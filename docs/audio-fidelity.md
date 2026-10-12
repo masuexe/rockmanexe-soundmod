@@ -8,7 +8,7 @@ The reported noisy percussion is in `exe1:0`. This track was not included in the
 
 Actual mGBA cursors establish the difference. At music clocks 100–104, the original drum advances through byte positions 704, 880, 1056, 1232 and 1408. The uncorrected GP copy advances through 1056, 1320, 1584, 1848 and 2112. Ordinary PCM notes in the same run advance at nearly identical source positions. The PSG/control registers also match at the drum snapshots. This identifies a fixed-step PCM rate issue independently of channel-budget differences.
 
-The shared exporter now creates private, rate-adapted copies of fixed-step PCM waves when the fingerprint-pinned donor rate differs from the target rate. EXE1 JP's profile supplies its verified 10,512 Hz rate; verified target layouts supply their effective rates. The initial enabled donor is EXE1 JP. Other donor rates are not guessed from sample headers.
+The shared exporter now creates private, rate-adapted copies of fixed-step PCM waves when the fingerprint-pinned donor rate differs from the target rate. EXE1 JP and EXE4 Red Sun JP profiles supply their verified 10,512 Hz rate; verified target layouts supply their effective rates. Other donor rates are not guessed from sample headers.
 
 Signed 8-bit linear interpolation adapts the copied wave to the target's fixed-step rate. Type 8 is retained so notes still ignore key, bend and modulation as in the original driver. Clearing the fixed-mode flag would change that behavior in EXE1 tracks that use modulation. Normal PCM instruments sharing the original sample keep a separate original copy. Adapted copies are deduplicated across songs, and their rate, offsets, sizes and hashes are recorded in each import's `audio_adjustments`. Pointer provenance records the final adapted pointer. Export validation reparses each song and checks both original and declared adapted PCM contents.
 
@@ -25,6 +25,26 @@ Validation evidence:
 - The manager was reloaded, its six selected sources and existing pools restored, and a corrected GP ROM/BPS exported through the HTTP workflow. `out/fidelity-research/manager-fixed-export.json` records that export. Original ROM files were not edited.
 
 The correction preserves the normal GP mixer settings and adapts imported data. The source-rate mixer experiment restores the original fixed-wave pointers when it changes the target to the source rate, preventing double adaptation. Linear interpolation is not a claim of bit-identical hardware output; residual balance, reverb, polyphony and filtering differences can remain. The new listening comparison is intended to verify the reported opening noise specifically.
+
+## EXE4 Red Sun correction
+
+`exe4:0` from the fingerprint-pinned Japanese Red Sun ROM has the same fixed-step rate mismatch. Its three fixed PCM drum records run at the original 10,512 Hz mixer rate, while GP runs at 15,768 Hz. mGBA observes source positions 704, 880, 1056, 1232 and 1408 at clocks 16–20; the unadapted GP positions are 1056, 1320, 1584, 1848 and 2112. Thus the drum samples play 1.5 times faster even though encoded note timing is correct.
+
+An isolated trial first enabled the existing adapter for this donor fingerprint, using its measured runtime rate. The verified rate is now enabled in the production donor profile, so normal manager exports automatically apply the same correction. Source, old GP and corrected GP each pass 924 sequence-model comparisons over 132 frames to clock 128. Seven common fixed-PCM cursor pairs in the corrected run map exactly to the source positions. Its three drum adjustments preserve fixed mode and the BPS reconstructs the ROM.
+
+All 34 currently importable EXE4 tracks use fixed PCM. They export together successfully with 87 fixed-tone adjustments and consistent final pointer provenance. Production output matches the validated trial byte-for-byte. The correction reuses the shared adapter and benefits the whole eligible source catalog.
+
+Other differences remain separate. The original uses a four-channel PCM budget and master volume 12, compared with GP's ten-channel budget and volume 15. Reverb is 40 in both. Within this short window, maximum active PCM voices are four in the original, six in the old GP export and seven in the corrected trial. Preserving drum durations can retain more overlapping voices under GP's larger budget. Rate correction therefore addresses a specific pitch/duration error; it does not establish identical overall balance or voice allocation.
+
+Evidence and review artifacts:
+
+- `out/fidelity-research/exe4-0-assessment.json`: measured configurations, cursor comparisons and validation summary.
+- `exe4-0-baseline/` and `exe4-0-trial/`: original/old/corrected recordings and single-track GP trial ROM/BPS. Apply the trial BPS to original `exegp.gba`.
+- `exe4-0-listen.html`: portable original/old/trial listening comparison, with eight-second RMS-normalized clips.
+- `exe4-all-trial/`: mixed-pool export and BPS/pointer validation for all 34 eligible tracks.
+- `exe4-enabled/`: production single-track, all-EXE4 and mixed EXE1/EXE4/native-GP builds, plus `validation.json` and the 80-test regression result. Single/all-EXE4 images match the corresponding trial images byte-for-byte. `manager-export.json` records the HTTP export after restoring the user's existing source selection and pools; both EXE1 and EXE4 adjustments appear in that export and its BPS reconstruction passes.
+
+The manager enables automatic fixed-PCM adaptation for this exact EXE4 Red Sun JP revision. Other EXE4/BN4 editions require their own verified donor rate. The original EXE4 ROM fingerprint is CRC32 `CF0E8B05`, SHA-256 `1904692bc383fc2cb7e1d81e1c80bf2d8c616c0d1b1d396c689f71b49a2e3188`.
 
 ## First GP comparison
 
@@ -112,3 +132,4 @@ The three source start/core/player-table locations were recognized structurally 
 | EXE1 JP | `0x0809C914` | `0x0809CF90` | `0x080A0D7C` |
 | BN2 EN | `0x080E71C0` | `0x080E78F4` | `0x080F3718` |
 | EXE6 Gregar JP | `0x0815B338` | `0x0815BB18` | `0x08164C8C` |
+| EXE4 Red Sun JP | `0x081126B4` | `0x08112DE8` | `0x08155CE4` |

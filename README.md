@@ -16,7 +16,7 @@ Catalog editing and export require only Python 3.10+. Realtime preview uses a lo
 
 For differences between original and transplanted music, see [same-emulator fidelity comparisons](docs/audio-fidelity.md). The diagnostic tools record original/target pairs, generate normalized listening pages, and probe sequence and mixer state without changing manager export defaults.
 
-EXE1 JP fixed-step PCM drums are automatically adapted to the target mixer rate during export. This corrects accelerated percussion in GP imports, including `exe1:0`; see the [drum correction evidence](docs/audio-fidelity.md#exe1-opening-drum-correction).
+EXE1 JP and EXE4 Red Sun JP fixed-step PCM drums are automatically adapted to the target mixer rate during export. This corrects accelerated percussion in GP imports, including `exe1:0` and `exe4:0`; see the [drum correction evidence](docs/audio-fidelity.md).
 
 ## Scan local ROMs
 

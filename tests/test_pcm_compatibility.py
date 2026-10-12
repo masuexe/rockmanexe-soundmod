@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'scripts'))
 from analyze_song import analyze, ROM_BASE
 from build_unified import Relocator
+from build_unified import build_catalog
+from original_catalog import catalog_originals
 from pcm_compatibility import FIXED_PCM_RATES, resample_fixed_pcm
+from scan_audio import apply_bps
+from transplant_song import make_bps
 
 
 class FixedPCMTests(unittest.TestCase):
@@ -93,6 +97,35 @@ class FixedPCMTests(unittest.TestCase):
         relocator = Relocator(bytes(64), [('fixture', report)], 15768)
         relocator.import_song('fixture', donor, report)
         self.assertEqual(relocator.mapping_reports[0]['audio_adjustments'], [])
+
+
+@unittest.skipUnless(all((ROOT.parent/'roms'/name).is_file()
+                        for name in ['exegp.gba', 'exe1.gba', 'exe4.gba']), 'Local music ROMs unavailable')
+class EnabledDonorTests(unittest.TestCase):
+    def test_mixed_exe1_exe4_export_adapts_both_donors_and_preserves_native_audio(self):
+        base = (ROOT.parent/'roms/exegp.gba').read_bytes()
+        donors = {key: (ROOT.parent/'roms'/f'{key}.gba').read_bytes() for key in ['exe1', 'exe4']}
+        catalog, reports = catalog_originals(base, base, donors)
+        project = {'schema_version': 1, 'target_profile': 'exegp',
+                   'pools': {'1': {'tracks': ['exe1:0', 'exe4:0', 'native-exegp:1']}}}
+        image, _, manifest = build_catalog(base, base, catalog, reports,
+                                           {'native-exegp': base, **donors}, project, selected_only=True)
+        imported = {r['key']: r for r in manifest['imports']}
+        for key, count in [('exe1:0', 6), ('exe4:0', 3)]:
+            adjustments = imported[key]['audio_adjustments']
+            self.assertEqual(len(adjustments), count)
+            for adjustment in adjustments:
+                original = adjustment['source_size_bytes']-16
+                converted = adjustment['target_size_bytes']-16
+                self.assertEqual(converted, (original*3+1)//2)
+                self.assertLess(converted/15768-original/10512, 1/15768)
+                for resource in imported[key]['resources']:
+                    if resource['source_offset']==adjustment['source_tone_offset']:
+                        for offset in resource['target_offsets']:
+                            self.assertEqual(image[offset], 8)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(image[table:table+170*8], base[0x160658:0x160658+170*8])
+        self.assertEqual(apply_bps(base, make_bps(base, image))[0], image)
 
 
 if __name__ == '__main__':

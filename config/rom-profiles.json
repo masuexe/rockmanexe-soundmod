@@ -240,7 +240,8 @@
       "entry_count": 457,
       "music_player": 31,
       "target_slot_start": 5679,
-      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending",
+      "fixed_pcm_rate": 10512
     },
     {
       "key": "exe4b",
