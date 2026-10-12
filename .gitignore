@@ -1,3 +1,6 @@
 *.gba
 *.sav
 *.bps
+out/
+__pycache__/
+*.pyc
