@@ -56,12 +56,12 @@ class LoopModelTests(unittest.TestCase):
             code.finish()
 
 
-@unittest.skipUnless(all((ROOT / path).exists() for path in ['roms/exe45.gba', 'roms/exegp.gba', 'references/exe45_pvp_0.6.0.bps', 'references/exe45_soundmod.bps']), 'local sources unavailable')
+@unittest.skipUnless(all((ROOT / path).exists() for path in ['../roms/exe45.gba', '../roms/exegp.gba', 'references/exe45_pvp_0.6.0.bps', 'references/exe45_soundmod.bps']), 'local sources unavailable')
 class UnifiedTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.base = (ROOT / 'roms/exe45.gba').read_bytes()
-        cls.gp = (ROOT / 'roms/exegp.gba').read_bytes()
+        cls.base = (ROOT / '../roms/exe45.gba').read_bytes()
+        cls.gp = (ROOT / '../roms/exegp.gba').read_bytes()
         cls.pvp, _ = apply_bps(cls.base, (ROOT / 'references/exe45_pvp_0.6.0.bps').read_bytes())
         cls.sound, _ = apply_bps(cls.base, (ROOT / 'references/exe45_soundmod.bps').read_bytes())
         cls.config = json.loads((ROOT / 'config/playlist.json').read_text())

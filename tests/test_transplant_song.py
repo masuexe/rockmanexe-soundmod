@@ -21,12 +21,12 @@ class BpsExportTests(unittest.TestCase):
         self.assertEqual(apply_bps(b'', make_bps(b'', target))[0], target)
 
 
-@unittest.skipUnless(all((ROOT / p).exists() for p in ['roms/exe45.gba', 'roms/exegp.gba', 'references/exe45_pvp_0.6.0.bps']), 'local ROMs/patch unavailable')
+@unittest.skipUnless(all((ROOT / p).exists() for p in ['../roms/exe45.gba', '../roms/exegp.gba', 'references/exe45_pvp_0.6.0.bps']), 'local ROMs/patch unavailable')
 class TransplantTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.base = (ROOT / 'roms/exe45.gba').read_bytes()
-        cls.donor = (ROOT / 'roms/exegp.gba').read_bytes()
+        cls.base = (ROOT / '../roms/exe45.gba').read_bytes()
+        cls.donor = (ROOT / '../roms/exegp.gba').read_bytes()
         cls.pvp, _ = apply_bps(cls.base, (ROOT / 'references/exe45_pvp_0.6.0.bps').read_bytes())
         cls.output, cls.manifest, cls.source, cls.target = transplant(cls.donor, cls.pvp)
 

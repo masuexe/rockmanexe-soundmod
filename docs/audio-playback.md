@@ -94,21 +94,21 @@ The repeated entries and the smaller subset used by ID 99 matter to the future m
 Requires Linux, Python 3.10+, and the mGBA SDL executable with its CLI debugger. Each output directory must be new. Use another directory name when repeating a run.
 
 ```bash
-python3 scripts/validate_playback.py roms/exe45.gba \
+python3 scripts/validate_playback.py ../roms/exe45.gba \
   --id 9 --id 90 --out out/playback-exe45
-python3 scripts/validate_playback.py roms/exe45.gba \
+python3 scripts/validate_playback.py ../roms/exe45.gba \
   --patch references/exe45_pvp_0.6.0.bps \
   --id 69 --out out/playback-pvp
-python3 scripts/validate_playback.py roms/exe45.gba \
+python3 scripts/validate_playback.py ../roms/exe45.gba \
   --patch references/exe45_soundmod.bps \
   --id 0 --id 69 --out out/playback-soundmod
-python3 scripts/validate_playback.py roms/exegp.gba \
+python3 scripts/validate_playback.py ../roms/exegp.gba \
   --id 1 --id 100 --out out/playback-exegp
-python3 scripts/validate_playback.py roms/exe45.gba \
+python3 scripts/validate_playback.py ../roms/exe45.gba \
   --patch references/exe45_soundmod.bps \
   --id 89 --id 64 --id 65 --id 99 --id 98 \
   --out out/playback-soundmod-remap
-python3 scripts/validate_playback.py roms/exe45.gba \
+python3 scripts/validate_playback.py ../roms/exe45.gba \
   --patch references/exe45_soundmod.bps --selector 255 \
   --id 89 --id 64 --id 65 --id 99 \
   --out out/playback-soundmod-selector255

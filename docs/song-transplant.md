@@ -24,7 +24,7 @@ All seven tracks reach `FINE`; this song has no infinite sequence loop. Its long
 Each consumed sequence range, note/voice pair, tone record, sample header/length, resource hash, and pointer site is retained in `dependencies.json`. Unsupported commands, nonzero key shifts, invalid references, unsupported sample encodings, nested composite tones, excessive pattern depth, and zero-time cycles fail analysis rather than producing a relocation-ready claim. This is not yet a complete parser for every song in every EXE ROM.
 
 ```bash
-python3 scripts/analyze_song.py roms/exegp.gba \
+python3 scripts/analyze_song.py ../roms/exegp.gba \
   --table 0x160658 --id 1 --out out/exegp-song1-analysis
 ```
 
@@ -37,7 +37,7 @@ For every frame and track, the model is compared with the actual cursor, remaini
 The donor run passed 1,690 frames and 11,830 track-state comparisons. All nine samples were observed on mixer channels, 28 distinct nonzero PCM-buffer hashes were recorded, and all tracks ended at player clock 1804.
 
 ```bash
-python3 scripts/validate_song.py roms/exegp.gba \
+python3 scripts/validate_song.py ../roms/exegp.gba \
   --id 1 --out out/exegp-song1-sustained
 ```
 
@@ -76,9 +76,9 @@ Increasing the global budget also affects other sounds and mixer work. This expe
 
 ```bash
 python3 scripts/transplant_song.py \
-  --base roms/exe45.gba \
+  --base ../roms/exe45.gba \
   --pvp-patch references/exe45_pvp_0.6.0.bps \
-  --donor roms/exegp.gba --donor-id 1 --target-id 0 \
+  --donor ../roms/exegp.gba --donor-id 1 --target-id 0 \
   --pcm-channels 10 --out out/pvp-exegp-song1-mixer10
 
 python3 scripts/validate_song.py \

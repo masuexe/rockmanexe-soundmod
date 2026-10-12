@@ -5,6 +5,7 @@ The only changed PvP prefix ranges are the declared SoundMode literal, entry
 stub and five table literals. Original entries/resources remain intact.
 """
 import argparse
+import copy
 import json
 from pathlib import Path
 import struct
@@ -244,14 +245,22 @@ def resolve_pools(config, value):
 
 def build(base, pvp, sound, gp, playlist, pcm_channels=10):
     value, reports = catalog(base, pvp, sound, gp)
+    return build_catalog(base, pvp, value, reports, {'soundmod': sound, 'exegp': gp}, playlist, pcm_channels)
+
+
+def build_catalog(base, pvp, value, reports, sources, playlist, pcm_channels=10, selected_only=False):
+    """Reuse the checked PvP relocator/hook with an independently prepared catalog."""
+    value = copy.deepcopy(value)
     rules = resolve_pools(playlist, value)
+    if selected_only:
+        selected = {key for rule in rules for key in rule['keys']}
+        reports = {key: report for key, report in reports.items() if key in selected}
     if not 4 <= pcm_channels <= 12:
         raise ValueError('PCM channel budget must be 4..12')
     selected_reports = [(key.split(':')[0], report) for key, report in reports.items()]
     relocator = Relocator(pvp, selected_reports)
     table = bytearray(pvp[0x135214:0x1361AC])
     table.extend(pvp[0x135214:0x13521C] * (value['table_entry_count'] - 499))
-    sources = {'soundmod': sound, 'exegp': gp}
     for row in value['entries']:
         key = row['key']
         if key not in reports:
@@ -321,7 +330,8 @@ def build(base, pvp, sound, gp, playlist, pcm_channels=10):
                 'limitations': ['Player-based music candidates; track names not assigned',
                                 'Selector producer/distribution not yet verified; preserves Soundmod input source',
                                 'Global PCM budget affects mixer work; multiplayer not tested',
-                                'EXEGP effects and over-capacity music reserved but not imported']}
+                                'Foreign effects and over-capacity music reserved but not imported'],
+                'import_policy': 'selected tracks only' if selected_only else 'all eligible foreign tracks'}
     return result, value, manifest
 
 

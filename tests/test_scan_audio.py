@@ -77,11 +77,11 @@ class DecoderTests(unittest.TestCase):
         self.assertIsNone(scan.song_header(data, scan.ROM_BASE))
 
 
-@unittest.skipUnless((ROOT / "roms/exe45.gba").exists() and (ROOT / "roms/exegp.gba").exists(), "local ROMs unavailable")
+@unittest.skipUnless((ROOT / "../roms/exe45.gba").exists() and (ROOT / "../roms/exegp.gba").exists(), "local ROMs unavailable")
 class LocalRomTests(unittest.TestCase):
     def test_original_tables_and_literals(self):
         for name, offset, count, nonempty in [("exe45", 0x135214, 499, 352), ("exegp", 0x160658, 170, 86)]:
-            data = (ROOT / f"roms/{name}.gba").read_bytes()
+            data = (ROOT / f"../roms/{name}.gba").read_bytes()
             tables = scan.scan_tables(data)
             self.assertEqual(len(tables), 1)
             table = tables[0]
@@ -90,7 +90,7 @@ class LocalRomTests(unittest.TestCase):
 
     @unittest.skipUnless((ROOT / "references/exe45_pvp_0.6.0.bps").exists() and (ROOT / "references/exe45_soundmod.bps").exists(), "local patches unavailable")
     def test_patch_checksums_and_changed_slots(self):
-        base = (ROOT / "roms/exe45.gba").read_bytes()
+        base = (ROOT / "../roms/exe45.gba").read_bytes()
         self.assertEqual(scan.fingerprint(base)["crc32"], "A646601B")
         targets = []
         for name, crc, nonempty in [("exe45_pvp_0.6.0", "D1240E4B", 364), ("exe45_soundmod", "D0020C1F", 404)]:

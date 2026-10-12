@@ -12,6 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from manager_backend import Manager, INPUTS
+from original_catalog import PROFILES, identify
 from manage_sound import Handler
 from scan_audio import apply_bps
 
@@ -75,20 +76,24 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('/api/load',body={})[0],400)
 
 
-@unittest.skipUnless(all(path.exists() for path in INPUTS.values()), 'local ROM inputs unavailable')
+@unittest.skipUnless(all(INPUTS[role].exists() for role in ('base','pvp','rom:exegp','rom:exe1')), 'local ROM inputs unavailable')
 class ManagerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.manager = Manager(self.temp.name)
+        # Keep integration checks small; full shared-directory inventory is checked separately.
+        self.manager.inputs = {key:value for key,value in self.manager.inputs.items() if key in ('base','pvp','rom:exegp','rom:exe1')}
         finish(self.manager,self.manager.load())
     def tearDown(self):
         self.manager.close()
         self.temp.cleanup()
     def test_names_persist_and_invalid_project_is_atomic(self):
         self.manager.name('exegp:1',' GP title ')
+        self.manager.names['exe1:0']='legacy name'
+        self.assertNotIn('soundmod:0',self.manager.state()['project']['names'])
         before = copy.deepcopy(self.manager.project)
         project = copy.deepcopy(before)
-        project['pools']['55']['tracks']=['soundmod:0']
+        project['pools']['55']['tracks']=['exe1:0']
         project['names']={'unknown:1':'bad'}
         with self.assertRaises(ValueError): self.manager.save_project(project)
         self.assertEqual(self.manager.project,before)
@@ -102,26 +107,47 @@ class ManagerTests(unittest.TestCase):
         output = self.manager.file(job['id'],'unified.gba').read_bytes()
         patch_data = self.manager.file(job['id'],'unified.bps').read_bytes()
         self.assertEqual(apply_bps(original['base'],patch_data)[0],output)
-        self.assertEqual(job['result']['fingerprint']['sha256'],'e20a5763e40d3510b200c9fd1a67597eb384d290007e3e38e3b40e5a621b5854')
+        manifest=json.loads((Path(job['result']['directory'])/'build.json').read_text())
+        self.assertEqual(manifest['imports'],[])
+        self.assertEqual(manifest['music_sources'],'original ROMs')
+        self.assertEqual(set(manifest['source_patches']),{'pvp'})
         self.assertEqual(original,{role:data for role,(_,data) in self.manager.inputs.items()})
         with self.assertRaises(ValueError): self.manager.file(job['id'],'build.json')
     def test_preview_isolated_and_cached(self):
         before = copy.deepcopy(self.manager.project)
         def capture(rom, manifest, target, directory, seconds, mgba):
-            self.assertEqual(manifest['hook']['rules'][0]['ids'],[499])
-            self.assertEqual(target,499)
+            self.assertEqual(manifest['hook']['rules'][0]['ids'],[PROFILES['exe1']['target_slot_start']])
+            self.assertEqual(target,PROFILES['exe1']['target_slot_start'])
             directory.mkdir()
             wav = directory/'preview.wav'; wav.write_bytes(b'fixture')
             return wav, {'seconds':seconds}
         with patch('manager_backend.capture_preview',side_effect=capture) as mock:
-            job = finish(self.manager,self.manager.preview('soundmod:0',3))
-            self.assertEqual(self.manager.preview('soundmod:0',3)['job_id'],job['id'])
+            job = finish(self.manager,self.manager.preview('exe1:0',3))
+            self.assertEqual(self.manager.preview('exe1:0',3)['job_id'],job['id'])
             self.assertEqual(mock.call_count,1)
         self.assertEqual(self.manager.project,before)
         self.assertEqual(self.manager.file(job['id'],'preview.wav').read_bytes(),b'fixture')
         with self.assertRaises(ValueError): self.manager.preview('exegp:5')
+    def test_original_rom_identity_and_selected_imports(self):
+        donor=self.manager.inputs['rom:exe1'][1]
+        self.assertEqual(identify(donor),'exe1')
+        self.manager.upload('rom','renamed.gba',donor)
+        finish(self.manager,self.manager.load())
+        state=self.manager.state()
+        self.assertNotIn('soundmod',state['catalog']['sources'])
+        project=state['project']
+        project['pools']['55']['tracks']=['exe1:0','exegp:1']
+        job=finish(self.manager,self.manager.export(project))
+        manifest=json.loads((Path(job['result']['directory'])/'build.json').read_text())
+        self.assertEqual({row['key'] for row in manifest['imports']},{'exe1:0','exegp:1'})
+        self.assertEqual(manifest['table_entry_count'],8455)
+        # Removing another donor cannot change fixed EXE1 IDs.
+        row=next(r for r in state['catalog']['entries'] if r['key']=='exe1:0')
+        self.assertEqual(row['target_index'],PROFILES['exe1']['target_slot_start'])
+        with self.assertRaises(ValueError):identify(b'unknown ROM')
+
     def test_wrong_input_rejects_and_invalidates_catalog(self):
-        self.manager.upload('donor','other.gba',b'bad ROM')
+        self.manager.upload('rom:exegp','other.gba',b'bad ROM')
         self.assertIsNone(self.manager.state()['catalog'])
         started = self.manager.load()
         with self.assertRaisesRegex(AssertionError,'Unsupported exegp fingerprint'):

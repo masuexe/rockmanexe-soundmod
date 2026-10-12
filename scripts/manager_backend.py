@@ -6,15 +6,18 @@ from pathlib import Path
 import threading
 import uuid
 
-from build_unified import build, resolve_pools
+from build_unified import build_catalog, resolve_pools
 from render_preview import capture_preview
 from scan_audio import apply_bps, fingerprint
 from transplant_song import make_bps
-from unified_catalog import catalog, write_catalog
+from unified_catalog import write_catalog
+from original_catalog import catalog_originals, PROFILES, identify
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = {'base': ROOT / 'roms/exe45.gba', 'pvp': ROOT / 'references/exe45_pvp_0.6.0.bps',
-          'soundmod': ROOT / 'references/exe45_soundmod.bps', 'donor': ROOT / 'roms/exegp.gba'}
+ROM_DIRECTORY = ROOT.parent / 'roms'
+INPUTS = {'base': ROM_DIRECTORY / 'exe45.gba', 'pvp': ROOT / 'references/exe45_pvp_0.6.0.bps'}
+INPUTS.update({f'rom:{key}': ROM_DIRECTORY / profile['filename'] for key, profile in PROFILES.items()})
+
 
 
 class Manager:
@@ -31,7 +34,8 @@ class Manager:
         self.jobs = {}
         self.active = None
         self.preview_cache = {}
-        self.default_project = json.loads((ROOT / 'config/playlist.json').read_text())
+        self.default_project = {'schema_version':1,'pools':{str(i):{'tracks':[f'pvp:{i}'],'selector_shift':0} for i in (55,64,65,89,98,99)}}
+        self.project_notice = ''
         self.project = copy.deepcopy(self.default_project)
         self.names_path = self.directory / 'track-names.json'
         self.project_path = self.directory / 'project.json'
@@ -50,13 +54,18 @@ class Manager:
                 for row in value['entries']:
                     row['name'] = self.names.get(row['key'], '')
             project = copy.deepcopy(self.project)
-            project['names'] = dict(self.names)
+            known = {r['key'] for r in value['entries']} if value else set(self.names)
+            project['names'] = {key:name for key,name in self.names.items() if key in known}
             return {'inputs': {role: {'filename': value[0], 'size_bytes': len(value[1])} for role, value in self.inputs.items()},
                     'revision': self.revision, 'catalog': value, 'project': project,
                     'active_job': self.jobs.get(self.active) if self.active else None,
-                    'preview_available': Path(self.mgba).is_file()}
+                    'preview_available': Path(self.mgba).is_file(), 'rom_directory':str(ROM_DIRECTORY),
+                    'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
+                    'project_notice':self.project_notice}
 
     def upload(self, role, filename, data):
+        if role == 'rom':
+            role = 'rom:' + identify(data)
         if role not in INPUTS or not data or len(data) > 32 * 1024 * 1024:
             raise ValueError('Choose a supported ROM or BPS file, no larger than 32 MiB')
         with self.lock:
@@ -99,15 +108,14 @@ class Manager:
 
     def load(self):
         with self.lock:
-            if set(self.inputs) != set(INPUTS):
-                raise ValueError('Select the original EXE4.5 ROM, both BPS patches, and EXEGP ROM')
+            if not {'base','pvp'} <= set(self.inputs):
+                raise ValueError('Select the original EXE4.5 ROM and the PvP BPS patch')
             inputs, revision = dict(self.inputs), self.revision
         def task(_):
             base = inputs['base'][1]
             pvp, pvp_info = apply_bps(base, inputs['pvp'][1])
-            sound, sound_info = apply_bps(base, inputs['soundmod'][1])
-            gp = inputs['donor'][1]
-            value, _ = catalog(base, pvp, sound, gp)
+            donors = {role[4:]:content[1] for role,content in inputs.items() if role.startswith('rom:')}
+            value, reports = catalog_originals(base, pvp, donors)
             with self.lock:
                 if revision != self.revision:
                     raise ValueError('Files changed; load tracks again')
@@ -115,8 +123,11 @@ class Manager:
                     resolve_pools(self.project, value)
                 except (ValueError, KeyError, TypeError):
                     self.project = copy.deepcopy(self.default_project)
+                    self.project_notice = 'Previous pools used unavailable sources (including legacy Soundmod tracks). Native playback defaults restored; save to keep the new project.'
+                else:
+                    self.project_notice = ''
                 self.value = value
-                self.decoded = (base, pvp, sound, gp, pvp_info, sound_info)
+                self.decoded = (base, pvp, donors, pvp_info, reports)
             return {'tracks': sum(row['playlist_eligible'] for row in value['entries'])}
         return self._start('catalog', task)
 
@@ -158,18 +169,19 @@ class Manager:
         with self.lock:
             decoded = self.decoded
             project = copy.deepcopy(self.project)
-            names = dict(self.names)
+            known = {r['key'] for r in self.value['entries']}
+            names = {key:name for key,name in self.names.items() if key in known}
         def task(job_id):
             directory = self.directory / job_id
             directory.mkdir()
-            base, pvp, sound, gp, pvp_info, sound_info = decoded
-            output, value, manifest = build(base, pvp, sound, gp, project)
+            base, pvp, donors, pvp_info, reports = decoded
+            output, value, manifest = build_catalog(base, pvp, self.value, reports, donors, project, selected_only=True)
             patch = make_bps(base, output)
             if apply_bps(base, patch)[0] != output:
                 raise AssertionError('Export verification failed')
             for row in value['entries']:
                 row['name'] = names.get(row['key'], '')
-            manifest.update(source_patches={'pvp': pvp_info, 'soundmod': sound_info}, manager=True)
+            manifest.update(source_patches={'pvp':pvp_info}, manager=True, music_sources='original ROMs')
             (directory / 'unified.gba').write_bytes(output)
             (directory / 'unified.bps').write_bytes(patch)
             (directory / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -196,9 +208,9 @@ class Manager:
         def task(job_id):
             directory = self.directory / job_id
             directory.mkdir()
-            base, pvp, sound, gp, _, _ = decoded
+            base, pvp, donors, _, reports = decoded
             config = {'schema_version': 1, 'pools': {'55': {'tracks': [key], 'selector_shift': 0}}}
-            output, _, manifest = build(base, pvp, sound, gp, config)
+            output, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
             rom = directory / 'preview.gba'
             rom.write_bytes(output)
             wav, info = capture_preview(rom, manifest, target_id, directory / 'capture', seconds, self.mgba)

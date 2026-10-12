@@ -81,9 +81,9 @@ class DependencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'malformed PCM'):
             analyze(bytes(data), 0, 0)
 
-    @unittest.skipUnless((ROOT / 'roms/exegp.gba').exists(), 'local donor unavailable')
+    @unittest.skipUnless((ROOT / '../roms/exegp.gba').exists(), 'local donor unavailable')
     def test_local_exegp_song1_closure(self):
-        report = analyze((ROOT / 'roms/exegp.gba').read_bytes(), 0x160658, 1)
+        report = analyze((ROOT / '../roms/exegp.gba').read_bytes(), 0x160658, 1)
         self.assertEqual(len(report['tracks']), 7)
         self.assertEqual(len(report['tones']), 13)
         self.assertEqual(len(report['samples']), 9)

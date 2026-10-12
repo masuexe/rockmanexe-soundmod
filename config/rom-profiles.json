@@ -1,0 +1,336 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "key": "bn1",
+      "label": "Mega Man Battle Network 1 (EN)",
+      "filename": "bn1.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "1D347971",
+        "sha256": "87bc7257f2f9ed0acc9f4874177e474e3d339d1e23a0b621d2d8edd73c1a09ed"
+      },
+      "table_offset": 659740,
+      "entry_count": 238,
+      "music_player": 31,
+      "target_slot_start": 499,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn2",
+      "label": "Mega Man Battle Network 2 (EN)",
+      "filename": "bn2.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "6D961F82",
+        "sha256": "61a8324c5179f0f8f6b0078aaa1237ea7ac0b3c5a8370c5ba8136c513a22cf2d"
+      },
+      "table_offset": 997528,
+      "entry_count": 304,
+      "music_player": 31,
+      "target_slot_start": 737,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn3",
+      "label": "Mega Man Battle Network 3 White (EN)",
+      "filename": "bn3.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "0BE4410A",
+        "sha256": "a161aa80e9ee7e07e85bda5d1c93ad3d1415e35aee88380fe117997ebaf6c1c2"
+      },
+      "table_offset": 1346412,
+      "entry_count": 330,
+      "music_player": 31,
+      "target_slot_start": 1041,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn3b",
+      "label": "Mega Man Battle Network 3 Blue (EN)",
+      "filename": "bn3b.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "C0C780F9",
+        "sha256": "8c6767788f99dc9e2af0c9d75513b227c7c42d6d452d6165c8e08850af78e273"
+      },
+      "table_offset": 1346668,
+      "entry_count": 330,
+      "music_player": 31,
+      "target_slot_start": 1371,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn4",
+      "label": "Mega Man Battle Network 4 Red Sun (EN)",
+      "filename": "bn4.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "2120695C",
+        "sha256": "b04adfca9cae47fc9241e70c88e49b16ee9e75d796ab4ee90940401a6c1d5514"
+      },
+      "table_offset": 1400824,
+      "entry_count": 457,
+      "music_player": 31,
+      "target_slot_start": 1701,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn4b",
+      "label": "Mega Man Battle Network 4 Blue Moon (EN)",
+      "filename": "bn4b.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "758A46E9",
+        "sha256": "63ea187c792f4bfcd077f92c3a509fa09ed422993aee9480c39dfdf6a561c5c1"
+      },
+      "table_offset": 1400844,
+      "entry_count": 457,
+      "music_player": 31,
+      "target_slot_start": 2158,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn5",
+      "label": "Mega Man Battle Network 5 Team ProtoMan (EN)",
+      "filename": "bn5.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "A73E83A4",
+        "sha256": "b35f5890f54784c9d90a896dc5ac4831d43acc9f94e8c42816742fcfa6b41a7b"
+      },
+      "table_offset": 1399564,
+      "entry_count": 372,
+      "music_player": 31,
+      "target_slot_start": 2615,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn5k",
+      "label": "Mega Man Battle Network 5 Team Colonel (EN)",
+      "filename": "bn5k.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "A552F683",
+        "sha256": "d4b7aefc3918c9f801c84cfd1322c2cdbb9d13c2e3271b3c3f8f9927480f2633"
+      },
+      "table_offset": 1399796,
+      "entry_count": 372,
+      "music_player": 31,
+      "target_slot_start": 2987,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn6",
+      "label": "Mega Man Battle Network 6 Gregar (EN)",
+      "filename": "bn6.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "79452182",
+        "sha256": "572e113eeb53bb29cd9ff8acb9db265cfd48c5e509c8d0e6420b58e71e442cf2"
+      },
+      "table_offset": 1417032,
+      "entry_count": 474,
+      "music_player": 31,
+      "target_slot_start": 3359,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bn6f",
+      "label": "Mega Man Battle Network 6 Falzar (EN)",
+      "filename": "bn6f.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "DEE6F2A9",
+        "sha256": "a37c1028adb72082b51e142321fa437967bc54b6f46730a53f6581ad455ad670"
+      },
+      "table_offset": 1410040,
+      "entry_count": 474,
+      "music_player": 31,
+      "target_slot_start": 3833,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "bnbcc",
+      "label": "Mega Man Battle Chip Challenge (EN)",
+      "filename": "bnbcc.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "26BE44FD",
+        "sha256": "e38da6e5dcdaf565ec1969ef6cbd95c4a307d87d3c853e23926ff2ce4497feb4"
+      },
+      "table_offset": 1076688,
+      "entry_count": 170,
+      "music_player": 0,
+      "target_slot_start": 4307,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe1",
+      "label": "Rockman EXE 1 (JP)",
+      "filename": "exe1.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "D9516E50",
+        "sha256": "5a453d04c8928d0e9426dd1643c3a18d1313ca38a5d2a8babbde8a5acc0c5a45"
+      },
+      "table_offset": 659196,
+      "entry_count": 238,
+      "music_player": 31,
+      "target_slot_start": 4477,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe2",
+      "label": "Rockman EXE 2 (JP)",
+      "filename": "exe2.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "046EED8D",
+        "sha256": "0603fd7e5a9afbdd615ed3bc1b77bb37707a986a80622931046fa1b3a5a99d4c"
+      },
+      "table_offset": 997236,
+      "entry_count": 304,
+      "music_player": 31,
+      "target_slot_start": 4715,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe3",
+      "label": "Rockman EXE 3 (JP)",
+      "filename": "exe3.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "E48E6BC9",
+        "sha256": "416aa3d4be363fa3032343c754c924c4d367735dafb5b9158bb2ec234458d2f4"
+      },
+      "table_offset": 1348616,
+      "entry_count": 330,
+      "music_player": 31,
+      "target_slot_start": 5019,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe3b",
+      "label": "Rockman EXE 3 Black (JP)",
+      "filename": "exe3b.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "FD57493B",
+        "sha256": "f35f6b8a03049e4f23f8cc8c814a846bb5846b21fb8ee24ef40596a9d7554a49"
+      },
+      "table_offset": 1348888,
+      "entry_count": 330,
+      "music_player": 31,
+      "target_slot_start": 5349,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe4",
+      "label": "Rockman EXE 4 Red Sun (JP)",
+      "filename": "exe4.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "CF0E8B05",
+        "sha256": "1904692bc383fc2cb7e1d81e1c80bf2d8c616c0d1b1d396c689f71b49a2e3188"
+      },
+      "table_offset": 1400420,
+      "entry_count": 457,
+      "music_player": 31,
+      "target_slot_start": 5679,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe4b",
+      "label": "Rockman EXE 4 Blue Moon (JP)",
+      "filename": "exe4b.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "709BBF07",
+        "sha256": "4b70e9e646adde8495f1a632f81d50edd7d8e96352326cb71910ada4214b849b"
+      },
+      "table_offset": 1400440,
+      "entry_count": 457,
+      "music_player": 31,
+      "target_slot_start": 6136,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe5",
+      "label": "Rockman EXE 5 Team Blues (JP)",
+      "filename": "exe5.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "C73F23C0",
+        "sha256": "284ae3c7c9d3b6eaaf8ed858f33de91a62b0bcf66d04cf21d6838d042b83a4ab"
+      },
+      "table_offset": 1398388,
+      "entry_count": 372,
+      "music_player": 31,
+      "target_slot_start": 6593,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe5k",
+      "label": "Rockman EXE 5 Team Colonel (JP)",
+      "filename": "exe5k.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "16842635",
+        "sha256": "c066880ffd7c668afe0824000eedf7266c4b91aa22092838db4566564bbbddfd"
+      },
+      "table_offset": 1398620,
+      "entry_count": 372,
+      "music_player": 31,
+      "target_slot_start": 6965,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe6",
+      "label": "Rockman EXE 6 Gregar (JP)",
+      "filename": "exe6.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "6285918A",
+        "sha256": "fa6808a5c63c2cc09430ec7ad74c6e02f4f35928448e6ff5f8dbdec0795160cf"
+      },
+      "table_offset": 1461772,
+      "entry_count": 474,
+      "music_player": 31,
+      "target_slot_start": 7337,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe6f",
+      "label": "Rockman EXE 6 Falzar (JP)",
+      "filename": "exe6f.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "2DFB603E",
+        "sha256": "21300170c404371da5cd0c327c3959c0981cf0af6e6bb9189fec4010fc6258a4"
+      },
+      "table_offset": 1454800,
+      "entry_count": 474,
+      "music_player": 31,
+      "target_slot_start": 7811,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exegp",
+      "label": "Rockman EXE Battle Chip GP (JP)",
+      "filename": "exegp.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "9217FB18",
+        "sha256": "6c3ac853d06b0fa70d9ac5a0705841ddb4f0e06cd246894e60bcb1cf824ef025"
+      },
+      "table_offset": 1443416,
+      "entry_count": 170,
+      "music_player": 0,
+      "target_slot_start": 8285,
+      "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    }
+  ],
+  "table_entry_count": 8455
+}

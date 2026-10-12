@@ -26,10 +26,10 @@ Unavailable slots remain empty in the expanded table, and cannot be selected in 
 
 ```bash
 python3 scripts/unified_catalog.py \
-  --base roms/exe45.gba \
+  --base ../roms/exe45.gba \
   --pvp-patch references/exe45_pvp_0.6.0.bps \
   --soundmod-patch references/exe45_soundmod.bps \
-  --donor roms/exegp.gba --out out/unified-catalog
+  --donor ../roms/exegp.gba --out out/unified-catalog
 ```
 
 `catalog.json` records source hashes, player indices, track counts, eligibility, dependency summaries, and target IDs. `catalog.csv` provides a readable inventory. Names remain unassigned.
@@ -96,10 +96,10 @@ Rebuild after changing the JSON file. Selecting a different pool does not renumb
 
 ```bash
 python3 scripts/build_unified.py \
-  --base roms/exe45.gba \
+  --base ../roms/exe45.gba \
   --pvp-patch references/exe45_pvp_0.6.0.bps \
   --soundmod-patch references/exe45_soundmod.bps \
-  --donor roms/exegp.gba \
+  --donor ../roms/exegp.gba \
   --playlist config/playlist.json --out out/unified-v2
 
 python3 scripts/validate_unified.py out/unified-v2/unified.gba \
@@ -143,3 +143,7 @@ All **37 automated tests** pass, including preservation, stable IDs, conflict re
 After receiving the reference unified ROM, the user reported that listening tests were completely satisfactory and authorized the manager milestone. This is human feedback on their tested playback, not evidence of an exhaustive audit of every imported song or multiplayer behavior.
 
 The [local manager](manager.md) now uses this JSON catalog and pool contract for file selection, filtering, names, previews, and checked exports. Default manager export reproduces the reference ROM SHA-256 above. Preview builds use a separate single-track title pool and do not change the saved export pools. Selection still occurs on game start calls; finite tracks do not advance automatically.
+
+## Original-ROM manager update
+
+The manager now reads original EXE/BN ROMs directly from `../roms/` and does not require Soundmod BPS. It retains this relocator and hook but uses separate fixed per-ROM slot ranges and packs only selected foreign songs. The Soundmod allocation, default configuration, and reference fingerprints in this document describe the legacy CLI build. See [the original-ROM library record](original-rom-library.md) for current manager profiles and validation.

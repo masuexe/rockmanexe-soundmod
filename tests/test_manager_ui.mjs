@@ -26,7 +26,7 @@ async function fetch(path, options){const body=options.body?JSON.parse(options.b
  else if(path.startsWith('/api/job/'))value=jobs[path.split('/').at(-1)];
  else if(path==='/api/name'){value=body;fixture.project.names[body.key]=body.name;}
  else if(path==='/api/project'){persisted=body;fixture.project=body;value=fixture;}
- else {const id=String(++next);if(path==='/api/load'){fixture.catalog={entries:rows};value={tracks:2};}else if(path==='/api/export'){exported=body;value={size_bytes:9585460,files:['unified.bps','unified.gba','project.json','catalog.csv']};}else if(path==='/api/preview'){previewed=body;value={files:['preview.wav']};}else throw new Error(path);jobs[id]={id,status:'done',result:value};value={job_id:id};}
+ else {const id=String(++next);if(path==='/api/load'){fixture.catalog={entries:rows,source_labels:{pvp:'EXE4.5 PvP',exegp:'Battle Chip GP'}};value={tracks:2};}else if(path==='/api/export'){exported=body;value={size_bytes:9585460,files:['unified.bps','unified.gba','project.json','catalog.csv']};}else if(path==='/api/preview'){previewed=body;value={files:['preview.wav']};}else throw new Error(path);jobs[id]={id,status:'done',result:value};value={job_id:id};}
  return {ok:true,json:async()=>value};
 }
 const context=vm.createContext({document,window:{MANAGER_TOKEN:'fixture-token'},fetch,File:class{},setTimeout,Promise,console,encodeURIComponent,Set,JSON});
@@ -40,6 +40,6 @@ const check=el('tracks').children[0].children[0];check.checked=true;check.listen
 await el('export').onclick();assert.equal(exported.pools['64'].selector_shift,0);assert.deepEqual(exported.pools['64'].tracks,['pvp:64','exegp:1']);assert.equal(el('downloads').children.length,4);
 el('tracks').children[0].listeners.click();el('name').value='GP Title';await el('save-name').onclick();assert.equal(el('tracks').children[0].children[1].children[0].textContent,'GP Title');
 await el('preview').onclick();assert.deepEqual(previewed,{key:'exegp:1',seconds:3});assert.match(el('audio').src,/preview.wav\?token=/);
-el('clear').onclick();assert.equal(el('export').disabled,true);await el('save-project').onclick();assert.match(el('status').textContent,/at least one/);
+el('clear').onclick();assert.equal(el('export').disabled,true);await el('save-project').onclick();assert.match(el('status').textContent,/1–255/);
 el('all-visible').onclick();el('apply-all').onclick();await el('save-project').onclick();assert.equal(persisted.pools['55'].tracks.length,2);assert.equal(persisted.pools['55'].selector_shift,0);
 console.log('UI workflow checks passed: load, unavailable entries, pool edits, names, preview, export, project save.');
