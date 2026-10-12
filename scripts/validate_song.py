@@ -16,6 +16,7 @@ import struct
 from analyze_song import analyze
 from scan_audio import ROM_BASE, fingerprint
 from validate_playback import Debugger, PROFILE_SHA256
+from target_profiles import valid_manifest_target
 
 
 def memory(debugger, address, size):
@@ -73,11 +74,10 @@ def main():
         if args.transplant or args.keep_song:
             parser.error('--unified validates natural playback; incompatible with transplant/keep-song probes')
         manifest = json.loads(args.unified.read_text())
-        if (manifest.get('target_profile') != 'exe45-pvp'
-            or manifest['target_base_fingerprint']['sha256'] != PROFILE_SHA256['exe45-pvp']
+        if (not valid_manifest_target(manifest)
             or manifest['output_fingerprint'] != fingerprint(data)):
             parser.error('Unified image does not match its version-pinned manifest')
-        profile, table, player_table, entry, core, count = 'exe45-pvp-unified', manifest['target_table_file_offset'], 0x135094, 0x080EE344, 0x080EEA78, manifest['table_entry_count']
+        profile, table, player_table, entry, core, count = manifest['target_profile'] + '-unified', manifest['target_table_file_offset'], 0x135094, 0x080EE344, 0x080EEA78, manifest['table_entry_count']
         if args.id is None:
             title = next((rule for rule in manifest['hook']['rules'] if rule['trigger_id'] == 55), None)
             if title is None or len(title['ids']) != 1:

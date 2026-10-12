@@ -18,15 +18,18 @@ import subprocess
 import time
 
 from scan_audio import ROM_BASE, apply_bps, fingerprint, song_header
+from target_profiles import TARGETS
 
 PROFILES = {
     "A646601B": ("exe45", 0xEE344, 0x135214, 0x135094, 499),
+    "C361D756": ("bn45-us-pvp", 0xEE344, 0x135214, 0x135094, 499),
     "D1240E4B": ("exe45-pvp", 0xEE344, 0x135214, 0x135094, 499),
     "D0020C1F": ("exe45-soundmod", 0xEE344, 0x135214, 0x135094, 499),
     "9217FB18": ("exegp", 0x4C3BC, 0x160658, 0x160604, 170),
 }
 PROFILE_SHA256 = {
     "exe45": "588a77da006fb0dca0c8addbcc316d7bd4b1c3a42db24750bcfe17b170ac5ef8",
+    "bn45-us-pvp": TARGETS["bn45-us-pvp"]["fingerprint"]["sha256"],
     "exe45-pvp": "2d921fe7775f3a5825a24cc07d821a73dffac576991f02b99cd23222f99e3278",
     "exe45-soundmod": "60a6ac7f0846a8aa4b890ca4dd4cc1294e6d3d540171e06929e5e3f4dd39ee2e",
     "exegp": "6c3ac853d06b0fa70d9ac5a0705841ddb4f0e06cd246894e60bcb1cf824ef025",

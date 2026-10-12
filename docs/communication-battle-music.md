@@ -1,6 +1,6 @@
 # Communication battle music pool
 
-For the pinned EXE4.5 PvP 0.6.0 ROM, the communication battle startup path requests **music ID 98**. In the current manager, edit **Music event #98** to select its pool. This is a song-ID rule and applies to every scene that requests ID 98; it is not an exclusive communication-scene hook.
+For the pinned Japanese and English PvP 0.6.0 ROMs, the communication battle startup path requests **music ID 98**. In the current manager, edit **Music event #98** to select its pool. This is a song-ID rule and applies to every scene that requests ID 98; it is not an exclusive communication-scene hook.
 
 ## Manager workflow
 
@@ -31,3 +31,7 @@ The battle-start music path selects the descriptor's music byte, or an override 
 A controlled mGBA check set the descriptor pointer to descriptor 99 and the battle mode to 71, then executed the native selection branch from `0x08007954` to `0x0800796C`. Register `r0` was **98** at the call. This check explicitly injected state and did not perform a complete two-peer communication battle. The earlier selector tests cover dispatch, player initialization, and register preservation; multiplayer behavior remains a separate gameplay test.
 
 Disassemblies and the controlled execution transcript are retained under `out/communication-bgm-research/`. This record avoids confusing communication descriptor index 99 with the actual music event 98.
+
+## English target confirmation
+
+The supplied `bn45_us_pvp_0.6.0.bps` also starts from original EXE4.5 CRC32 `A646601B`. Its descriptor lookup, descriptor-99 music byte, and battle-start selection code match the Japanese target. Music event 98 therefore remains the communication pool. English target dispatch/ABI probes and natural imported playback also pass; see [English target validation](english-pvp.md).

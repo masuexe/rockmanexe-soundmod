@@ -16,13 +16,16 @@ from original_catalog import catalog_originals, PROFILES, identify
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_DIRECTORY = ROOT.parent / 'roms'
-INPUTS = {'base': ROM_DIRECTORY / 'exe45.gba', 'pvp': ROOT / 'references/exe45_pvp_0.6.0.bps'}
+PATCH_DIRECTORY = ROOT.parent / 'patches'
+DEFAULT_PVP_PATCH = PATCH_DIRECTORY / 'exe45_pvp_0.6.0.bps'
+if not DEFAULT_PVP_PATCH.is_file(): DEFAULT_PVP_PATCH = ROOT / 'references/exe45_pvp_0.6.0.bps'
+INPUTS = {'base': ROM_DIRECTORY / 'exe45.gba', 'pvp': DEFAULT_PVP_PATCH}
 INPUTS.update({f'rom:{key}': ROM_DIRECTORY / profile['filename'] for key, profile in PROFILES.items()})
 
 
 
 class Manager:
-    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba', realtime=None):
+    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba', realtime=None, pvp_patch=None):
         self.directory = Path(directory or ROOT / 'out/manager')
         self.directory.mkdir(parents=True, exist_ok=True)
         self.mgba = mgba
@@ -55,6 +58,9 @@ class Manager:
                 uploaded = self.directory / 'uploaded-roms' / profile['filename']
                 path = uploaded if uploaded.exists() else INPUTS['rom:' + key]
                 if path.exists(): self.source_paths[key] = (path.name, path)
+        if pvp_patch is not None:
+            patch_path = Path(pvp_patch)
+            self.inputs['pvp'] = (patch_path.name,patch_path.read_bytes())
         self.selected_sources = set(saved['sources']) if saved and isinstance(saved.get('sources'), list) else set(self.source_paths)
         self.selected_sources.intersection_update(PROFILES)
 
@@ -117,7 +123,7 @@ class Manager:
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
-                    'project_notice':self.project_notice, 'selected_sources':sorted(self.selected_sources & self.source_paths.keys()),
+                    'project_notice':self.project_notice, 'target_label':self.value.get('target_label') if self.value else None, 'selected_sources':sorted(self.selected_sources & self.source_paths.keys()),
                     'source_options':[{'key':key,'label':PROFILES[key]['label'],'filename':filename,
                                        'size_bytes':path.stat().st_size if path.is_file() else 0,'loaded':self.value is not None and key in self.decoded[2]}
                                       for key,(filename,path) in sorted(self.source_paths.items())]}

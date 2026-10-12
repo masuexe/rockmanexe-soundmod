@@ -5,7 +5,7 @@ import struct
 
 from analyze_song import analyze
 from scan_audio import fingerprint, song_header
-from validate_playback import PROFILE_SHA256
+from target_profiles import validate_target
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_DATA = json.loads((ROOT / 'config/rom-profiles.json').read_text())
@@ -21,12 +21,10 @@ def identify(data):
 
 
 def catalog_originals(base, pvp, donors):
-    for label, data in [('exe45', base), ('exe45-pvp', pvp)]:
-        if fingerprint(data)['sha256'] != PROFILE_SHA256[label]:
-            raise ValueError(f'Unsupported {label} fingerprint')
+    target = validate_target(base, pvp)
     rows, reports = [], {}
     source_info = {'pvp': fingerprint(pvp)}
-    labels = {'pvp': 'Rockman EXE 4.5 PvP'}
+    labels = {'pvp': target['native_label']}
     capacity = pvp[0x135094 + 31 * 12 + 8]
     sources = [('pvp', pvp, {'table_offset': 0x135214, 'entry_count':499, 'music_player':31, 'target_slot_start':0})]
     for key in sorted(donors):
@@ -68,7 +66,7 @@ def catalog_originals(base, pvp, donors):
                                dependency_summary={'tone_records':len(report['tones']),'pcm_samples':len(report['samples']),
                                                    'covered_bytes':report['covered_bytes']})
             rows.append(row)
-    return {'schema_version':1,'sources':source_info,'source_labels':labels,'target_player':31,
+    return {'schema_version':1,'target_profile':target['key'],'target_label':target['label'],'sources':source_info,'source_labels':labels,'target_player':31,
             'target_track_capacity':capacity,'table_entry_count':PROFILE_DATA['table_entry_count'],
             'allocation_policy':'Native IDs preserved; fixed original-ROM profile ranges including absent sources',
             'classification_basis':'Profile music-player candidates, not verified song titles; donor runtime coverage is representative',

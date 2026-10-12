@@ -14,10 +14,12 @@ import struct
 from analyze_song import analyze
 from scan_audio import apply_bps, fingerprint, song_header
 from validate_playback import PROFILE_SHA256
+from target_profiles import validate_target
 
 
 def catalog(base, pvp, soundmod, gp):
-    for label, data in [('exe45', base), ('exe45-pvp', pvp), ('exe45-soundmod', soundmod), ('exegp', gp)]:
+    target = validate_target(base, pvp)
+    for label, data in [('exe45-soundmod', soundmod), ('exegp', gp)]:
         if fingerprint(data)['sha256'] != PROFILE_SHA256[label]:
             raise ValueError(f'Unsupported {label} fingerprint')
     rows, reports = [], {}
@@ -65,7 +67,7 @@ def catalog(base, pvp, soundmod, gp):
                                                    'terminations': sorted({track['termination'] for track in report['tracks']})})
                     reports[key] = report
             rows.append(row)
-    return {'schema_version': 1, 'sources': {name: fingerprint(data) for name, (data, _, _) in sources.items()},
+    return {'schema_version': 1, 'target_profile':target['key'], 'target_label':target['label'], 'sources': {name: fingerprint(data) for name, (data, _, _) in sources.items()},
             'target_player': 31, 'target_track_capacity': capacity, 'table_entry_count': next_id,
             'allocation_policy': 'Native IDs preserved; sorted Soundmod additions then sorted nonempty EXEGP IDs; unavailable slots remain reserved',
             'classification_basis': 'Player index, not a verified music title or exhaustive BGM/SFX classification',

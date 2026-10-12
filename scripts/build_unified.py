@@ -14,6 +14,7 @@ from analyze_song import analyze
 from scan_audio import ROM_BASE, MAX_ROM_SIZE, apply_bps, fingerprint
 from transplant_song import make_bps
 from unified_catalog import catalog, write_catalog
+from target_profiles import validate_target
 
 TABLE_REFERENCES = [0xEE36C, 0xEE3A0, 0xEE3EC, 0xEE440, 0xEE474]
 
@@ -250,6 +251,7 @@ def build(base, pvp, sound, gp, playlist, pcm_channels=10):
 
 def build_catalog(base, pvp, value, reports, sources, playlist, pcm_channels=10, selected_only=False):
     """Reuse the checked PvP relocator/hook with an independently prepared catalog."""
+    target = validate_target(base, pvp)
     value = copy.deepcopy(value)
     rules = resolve_pools(playlist, value)
     if selected_only:
@@ -317,7 +319,7 @@ def build_catalog(base, pvp, value, reports, sources, playlist, pcm_channels=10,
         new_samples = {result[s['file_offset']:s['file_offset'] + s['size_bytes']] for s in relocated['samples']}
         if old_samples != new_samples:
             raise AssertionError(f"Relocated PCM differs: {row['key']}")
-    manifest = {'schema_version': 1, 'target_profile': 'exe45-pvp', 'target_base_fingerprint': fingerprint(pvp),
+    manifest = {'schema_version': 1, 'target_profile': target['key'], 'target_label':target['label'], 'audio_layout':target['audio_layout'], 'target_base_fingerprint': fingerprint(pvp),
                 'output_fingerprint': fingerprint(result), 'original_fingerprint': fingerprint(base),
                 'sources': value['sources'], 'target_table_file_offset': table_offset, 'table_entry_count': value['table_entry_count'],
                 'appended_bytes': len(result) - len(pvp), 'declared_prefix_ranges': allowed,

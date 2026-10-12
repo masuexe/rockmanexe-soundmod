@@ -167,10 +167,11 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--data-dir', type=Path, help='Local names, projects, and generated files')
+    parser.add_argument('--pvp-patch',type=Path,help='JP or English PvP 0.6.0 patch to preload')
     parser.add_argument('--mgba', default='/usr/games/mgba')
     parser.add_argument('--realtime',type=Path,help='agbplay streaming helper executable')
     args = parser.parse_args()
-    manager = Manager(args.data_dir, mgba=args.mgba, realtime=args.realtime)
+    manager = Manager(args.data_dir, mgba=args.mgba, realtime=args.realtime, pvp_patch=args.pvp_patch)
     try:
         server = Server(('127.0.0.1', args.port), manager)
     except OSError as exc:

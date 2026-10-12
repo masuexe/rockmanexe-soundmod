@@ -23,10 +23,10 @@ The default base inputs and music source directory are:
 | Input | Default location |
 |---|---|
 | Original EXE4.5 ROM | `../roms/exe45.gba` |
-| PvP patch | `references/exe45_pvp_0.6.0.bps` |
+| Default Japanese PvP patch | `../patches/exe45_pvp_0.6.0.bps` (fallback: `references/`) |
 | Original music ROMs | `../roms/*.gba` matching the configured profiles |
 
-The base ROM and PvP patch can be replaced in the interface. Music sources appear as checkboxes with game names and filenames. Use **Select all** or **Clear selection**, then check only the games you want. Click **Load tracks** to apply the choice. The server lists available files at startup, but reads and analyzes donor ROM bytes only when selected for loading. **Add music ROMs** accepts multiple donor files and checks the added sources; identities are determined by content fingerprint rather than uploaded filename. Uploaded donor copies persist under the local data directory's `uploaded-roms/` folder. The PvP BPS is decoded against original EXE4.5 in memory. Donor profiles are pinned in `config/rom-profiles.json`; unsupported revisions are rejected. The shared directory is `/home/harp/projects/gba/roms` in this workspace. Restart the server after changing files there, or add files through the interface.
+The base ROM and PvP patch can be replaced in the interface. Japanese and English PvP 0.6.0 targets are supported from the same original base; use `--pvp-patch ../patches/bn45_us_pvp_0.6.0.bps` to preload English. See [English target support](english-pvp.md) for fingerprints, preserved resources, and verification. Music sources appear as checkboxes with game names and filenames. Use **Select all** or **Clear selection**, then check only the games you want. Click **Load tracks** to apply the choice. The server lists available files at startup, but reads and analyzes donor ROM bytes only when selected for loading. **Add music ROMs** accepts multiple donor files and checks the added sources; identities are determined by content fingerprint rather than uploaded filename. Uploaded donor copies persist under the local data directory's `uploaded-roms/` folder. The PvP BPS is decoded against original EXE4.5 in memory. Donor profiles are pinned in `config/rom-profiles.json`; unsupported revisions are rejected. The shared directory is `/home/harp/projects/gba/roms` in this workspace. Restart the server after changing files there, or add files through the interface.
 
 Supported local profiles cover Japanese Rockman EXE 1–6, Black/Blue Moon/Team Colonel/Falzar variants, Battle Chip GP, and corresponding English Battle Network/Chip Challenge ROMs. Each source has its own game label and stable key such as `exe1:0`, `bn2:1`, or `exegp:1`. Song titles remain user-assigned metadata. Regional variants are listed separately; this count is not a count of unique compositions.
 
@@ -71,7 +71,7 @@ The output directory must be new.
 
 ## Verification
 
-The Python suite passes 54 tests, including manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity, selected-only packing/loading, source-choice persistence, disabled-source pool pruning, native-only catalogs, and BPS reconstruction. Run:
+The Python suite passes 60 tests, including manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity, selected-only packing/loading, source-choice persistence, disabled-source pool pruning, native-only catalogs, and BPS reconstruction. Run:
 
 ```bash
 python3 -m unittest discover -s tests -v

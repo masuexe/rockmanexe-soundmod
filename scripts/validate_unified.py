@@ -13,7 +13,8 @@ from pathlib import Path
 import struct
 
 from scan_audio import ROM_BASE, fingerprint
-from validate_playback import Debugger, PROFILE_SHA256
+from validate_playback import Debugger
+from target_profiles import valid_manifest_target
 
 
 def probe(rom, data, manifest, trigger, selector, work, mgba):
@@ -86,7 +87,7 @@ def main():
     data = args.rom.read_bytes()
     manifest = json.loads(args.manifest.read_text())
     if (manifest['output_fingerprint'] != fingerprint(data)
-        or manifest['target_base_fingerprint']['sha256'] != PROFILE_SHA256['exe45-pvp']):
+        or not valid_manifest_target(manifest)):
         parser.error('ROM does not match the pinned unified manifest')
     if not 1 <= args.jobs <= 4:
         parser.error('--jobs must be 1..4')
