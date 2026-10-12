@@ -1,8 +1,18 @@
 # rockmanexe-soundmod
 
-ROM audio analysis and transplantation tools for Rockman EXE. The eventual goal is a manager that combines EXE4.5 PvP with Soundmod and music from other games, lets users select tracks for random playback, and exports a patch.
+A local sound manager and ROM audio analysis tools for Rockman EXE. Combine EXE4.5 PvP with Soundmod and eligible EXEGP music, preview tracks, edit names and playback pools, and export a checked BPS patch.
 
 The tools provide **read-only audio table scanning, verified BPS decoding, patch comparison, and supported-song dependency analysis**. The unified builder exports PvP plus all 52 Soundmod additions and 15 eligible EXEGP songs, with stable IDs and configurable ROM-resident selection. Input ROMs are never modified. Background music and sound effects are not yet classified; nonempty audio entries are not a count of music tracks.
+
+## Open the local manager
+
+```bash
+python3 scripts/manage_sound.py
+```
+
+Open `http://127.0.0.1:8765/` if the browser does not open automatically. Files already in `roms/` and `references/` are preloaded; you can also choose files in the interface. Load the catalog, preview and name tracks, choose a playback event, check its tracks, then build and download the patch. The BPS applies to the **original EXE4.5 ROM**, and already includes PvP.
+
+Catalog editing and export require only Python 3.10+. Audio preview additionally requires Linux, the mGBA SDL executable (tested with 0.10.2), `cc`, and SDL2 development headers. See [manager usage and preview details](docs/manager.md) for supported versions, saved projects, and limitations.
 
 ## Scan local ROMs
 
@@ -32,7 +42,7 @@ Addresses include both file offsets and `0x08000000 + offset` ROM addresses. Tab
 
 ## Build the unified ROM
 
-Edit `config/playlist.json` to choose pools using stable keys from the catalog. For example, `exegp:1` identifies the donor entry regardless of its relocated address. The current interface is JSON/CSV; the graphical manager is not implemented yet.
+Edit `config/playlist.json` to choose pools using stable keys from the catalog. For example, `exegp:1` identifies the donor entry regardless of its relocated address. The browser manager edits the same pool format; the command-line builder remains available.
 
 ```bash
 python3 scripts/build_unified.py \
@@ -57,12 +67,12 @@ Tests cover BPS decoding/export, overlapping copies, checksums, invalid referenc
 
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
-Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. Audible listening remains unverified; sustained donor and transplanted execution are covered in the transplantation research.
+Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. The user has confirmed that the unified ROM sounds correct during their listening test; sustained donor and transplanted execution are covered in the transplantation research.
 
 EXEGP song 1 has now been decoded, relocated, and validated through sustained playback in a PvP-based experiment. See [song transplantation](docs/song-transplant.md) for build commands, the startup mixer adjustment, BPS output, and limitations. That earlier experiment used a provisional slot and debugger selection; the unified build now assigns stable IDs and selects the title song during normal startup.
 
 The unified catalog and permanent start-by-ID selection hook are now implemented; see [unified build and pool configuration](docs/unified-catalog.md). The default build plays EXEGP song 1 on the title screen and preserves the original Soundmod selection pools using remapped IDs.
 
-The next milestone is a local manager interface using this catalog/build backend, with track preview, names, pool selection, and export. Selection currently follows Soundmod's existing selector byte; its distribution is not verified. Finite tracks do not automatically advance to another song.
+The local manager now provides track previews, names, pool selection, project persistence, and export using the same catalog/build backend. Selection currently follows Soundmod's existing selector byte; its distribution is not verified. Finite tracks do not automatically advance to another song.
 
 ROMs, saves, BPS files, and generated reports remain local and are excluded from version control.

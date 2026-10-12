@@ -1,6 +1,6 @@
 # Unified catalog, combined build, and ROM-resident selection
 
-Status: version-pinned catalog, batch relocation, stable IDs, configurable selection pools, combined BPS export, natural title playback, and representative Soundmod loop playback verified. The graphical manager, track names/listening previews, and multiplayer validation remain pending.
+Status: version-pinned catalog, batch relocation, stable IDs, configurable selection pools, combined BPS export, natural title playback, and representative Soundmod loop playback verified. A local browser manager now provides names, listening previews, pool editing, and export; multiplayer validation remains pending.
 
 ## Stable IDs and eligibility
 
@@ -138,6 +138,8 @@ An exploratory longer `soundmod:3` title run was stopped by the game's attract/d
 
 All **37 automated tests** pass, including preservation, stable IDs, conflict remapping, sparse dependency handling, PCM deduplication, loop-state projection, invalid pool rejection, and BPS reconstruction tests from prior stages. No full gameplay pass for every imported track or PvP multiplayer test has been performed. The dummy audio backend establishes sequence/mixer execution but is not a listening review.
 
-## Next manager milestone
+## Listening feedback and local manager
 
-The JSON catalog and pools now form the manager's backend contract. Next, provide a local interface for choosing ROMs, filtering the catalog, editing selected pools, and exporting the existing checked build. Add track preview/names and a playback lifecycle strategy for finite tracks; the current hook chooses music on game start calls and does not advance automatically when a finite track ends.
+After receiving the reference unified ROM, the user reported that listening tests were completely satisfactory and authorized the manager milestone. This is human feedback on their tested playback, not evidence of an exhaustive audit of every imported song or multiplayer behavior.
+
+The [local manager](manager.md) now uses this JSON catalog and pool contract for file selection, filtering, names, previews, and checked exports. Default manager export reproduces the reference ROM SHA-256 above. Preview builds use a separate single-track title pool and do not change the saved export pools. Selection still occurs on game start calls; finite tracks do not advance automatically.

@@ -1,6 +1,6 @@
 # Audio playback entry points and runtime validation
 
-Status: entry-point disassembly, table lookup, player selection, and player header/tone-bank initialization verified on the local ROM versions. This document covers initialization only. Sustained execution and dependencies for EXEGP song 1 are now covered in [song transplantation](song-transplant.md); audible listening and general BGM/SFX names remain unverified.
+Status: entry-point disassembly, table lookup, player selection, and player header/tone-bank initialization verified on the local ROM versions. This document covers initialization only. Sustained execution and dependencies for EXEGP song 1 are now covered in [song transplantation](song-transplant.md); later user listening feedback is recorded in [the unified build record](unified-catalog.md). General BGM/SFX names remain unverified.
 
 ## Baselines
 
