@@ -110,4 +110,4 @@ The transplanted sustained run passed 1,846 frames and 12,922 track-state compar
 
 `dependencies.json` provides resource boundaries and reference sites suitable for annotations. The sustained `validation.json` and `debugger.txt` provide runtime evidence. `transplant.json` records exactly which source references were mapped to which target locations. These artifacts can be consumed by `rockmanexe-reverse`; its files were not changed.
 
-The next milestone is a unified catalog/ID allocation plan for PvP, Soundmod, and EXEGP, followed by a permanent selection hook and broader supported-song coverage. Keep audible preview and mixer requirements in that design; parsing a valid sequence alone does not establish playback compatibility.
+The follow-up milestone implemented a unified catalog, stable IDs, batch Soundmod/EXEGP relocation, and a permanent start-by-ID selection hook; see [the unified build record](unified-catalog.md). Keep audible preview and mixer requirements in that design; parsing a valid sequence alone does not establish playback compatibility.

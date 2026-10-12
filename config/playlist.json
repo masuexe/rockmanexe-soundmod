@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "pools": {
+    "55": { "tracks": ["exegp:1"], "selector_shift": 0 },
+    "64": { "tracks": ["soundmod:3", "soundmod:16", "pvp:64", "soundmod:38", "soundmod:77", "soundmod:86", "soundmod:32", "soundmod:29"], "selector_shift": 5 },
+    "65": { "tracks": ["soundmod:4", "soundmod:17", "pvp:65", "pvp:66", "soundmod:39", "soundmod:78", "soundmod:87", "pvp:65"], "selector_shift": 5 },
+    "89": { "tracks": ["soundmod:5", "soundmod:18", "pvp:98", "soundmod:69", "soundmod:79", "soundmod:88", "soundmod:33", "pvp:89", "soundmod:6", "soundmod:19", "pvp:99", "soundmod:70", "soundmod:80", "soundmod:23", "soundmod:34", "soundmod:72", "soundmod:5", "soundmod:18", "pvp:98", "soundmod:69", "soundmod:79", "soundmod:88", "soundmod:33", "pvp:89", "soundmod:6", "soundmod:19", "soundmod:82", "soundmod:70", "soundmod:80", "soundmod:23", "soundmod:34", "soundmod:11"], "selector_shift": 3 },
+    "98": { "tracks": ["soundmod:5", "soundmod:18", "pvp:98", "soundmod:69", "soundmod:79", "soundmod:88", "soundmod:33", "pvp:89", "soundmod:6", "soundmod:19", "pvp:99", "soundmod:70", "soundmod:80", "soundmod:23", "soundmod:34", "soundmod:72", "soundmod:5", "soundmod:18", "pvp:98", "soundmod:69", "soundmod:79", "soundmod:88", "soundmod:33", "pvp:89", "soundmod:6", "soundmod:19", "soundmod:82", "soundmod:70", "soundmod:80", "soundmod:23", "soundmod:34", "soundmod:11"], "selector_shift": 3 },
+    "99": { "tracks": ["soundmod:5", "soundmod:18", "pvp:98", "soundmod:69", "soundmod:79", "soundmod:88", "soundmod:33", "pvp:89"], "selector_shift": 5 }
+  }
+}

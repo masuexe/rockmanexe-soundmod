@@ -30,6 +30,9 @@ def memory(debugger, address, size):
 
 
 def expected_state(track, clock, data, bank):
+    if track['termination'] == 'repeated_state' and clock > track['ticks_before_repeat']:
+        start, duration = track['loop_start_ticks'], track['loop_ticks']
+        clock = start + (clock - start - 1) % duration + 1
     result = {'cursor': ROM_BASE + track['file_offset'], 'wait': 0, 'pattern_depth': 0,
               'key': 0, 'velocity': 0, 'running_status': 0, 'ended': False, 'tone_hex': None}
     for event in track['events']:
@@ -56,6 +59,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('rom', type=Path)
     parser.add_argument('--id', type=int)
+    parser.add_argument('--unified', type=Path, help='Unified build manifest; starts the selected title song naturally')
     parser.add_argument('--transplant', type=Path, help='Manifest authorizing the verified experimental PvP image')
     parser.add_argument('--keep-song', action='store_true', help='Redirect later starts on the selected player to this header in debugger RAM')
     parser.add_argument('--frames', type=int, default=3000, help='Maximum frames; must reach sequence completion')
@@ -65,7 +69,21 @@ def main():
     data = args.rom.read_bytes()
     profile, table, player_table, entry, core, count = 'exegp', 0x160658, 0x160604, 0x0804C3BC, 0x0804CAF0, 170
     manifest = None
-    if args.transplant:
+    if args.unified:
+        if args.transplant or args.keep_song:
+            parser.error('--unified validates natural playback; incompatible with transplant/keep-song probes')
+        manifest = json.loads(args.unified.read_text())
+        if (manifest.get('target_profile') != 'exe45-pvp'
+            or manifest['target_base_fingerprint']['sha256'] != PROFILE_SHA256['exe45-pvp']
+            or manifest['output_fingerprint'] != fingerprint(data)):
+            parser.error('Unified image does not match its version-pinned manifest')
+        profile, table, player_table, entry, core, count = 'exe45-pvp-unified', manifest['target_table_file_offset'], 0x135094, 0x080EE344, 0x080EEA78, manifest['table_entry_count']
+        if args.id is None:
+            title = next((rule for rule in manifest['hook']['rules'] if rule['trigger_id'] == 55), None)
+            if title is None or len(title['ids']) != 1:
+                parser.error('Choose --id explicitly unless title pool contains one track')
+            args.id = title['ids'][0]
+    elif args.transplant:
         manifest = json.loads(args.transplant.read_text())
         if (manifest.get('target_profile') != 'exe45-pvp'
             or manifest['target_base_fingerprint']['sha256'] != PROFILE_SHA256['exe45-pvp']
@@ -81,8 +99,7 @@ def main():
     if args.id < 0 or args.id >= count or args.frames < 1:
         parser.error('Invalid ID or frame limit')
     dependency = analyze(data, table, args.id)
-    if any(track['termination'] != 'fine' for track in dependency['tracks']):
-        parser.error('Completion validation currently requires finite tracks')
+    validation_clock = max(track['ticks_before_repeat'] + (track['loop_ticks'] if track['termination'] == 'repeated_state' else 0) + 1 for track in dependency['tracks'])
     args.out.mkdir(parents=True, exist_ok=False)
     work = args.out.resolve()
     rom = work / 'test.gba'
@@ -92,10 +109,11 @@ def main():
     env.pop('LD_PRELOAD', None)
     snapshots, seen_waves, pcm_hashes = [], set(), set()
     report = {'schema_version': 1, 'rom_fingerprint': fingerprint(data), 'rom_path': str(args.rom),
-              'id': args.id, 'register_injection': True, 'audio_output': 'SDL dummy',
+              'id': args.id, 'register_injection': not bool(args.unified), 'audio_output': 'SDL dummy',
               'complete': False, 'clock_restarts': 0, 'snapshots': snapshots,
               'profile': profile, 'transplant_manifest': str(args.transplant) if args.transplant else None,
-              'keep_song': args.keep_song, 'core_header_redirects': []}
+              'keep_song': args.keep_song, 'core_header_redirects': [],
+              'unified_manifest': str(args.unified) if args.unified else None, 'startup_calls': []}
     bank = dependency['header']['tone_bank']['file_offset']
     track_count = len(dependency['tracks'])
     field_a = struct.unpack_from('<H', data, table + args.id * 8 + 4)[0]
@@ -108,12 +126,35 @@ def main():
         try:
             debugger.prompt()
             debugger.command(f'break/t 0x{entry:08X}')
-            debugger.hit(entry)
-            debugger.command(f'w/r r0 {args.id}')
-            debugger.command(f'break/t 0x{entry + 32:08X}')
-            debugger.hit(entry + 32)
-            debugger.command('delete 1')
-            debugger.command('delete 2')
+            if args.unified:
+                debugger.command(f'break/t 0x{core:08X}')
+                incoming = None
+                for _ in range(100):
+                    text = debugger.command('continue')
+                    regs = {int(n): int(value, 16) for n, value in re.findall(r'\br(\d+):\s*([0-9a-fA-F]{8})', text)}
+                    if f'at 0x{entry:08X}' in text:
+                        incoming = regs[0]
+                        continue
+                    if f'at 0x{core:08X}' not in text:
+                        raise RuntimeError('Unexpected startup breakpoint')
+                    report['startup_calls'].append({'incoming_id': incoming, 'player': f'0x{regs[0]:08X}', 'header': f'0x{regs[1]:08X}'})
+                    incoming = None
+                    if regs[0] == player and regs[1] == header:
+                        returned = regs[14] & ~1
+                        debugger.command(f'break/t 0x{returned:08X}')
+                        debugger.hit(returned)
+                        break
+                else:
+                    raise AssertionError('Selected song was not reached naturally')
+                for number in (1, 2, 3):
+                    debugger.command(f'delete {number}')
+            else:
+                debugger.hit(entry)
+                debugger.command(f'w/r r0 {args.id}')
+                debugger.command(f'break/t 0x{entry + 32:08X}')
+                debugger.hit(entry + 32)
+                debugger.command('delete 1')
+                debugger.command('delete 2')
             if args.keep_song:
                 debugger.command(f'break/t 0x{core:08X}')
             track_base = debugger.read(4, player + 44)
@@ -178,10 +219,10 @@ def main():
                 snapshots.append(snapshot)
                 if frame % 120 == 0:
                     print(f'frame {frame}: clock {clock}, {len(seen_waves)} observed samples, {len(pcm_hashes)} nonzero PCM snapshots', flush=True)
-                if all(record['ended'] for record in records) and clock:
+                if clock >= validation_clock:
                     break
             else:
-                raise AssertionError('Frame limit reached before track completion')
+                raise AssertionError('Frame limit reached before finite completion or loop coverage')
             report.update(frames=len(snapshots), final_clock=clock,
                           player_address=f'0x{player:08X}', track_base=f'0x{track_base:08X}',
                           sound_info=f'0x{sound:08X}', observed_samples=[f'0x{wave:08X}' for wave in sorted(seen_waves)],
@@ -189,6 +230,8 @@ def main():
             if seen_waves != allowed_waves or len(pcm_hashes) < 2:
                 raise AssertionError('Sample coverage or changing PCM evidence incomplete')
             report['complete'] = True
+            report['validation_clock_target'] = validation_clock
+            report['terminations'] = sorted({track['termination'] for track in dependency['tracks']})
             print(f"Passed {len(snapshots)} frames, {track_count} tracks, all {len(seen_waves)} samples; final clock {clock}", flush=True)
         except BaseException as exc:
             report['error'] = repr(exc)

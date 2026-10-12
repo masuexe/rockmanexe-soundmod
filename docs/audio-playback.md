@@ -56,7 +56,7 @@ The initial runs completed 11 scenarios:
 
 All selected headers, players, active headers, and tone banks matched. EXEGP entry 1 selects player 0 with a capacity of 10 tracks; entry 100 selects player 1 with a capacity of three. These differences help choose future music and effect probes, but do not by themselves label every entry as BGM or SFX.
 
-## Soundmod's existing selection hook
+## Soundmod's original selection hook
 
 Soundmod replaces the instructions at `0x080EE346–0x080EE349` with a call to `0x08475A00`. The hook remaps certain input IDs once, then performs the displaced shift and loads the original player table. The main lookup still uses `0x08135214`, not the additional scanner candidate at `0x09135214`.
 
