@@ -16,7 +16,7 @@ import struct
 from analyze_song import analyze
 from scan_audio import ROM_BASE, fingerprint
 from validate_playback import Debugger, PROFILE_SHA256
-from target_profiles import valid_manifest_target
+from target_profiles import valid_manifest_target, manifest_layout
 
 
 def memory(debugger, address, size):
@@ -77,9 +77,10 @@ def main():
         if (not valid_manifest_target(manifest)
             or manifest['output_fingerprint'] != fingerprint(data)):
             parser.error('Unified image does not match its version-pinned manifest')
-        profile, table, player_table, entry, core, count = manifest['target_profile'] + '-unified', manifest['target_table_file_offset'], 0x135094, 0x080EE344, 0x080EEA78, manifest['table_entry_count']
+        layout = manifest_layout(manifest)
+        profile, table, player_table, entry, core, count = manifest['target_profile'] + '-unified', manifest['target_table_file_offset'], layout['player_table_offset'], ROM_BASE+layout['entry_offset'], ROM_BASE+layout['core_offset'], manifest['table_entry_count']
         if args.id is None:
-            title = next((rule for rule in manifest['hook']['rules'] if rule['trigger_id'] == 55), None)
+            title = next((rule for rule in manifest['hook']['rules'] if rule['trigger_id'] == layout['preview_trigger']), None)
             if title is None or len(title['ids']) != 1:
                 parser.error('Choose --id explicitly unless title pool contains one track')
             args.id = title['ids'][0]

@@ -14,10 +14,14 @@ import struct
 
 from scan_audio import ROM_BASE, fingerprint
 from validate_playback import Debugger
-from target_profiles import valid_manifest_target
+from target_profiles import valid_manifest_target, manifest_layout, selector_value
 
 
 def probe(rom, data, manifest, trigger, selector, work, mgba):
+    layout = manifest_layout(manifest)
+    entry, core = ROM_BASE+layout['entry_offset'], ROM_BASE+layout['core_offset']
+    selector_address = layout['selector_address']
+    selector_width = 4 if layout.get('selector_mode')=='clock-xorshift32' else 1
     label = f'id-{trigger}-selector-{selector if selector is not None else "native"}'
     directory = work / label
     directory.mkdir()
@@ -30,27 +34,28 @@ def probe(rom, data, manifest, trigger, selector, work, mgba):
         debugger = Debugger([mgba, '-d', str(sample_rom)], env, transcript)
         try:
             debugger.prompt()
-            if trigger == 68:
+            if trigger == layout['preservation_probes'][0]:
                 handler = int(manifest['hook']['handler_address'], 16)
                 size = manifest['hook']['handler_size']
                 listing = debugger.command(f'disassemble/t 0x{handler:08X} {(size - 24) // 2}')
                 (directory / 'handler-disassembly.txt').write_text(listing)
-                (directory / 'stub-disassembly.txt').write_text(debugger.command('disassemble/t 0x080EE344 7'))
-            debugger.command('break/t 0x080EE344')
-            before = debugger.hit(0x080EE344)
+                (directory / 'stub-disassembly.txt').write_text(debugger.command(f'disassemble/t 0x{entry:08X} 7'))
+            debugger.command(f'break/t 0x{entry:08X}')
+            before = debugger.hit(entry)
             debugger.command(f'w/r r0 {trigger}')
             if selector is not None:
-                debugger.command(f'w/1 0x02003D58 {selector}')
-            observed_selector = debugger.read(1, 0x02003D58)
+                debugger.command(f'w/{selector_width} 0x{selector_address:08X} {selector}')
+            selector_raw = debugger.read(selector_width, selector_address)
+            observed_selector = selector_value(layout,selector_raw)
             expected_id = trigger
             rule = next((r for r in manifest['hook']['rules'] if r['trigger_id'] == trigger), None)
             if rule:
                 expected_id = rule['ids'][(observed_selector >> rule['selector_shift']) % len(rule['ids'])]
             table = manifest['target_table_file_offset']
             header, player_index = struct.unpack_from('<IH', data, table + expected_id * 8)
-            player = struct.unpack_from('<I', data, 0x135094 + player_index * 12)[0]
-            debugger.command('break/t 0x080EEA78')
-            at_core = debugger.hit(0x080EEA78)
+            player = struct.unpack_from('<I', data, layout['player_table_offset'] + player_index * 12)[0]
+            debugger.command(f'break/t 0x{core:08X}')
+            at_core = debugger.hit(core)
             if at_core[0] != player or at_core[1] != header or at_core[4] != expected_id:
                 raise AssertionError('Hook selection/player/header mismatch')
             returned = at_core[14] & ~1
@@ -66,7 +71,20 @@ def probe(rom, data, manifest, trigger, selector, work, mgba):
             after = debugger.hit(caller)
             if any(before[r] != after[r] for r in list(range(4, 12)) + [13]):
                 raise AssertionError('Hook changed callee-saved registers or stack')
-            return {'trigger_id': trigger, 'selector_override': selector, 'selector_byte': observed_selector,
+            query_checked = False
+            if 'query_entry_offset' in layout:
+                expected_status = debugger.read(2,player+4)
+                query = ROM_BASE+layout['query_entry_offset']
+                debugger.command(f'w/r r0 {trigger}')
+                debugger.command(f'w/r r14 {caller|1}')
+                debugger.command(f'w/r r15 {query}')
+                queried = debugger.hit(caller)
+                if queried[0] != expected_status:
+                    raise AssertionError('Status query did not recognize the selected pool header')
+                if any(after[r] != queried[r] for r in list(range(4,12))+[13]):
+                    raise AssertionError('Status query changed callee-saved registers or stack')
+                query_checked = True
+            return {'status_query_checked':query_checked, 'trigger_id': trigger, 'selector_override': selector, 'selector_byte': observed_selector, 'selector_raw':selector_raw,
                     'selected_id': expected_id, 'player_index': player_index, 'header': f'0x{header:08X}',
                     'tone_bank': f'0x{tone_bank:08X}', 'register_injection': True,
                     'abi_preserved': True, 'player_initialized': True}
@@ -98,12 +116,14 @@ def main():
     selectors = args.selector if args.selector is not None else [0, 128, 255]
     if any(not 0 <= value <= 255 for value in selectors):
         parser.error('Selector values must be 0..255')
+    layout = manifest_layout(manifest)
+    native_cases = [(i,None) for i in layout['preservation_probes']]
     if args.trigger:
         if any(not 0 <= value < manifest['table_entry_count'] for value in args.trigger):
             parser.error('Trigger outside unified table')
-        cases = [(68, None)] + [(trigger, selector) for trigger in args.trigger for selector in selectors]
+        cases = native_cases[:1] + [(trigger, selector) for trigger in args.trigger for selector in selectors]
     else:
-        cases = [(68, None)] + [(i, None) for i in range(69, 81)]
+        cases = native_cases
         cases += [(rule['trigger_id'], selector) for rule in manifest['hook']['rules'] for selector in selectors]
     cases = list(dict.fromkeys(cases))
     samples, errors = [], []

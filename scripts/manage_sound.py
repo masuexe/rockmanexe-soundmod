@@ -147,6 +147,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.manager.realtime.stop(value.get('id'))
                 elif path == '/api/load':
                     result = self.server.manager.load(value.get('sources'),value.get('project'))
+                elif path == '/api/target':
+                    result = self.server.manager.select_target(value['target'])
                 elif path == '/api/name':
                     result = self.server.manager.name(value['key'], value['name'])
                 elif path == '/api/project':
@@ -167,11 +169,13 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--data-dir', type=Path, help='Local names, projects, and generated files')
-    parser.add_argument('--pvp-patch',type=Path,help='JP or English PvP 0.6.0 patch to preload')
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument('--pvp-patch',type=Path,help='JP or English PvP 0.6.0 patch to preload')
+    selection.add_argument('--target',choices=['exe45-pvp','bn45-us-pvp','exegp'],help='Target preset; otherwise restore the last selected target')
     parser.add_argument('--mgba', default='/usr/games/mgba')
     parser.add_argument('--realtime',type=Path,help='agbplay streaming helper executable')
     args = parser.parse_args()
-    manager = Manager(args.data_dir, mgba=args.mgba, realtime=args.realtime, pvp_patch=args.pvp_patch)
+    manager = Manager(args.data_dir, mgba=args.mgba, realtime=args.realtime, pvp_patch=args.pvp_patch, target=args.target)
     try:
         server = Server(('127.0.0.1', args.port), manager)
     except OSError as exc:

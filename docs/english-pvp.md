@@ -15,7 +15,7 @@ Alternatively, use **Choose file** for the PvP BPS input in an already restarted
 
 Communication battle music remains **Music event #98**. Its pool accepts the same stable keys. Every scene requesting that ID is affected by the rule. Use the exported ROM directly, or apply its BPS to the original EXE4.5 ROM. The generated BPS includes the English translation, PvP changes, and configured music changes together.
 
-`--pvp-patch` is a startup option. Uploaded patch selection is held for the current server session; restarting without that option uses the default Japanese patch. Source-checkbox preferences and saved pools remain in the selected manager data directory.
+`--pvp-patch` is a startup option. Uploaded patch selection is held for the current server session; restarting without that option restores the UI-selected target, or defaults to Japanese PvP when no target choice is saved. Source-checkbox preferences and saved pools remain in the selected manager data directory. The target dropdown can also select either PvP preset; see [multiple targets](multi-target.md).
 
 The default Japanese patch is discovered in `../patches/exe45_pvp_0.6.0.bps`, falling back to the older `references/` copy when the shared file is absent. Target identity is determined by the decoded ROM fingerprint, not the patch filename. Other revisions remain rejected.
 

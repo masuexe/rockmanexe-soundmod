@@ -13,6 +13,7 @@ from scan_audio import apply_bps, fingerprint
 from transplant_song import make_bps
 from unified_catalog import write_catalog
 from original_catalog import catalog_originals, PROFILES, identify
+from target_profiles import TARGETS, target_profile, identify_target
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_DIRECTORY = ROOT.parent / 'roms'
@@ -25,7 +26,9 @@ INPUTS.update({f'rom:{key}': ROM_DIRECTORY / profile['filename'] for key, profil
 
 
 class Manager:
-    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba', realtime=None, pvp_patch=None):
+    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba', realtime=None, pvp_patch=None, target=None):
+        if pvp_patch is not None and target is not None:
+            raise ValueError('Use either a target preset or a custom pre-patch, not both')
         self.directory = Path(directory or ROOT / 'out/manager')
         self.directory.mkdir(parents=True, exist_ok=True)
         self.mgba = mgba
@@ -39,11 +42,13 @@ class Manager:
         self.jobs = {}
         self.active = None
         self.preview_cache = {}
-        self.default_project = {'schema_version':1,'pools':{str(i):{'tracks':[f'pvp:{i}'],'selector_shift':0} for i in (55,64,65,89,98,99)}}
+        self.default_project = self._default_project(target_profile('exe45-pvp'))
         self.project_notice = ''
         self.project = copy.deepcopy(self.default_project)
         self.names_path = self.directory / 'track-names.json'
         self.project_path = self.directory / 'project.json'
+        self.target_path = self.directory / 'target.json'
+        self.selected_target = 'exe45-pvp'
         self.names = json.loads(self.names_path.read_text()) if self.names_path.exists() else {}
         if self.project_path.exists():
             self.project = json.loads(self.project_path.read_text())
@@ -63,6 +68,56 @@ class Manager:
             self.inputs['pvp'] = (patch_path.name,patch_path.read_bytes())
         self.selected_sources = set(saved['sources']) if saved and isinstance(saved.get('sources'), list) else set(self.source_paths)
         self.selected_sources.intersection_update(PROFILES)
+
+        saved_target = json.loads(self.target_path.read_text()).get('target') if self.target_path.exists() else None
+        if target is not None:
+            self.select_target(target, persist=False)
+        elif pvp_patch is not None and 'base' in self.inputs:
+            decoded, _ = apply_bps(self.inputs['base'][1],self.inputs['pvp'][1])
+            self.selected_target = identify_target(decoded)['key']
+        elif saved_target in TARGETS and preload:
+            self.select_target(saved_target, persist=False)
+
+    def select_target(self, key, persist=True):
+        if key not in TARGETS: raise ValueError('Choose a supported target ROM')
+        with self.lock:
+            if self.active: raise ValueError('Wait for the current task before changing targets')
+            profile = target_profile(key)
+            base_path = ROM_DIRECTORY / profile['filename']
+            base = base_path.read_bytes() if base_path.is_file() else None
+            if base is not None and fingerprint(base)['sha256'] != profile['base_sha256']:
+                raise ValueError('Target input ROM does not match the supported revision')
+            replacement = {'base':(base_path.name,base)} if base is not None else {}
+            if profile['patch_filename']:
+                patch_path = PATCH_DIRECTORY / profile['patch_filename']
+                if not patch_path.is_file(): patch_path = ROOT / 'references' / profile['patch_filename']
+                if patch_path.is_file():
+                    patch = patch_path.read_bytes()
+                    if base is not None and identify_target(apply_bps(base,patch)[0])['key'] != key:
+                        raise ValueError('Pre-patch does not produce the selected target')
+                    replacement['pvp'] = (patch_path.name,patch)
+            project_path = self.directory / ('project.json' if profile['audio_layout']=='exe45-audio-v1' else f'project-{key}.json')
+            default_project = self._default_project(profile)
+            project = json.loads(project_path.read_text()) if project_path.exists() else copy.deepcopy(default_project)
+            self.selected_target = key
+            self.inputs = replacement
+            self._invalidate()
+            self.project_path, self.default_project, self.project = project_path, default_project, project
+            self.project_notice = ''
+            if persist:
+                temporary = self.target_path.with_suffix('.tmp')
+                temporary.write_text(json.dumps({'schema_version':1,'target':key},indent=2)+'\n')
+                temporary.replace(self.target_path)
+        return self.state()
+
+    @staticmethod
+    def _default_project(profile, value=None):
+        layout = profile['layout']
+        events = layout['default_events']
+        if events is None:
+            events = [r['source_index'] for r in value['entries'] if r['source']==layout['native_source'] and r['playlist_eligible']] if value else [layout['preview_trigger']]
+        return {'schema_version':1,'target_profile':profile['key'],
+                'pools':{str(i):{'tracks':[f"{layout['native_source']}:{i}"],'selector_shift':0} for i in events}}
 
     def _invalidate(self):
         self.revision += 1
@@ -87,7 +142,14 @@ class Manager:
 
     def _reconcile_project(self, value, draft):
         eligible = {row['key'] for row in value['entries'] if row['playlist_eligible']}
-        project = copy.deepcopy(draft)
+        profile = target_profile(value['target_profile'])
+        unchanged_default = draft == self.default_project
+        self.default_project = self._default_project(profile,value)
+        project = copy.deepcopy(self.default_project if unchanged_default else draft)
+        previous = project.get('target_profile')
+        if previous and (previous not in TARGETS or TARGETS[previous]['audio_layout'] != profile['audio_layout']):
+            project = copy.deepcopy(self.default_project)
+        project['target_profile'] = profile['key']
         removed = fallback = 0
         try:
             for trigger, pool in project['pools'].items():
@@ -97,7 +159,7 @@ class Manager:
                 removed += len(old) - len(tracks)
                 if tracks != old: pool['selector_shift'] = 0
                 if not tracks:
-                    tracks = [f'pvp:{int(trigger)}']
+                    tracks = [f"{value['native_source']}:{int(trigger)}"]
                     pool['selector_shift'] = 0
                     fallback += 1
                 pool['tracks'] = tracks
@@ -106,8 +168,8 @@ class Manager:
             self.project = copy.deepcopy(self.default_project)
             self.project_notice = 'Invalid previous pools: native playback defaults restored. Save to keep the new project.'
         else:
-            self.project = {'schema_version':1,'pools':project['pools']}
-            self.project_notice = f'Removed {removed} unavailable playlist entries; {fallback} empty pools restored to native PvP music. Save to keep these changes.' if removed or fallback else ''
+            self.project = {'schema_version':1,'target_profile':profile['key'],'pools':project['pools']}
+            self.project_notice = f'Removed {removed} unavailable playlist entries; {fallback} empty pools restored to native target music. Save to keep these changes.' if removed or fallback else ''
 
     def state(self):
         with self.lock:
@@ -120,6 +182,9 @@ class Manager:
             project['names'] = {key:name for key,name in self.names.items() if key in known}
             return {'inputs': {role: {'filename': value[0], 'size_bytes': len(value[1])} for role, value in self.inputs.items()},
                     'revision': self.revision, 'catalog': value, 'project': project,
+                    'selected_target':self.selected_target,
+                    'target_options':[{'key':key,'label':profile['label'],'available':(ROM_DIRECTORY/profile['filename']).is_file() and (not profile['patch_filename'] or (PATCH_DIRECTORY/profile['patch_filename']).is_file() or (ROOT/'references'/profile['patch_filename']).is_file())} for key,profile in TARGETS.items()],
+                    'patch_required':bool(TARGETS[self.selected_target]['patch_filename']),
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
@@ -150,6 +215,11 @@ class Manager:
                 self._invalidate()
                 self.select_sources(sorted(self.selected_sources & self.source_paths.keys()))
             else:
+                if role=='base':
+                    if fingerprint(data)['sha256'] != TARGETS[self.selected_target]['base_sha256']:
+                        raise ValueError('ROM does not match the selected target revision')
+                if role=='pvp' and not TARGETS[self.selected_target]['patch_filename']:
+                    raise ValueError('This target uses its original ROM without a pre-patch')
                 self.inputs[role] = (filename, bytes(data))
                 self._invalidate()
 
@@ -191,19 +261,20 @@ class Manager:
             raise ValueError('Project requires schema_version 1 and nonempty pools')
         if sources is not None: self.select_sources(sources)
         with self.lock:
-            if not {'base','pvp'} <= set(self.inputs):
-                raise ValueError('Select the original EXE4.5 ROM and the PvP BPS patch')
+            if 'base' not in self.inputs or (TARGETS[self.selected_target]['patch_filename'] and 'pvp' not in self.inputs):
+                raise ValueError('Select the target ROM and its required pre-patch')
             inputs, revision = dict(self.inputs), self.revision
             draft = copy.deepcopy(project if project is not None else self.project)
             source_paths = {key:self.source_paths[key] for key in sorted(self.selected_sources & self.source_paths.keys())}
         def task(_):
             base = inputs['base'][1]
-            pvp, pvp_info = apply_bps(base, inputs['pvp'][1])
+            pvp, pvp_info = apply_bps(base, inputs['pvp'][1]) if 'pvp' in inputs else (base,None)
             donors = {key:path.read_bytes() for key,(_,path) in source_paths.items()}
             value, reports = catalog_originals(base, pvp, donors)
             with self.lock:
                 if revision != self.revision:
                     raise ValueError('Files changed; load tracks again')
+                self.selected_target = value['target_profile']
                 self._reconcile_project(value, draft)
                 self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in donors.items()})
                 self.value = value
@@ -226,7 +297,7 @@ class Manager:
             if 'names' in project:
                 self._validate_names(project['names'])
                 self.names.update(project['names'])
-            self.project = {'schema_version': 1, 'pools': copy.deepcopy(project['pools'])}
+            self.project = {'schema_version': 1, 'target_profile':self.value['target_profile'], 'pools': copy.deepcopy(project['pools'])}
             self.project_path.write_text(json.dumps(self.project, ensure_ascii=False, indent=2) + '\n')
             self.names_path.write_text(json.dumps(self.names, ensure_ascii=False, indent=2) + '\n')
         return self.state()
@@ -261,7 +332,7 @@ class Manager:
                 raise AssertionError('Export verification failed')
             for row in value['entries']:
                 row['name'] = names.get(row['key'], '')
-            manifest.update(source_patches={'pvp':pvp_info}, manager=True, music_sources='original ROMs')
+            manifest.update(source_patches={'pvp':pvp_info} if pvp_info else {}, manager=True, music_sources='original ROMs')
             (directory / 'unified.gba').write_bytes(output)
             (directory / 'unified.bps').write_bytes(patch)
             (directory / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -289,7 +360,7 @@ class Manager:
             directory = self.directory / job_id
             directory.mkdir()
             base, pvp, donors, _, reports = decoded
-            config = {'schema_version': 1, 'pools': {'55': {'tracks': [key], 'selector_shift': 0}}}
+            config = {'schema_version': 1, 'pools': {str(self.value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
             output, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
             rom = directory / 'preview.gba'
             rom.write_bytes(output)
@@ -307,8 +378,9 @@ class Manager:
             if not row or not row['playlist_eligible']:
                 raise ValueError('This entry is not available for music preview')
             base, pvp, donors, _, _ = self.decoded
-            if row['source'] == 'pvp':
-                data, table, count = pvp, 0x135214, 499
+            if row['source'] == self.value['native_source']:
+                layout = target_profile(self.value['target_profile'])['layout']
+                data, table, count = pvp, layout['table_offset'], layout['entry_count']
             else:
                 profile = PROFILES[row['source']]
                 data, table, count = donors[row['source']], profile['table_offset'], profile['entry_count']

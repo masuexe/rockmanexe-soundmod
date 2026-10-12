@@ -20,13 +20,15 @@ def identify(data):
     raise ValueError('Unsupported original ROM revision; choose one of the cataloged EXE/BN ROMs')
 
 
-def catalog_originals(base, pvp, donors):
-    target = validate_target(base, pvp)
+def catalog_originals(base, target_rom, donors):
+    target = validate_target(base, target_rom)
+    layout = target['layout']
+    native = layout['native_source']
     rows, reports = [], {}
-    source_info = {'pvp': fingerprint(pvp)}
-    labels = {'pvp': target['native_label']}
-    capacity = pvp[0x135094 + 31 * 12 + 8]
-    sources = [('pvp', pvp, {'table_offset': 0x135214, 'entry_count':499, 'music_player':31, 'target_slot_start':0})]
+    source_info = {native: fingerprint(target_rom)}
+    labels = {native: target['native_label']}
+    capacity = target_rom[layout['player_table_offset'] + layout['music_player'] * 12 + 8]
+    sources = [(native, target_rom, {**layout, 'target_slot_start':0})]
     for key in sorted(donors):
         profile = PROFILES.get(key)
         if not profile or fingerprint(donors[key]) != profile['fingerprint']:
@@ -50,10 +52,10 @@ def catalog_originals(base, pvp, donors):
             if header['empty']:
                 row['availability']='empty'
             elif not candidate:
-                row['availability']='preserved_native_audio' if source=='pvp' else 'reserved_nonmusic_entry'
+                row['availability']='preserved_native_audio' if source==native else 'reserved_nonmusic_entry'
             elif header['track_count']>capacity:
                 row['availability']='exceeds_target_track_capacity'
-            elif source=='pvp':
+            elif source==native:
                 row.update(availability='native_music',playlist_eligible=True)
             else:
                 try:
@@ -66,7 +68,7 @@ def catalog_originals(base, pvp, donors):
                                dependency_summary={'tone_records':len(report['tones']),'pcm_samples':len(report['samples']),
                                                    'covered_bytes':report['covered_bytes']})
             rows.append(row)
-    return {'schema_version':1,'target_profile':target['key'],'target_label':target['label'],'sources':source_info,'source_labels':labels,'target_player':31,
+    return {'schema_version':1,'target_profile':target['key'],'target_label':target['label'],'sources':source_info,'source_labels':labels,'native_source':native, 'target_player':layout['music_player'], 'event_labels':layout['event_labels'], 'preview_trigger':layout['preview_trigger'],
             'target_track_capacity':capacity,'table_entry_count':PROFILE_DATA['table_entry_count'],
             'allocation_policy':'Native IDs preserved; fixed original-ROM profile ranges including absent sources',
             'classification_basis':'Profile music-player candidates, not verified song titles; donor runtime coverage is representative',
