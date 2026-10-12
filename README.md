@@ -1,6 +1,6 @@
 # rockmanexe-soundmod
 
-A local sound manager and ROM audio analysis tools for Rockman EXE. Combine EXE4.5 PvP with music read directly from original EXE/BN ROMs, preview tracks, edit names and playback pools, and export a checked BPS patch.
+A local sound manager and ROM audio analysis tools for Rockman EXE. Combine EXE4.5 PvP with music read directly from original EXE/BN ROMs, preview tracks in realtime, edit names and playback pools, and export a checked BPS patch.
 
 The tools provide **read-only audio table scanning, verified BPS decoding, patch comparison, and supported-song dependency analysis**. The manager reads 22 original-ROM profiles from the shared `../roms/` directory, with 740 eligible entries in the current library (48 native PvP and 692 foreign music-player candidates). Export packs only selected foreign songs with stable IDs and configurable ROM-resident selection. The earlier Soundmod-based command-line builder remains available for reproducing the validated legacy build. Input ROMs are never modified. Background music and sound effects are not yet classified; nonempty audio entries are not a count of music tracks.
 
@@ -10,9 +10,9 @@ The tools provide **read-only audio table scanning, verified BPS decoding, patch
 python3 scripts/manage_sound.py
 ```
 
-Open `http://127.0.0.1:8765/` if the browser does not open automatically. Original ROMs in `../roms/` and the PvP patch in `references/` are preloaded; you can also choose files in the interface. Load the catalog, preview and name tracks, choose a playback event, check its tracks, then build and download the patch. The BPS applies to the **original EXE4.5 ROM**, and already includes PvP.
+Open `http://127.0.0.1:8765/` if the browser does not open automatically. Original ROMs in `../roms/` and the PvP patch in `references/` are preloaded; you can also choose files in the interface. Load the catalog, select a track and click **Play now** for realtime preview, edit its name, choose a playback event, check its tracks, then build and download the patch. The BPS applies to the **original EXE4.5 ROM**, and already includes PvP.
 
-Catalog editing and export require only Python 3.10+. Audio preview additionally requires Linux, the mGBA SDL executable (tested with 0.10.2), `cc`, and SDL2 development headers. See [manager usage and preview details](docs/manager.md) for supported versions, saved projects, and limitations.
+Catalog editing and export require only Python 3.10+. Realtime preview uses a locally built agbplay core: run `python3 scripts/build_realtime.py --fetch-deps` once in the tested Ubuntu environment. See [realtime setup](docs/realtime-preview.md). The optional mGBA verification capture additionally requires Linux, the mGBA SDL executable (tested with 0.10.2), `cc`, and SDL2 development headers. See [manager usage and preview details](docs/manager.md) for supported versions, saved projects, and limitations.
 
 ## Scan local ROMs
 
@@ -60,6 +60,7 @@ Outputs include `unified.gba`, a BPS patch for the original EXE4.5 ROM, `catalog
 ```bash
 python3 -m unittest discover -s tests -v
 node tests/test_manager_ui.mjs
+node tests/test_audio_worklet.mjs
 ```
 
 Tests cover BPS decoding/export, overlapping copies, checksums, invalid references, sequence patterns and running commands, PCM boundaries, sparse drum dependencies, preservation of existing PvP data, and relocated sample contents. When local ROMs and patches are available, they also verify discovered tables, target checksums, and the PvP conflict indices. Those integration tests are skipped when their inputs are absent.

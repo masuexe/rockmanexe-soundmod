@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/':
                 raw = (ROOT / 'web/index.html').read_text().replace('__MANAGER_TOKEN__', self.server.token).encode()
                 mime = 'text/html; charset=utf-8'
-            elif path in ('/app.js', '/style.css'):
+            elif path in ('/app.js', '/realtime.js', '/audio-worklet.js', '/style.css'):
                 raw = (ROOT / 'web' / path[1:]).read_bytes()
                 mime = 'application/javascript' if path.endswith('.js') else 'text/css'
             elif path.startswith('/api/'):
@@ -102,6 +102,29 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def stream_audio(self, value):
+        session = self.server.manager.live_preview(value['key'],value.get('sample_rate',48000))
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type','application/octet-stream')
+            self.send_header('Cache-Control','no-store')
+            self.send_header('X-Content-Type-Options','nosniff')
+            self.send_header('X-Preview-Id',session.id)
+            self.send_header('X-Audio-Sample-Rate',str(session.metadata['sample_rate']))
+            self.send_header('Connection','close')
+            self.end_headers()
+            self.close_connection = True
+            while True:
+                block = session.read()
+                if not block: break
+                self.wfile.write(block)
+                self.wfile.flush()
+        except (BrokenPipeError,ConnectionResetError,OSError,ValueError):
+            pass
+        finally:
+            self.server.manager.realtime.stop(session.id)
+            session.close()
+
     def do_POST(self):
         if not self.trusted() or not self.authorized():
             return
@@ -118,7 +141,11 @@ class Handler(BaseHTTPRequestHandler):
                 value = json.loads(raw or b'{}')
                 if not isinstance(value, dict):
                     raise ValueError('Request must be a JSON object')
-                if path == '/api/load':
+                if path == '/api/realtime':
+                    self.stream_audio(value); return
+                elif path == '/api/realtime/stop':
+                    result = self.server.manager.realtime.stop(value.get('id'))
+                elif path == '/api/load':
                     result = self.server.manager.load()
                 elif path == '/api/name':
                     result = self.server.manager.name(value['key'], value['name'])
@@ -141,8 +168,9 @@ def main():
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--data-dir', type=Path, help='Local names, projects, and generated files')
     parser.add_argument('--mgba', default='/usr/games/mgba')
+    parser.add_argument('--realtime',type=Path,help='agbplay streaming helper executable')
     args = parser.parse_args()
-    manager = Manager(args.data_dir, mgba=args.mgba)
+    manager = Manager(args.data_dir, mgba=args.mgba, realtime=args.realtime)
     try:
         server = Server(('127.0.0.1', args.port), manager)
     except OSError as exc:

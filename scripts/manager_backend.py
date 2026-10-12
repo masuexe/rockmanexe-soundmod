@@ -8,6 +8,7 @@ import uuid
 
 from build_unified import build_catalog, resolve_pools
 from render_preview import capture_preview
+from realtime_audio import RealtimeEngine
 from scan_audio import apply_bps, fingerprint
 from transplant_song import make_bps
 from unified_catalog import write_catalog
@@ -21,10 +22,11 @@ INPUTS.update({f'rom:{key}': ROM_DIRECTORY / profile['filename'] for key, profil
 
 
 class Manager:
-    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba'):
+    def __init__(self, directory=None, preload=True, mgba='/usr/games/mgba', realtime=None):
         self.directory = Path(directory or ROOT / 'out/manager')
         self.directory.mkdir(parents=True, exist_ok=True)
         self.mgba = mgba
+        self.realtime = RealtimeEngine(realtime or ROOT / 'out/realtime/exe-realtime', self.directory / 'realtime')
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.inputs = {}
@@ -59,7 +61,7 @@ class Manager:
             return {'inputs': {role: {'filename': value[0], 'size_bytes': len(value[1])} for role, value in self.inputs.items()},
                     'revision': self.revision, 'catalog': value, 'project': project,
                     'active_job': self.jobs.get(self.active) if self.active else None,
-                    'preview_available': Path(self.mgba).is_file(), 'rom_directory':str(ROM_DIRECTORY),
+                    'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
                     'project_notice':self.project_notice}
 
@@ -75,6 +77,7 @@ class Manager:
             self.revision += 1
             self.value = self.decoded = None
             self.preview_cache.clear()
+            self.realtime.stop()
         return self.state()
 
     def _start(self, kind, function):
@@ -220,6 +223,20 @@ class Manager:
             return {'files': ['preview.wav'], 'key': key, 'audio': info}
         return self._start('preview', task)
 
+    def live_preview(self, key, sample_rate=48000):
+        with self.lock:
+            self._loaded()
+            row = next((r for r in self.value['entries'] if r['key'] == key), None)
+            if not row or not row['playlist_eligible']:
+                raise ValueError('This entry is not available for music preview')
+            base, pvp, donors, _, _ = self.decoded
+            if row['source'] == 'pvp':
+                data, table, count = pvp, 0x135214, 499
+            else:
+                profile = PROFILES[row['source']]
+                data, table, count = donors[row['source']], profile['table_offset'], profile['entry_count']
+            return self.realtime.start(data,table,count,row['source_index'],sample_rate)
+
     def file(self, job_id, filename):
         with self.lock:
             job = self.jobs.get(job_id)
@@ -231,4 +248,5 @@ class Manager:
         return path
 
     def close(self):
+        self.realtime.stop()
         self.executor.shutdown(wait=True)
