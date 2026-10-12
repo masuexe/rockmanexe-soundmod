@@ -44,10 +44,64 @@ class Manager:
         self.names = json.loads(self.names_path.read_text()) if self.names_path.exists() else {}
         if self.project_path.exists():
             self.project = json.loads(self.project_path.read_text())
+        self.source_paths = {}
+        self.selection_path = self.directory / 'sources.json'
+        saved = json.loads(self.selection_path.read_text()) if self.selection_path.exists() else None
         if preload:
-            for role, path in INPUTS.items():
-                if path.exists():
-                    self.inputs[role] = (path.name, path.read_bytes())
+            for role in ('base', 'pvp'):
+                path = INPUTS[role]
+                if path.exists(): self.inputs[role] = (path.name, path.read_bytes())
+            for key, profile in PROFILES.items():
+                uploaded = self.directory / 'uploaded-roms' / profile['filename']
+                path = uploaded if uploaded.exists() else INPUTS['rom:' + key]
+                if path.exists(): self.source_paths[key] = (path.name, path)
+        self.selected_sources = set(saved['sources']) if saved and isinstance(saved.get('sources'), list) else set(self.source_paths)
+        self.selected_sources.intersection_update(PROFILES)
+
+    def _invalidate(self):
+        self.revision += 1
+        self.value = self.decoded = None
+        self.inputs = {key:value for key,value in self.inputs.items() if not key.startswith('rom:')}
+        self.preview_cache.clear()
+        self.realtime.stop()
+
+    def select_sources(self, sources):
+        with self.lock:
+            if self.active: raise ValueError('Wait for the current task before changing sources')
+            if not isinstance(sources, list) or any(not isinstance(key, str) or key not in self.source_paths for key in sources):
+                raise ValueError('Select available original ROM sources')
+            selected = set(sources)
+            if selected != self.selected_sources:
+                self.selected_sources = selected
+                self._invalidate()
+            temporary = self.selection_path.with_suffix('.tmp')
+            temporary.write_text(json.dumps({'schema_version':1,'sources':sorted(selected)}, indent=2) + '\n')
+            temporary.replace(self.selection_path)
+        return self.state()
+
+    def _reconcile_project(self, value, draft):
+        eligible = {row['key'] for row in value['entries'] if row['playlist_eligible']}
+        project = copy.deepcopy(draft)
+        removed = fallback = 0
+        try:
+            for trigger, pool in project['pools'].items():
+                old = pool['tracks']
+                if not isinstance(old, list): raise ValueError('Invalid tracks list')
+                tracks = [key for key in old if isinstance(key, str) and key in eligible]
+                removed += len(old) - len(tracks)
+                if tracks != old: pool['selector_shift'] = 0
+                if not tracks:
+                    tracks = [f'pvp:{int(trigger)}']
+                    pool['selector_shift'] = 0
+                    fallback += 1
+                pool['tracks'] = tracks
+            resolve_pools(project, value)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            self.project = copy.deepcopy(self.default_project)
+            self.project_notice = 'Invalid previous pools: native playback defaults restored. Save to keep the new project.'
+        else:
+            self.project = {'schema_version':1,'pools':project['pools']}
+            self.project_notice = f'Removed {removed} unavailable playlist entries; {fallback} empty pools restored to native PvP music. Save to keep these changes.' if removed or fallback else ''
 
     def state(self):
         with self.lock:
@@ -63,7 +117,10 @@ class Manager:
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
-                    'project_notice':self.project_notice}
+                    'project_notice':self.project_notice, 'selected_sources':sorted(self.selected_sources & self.source_paths.keys()),
+                    'source_options':[{'key':key,'label':PROFILES[key]['label'],'filename':filename,
+                                       'size_bytes':path.stat().st_size if path.is_file() else 0,'loaded':self.value is not None and key in self.decoded[2]}
+                                      for key,(filename,path) in sorted(self.source_paths.items())]}
 
     def upload(self, role, filename, data):
         if role == 'rom':
@@ -73,12 +130,26 @@ class Manager:
         with self.lock:
             if self.active:
                 raise ValueError('Wait for the current task before changing files')
-            self.inputs[role] = (filename.replace('\\', '/').rsplit('/', 1)[-1][:200], bytes(data))
-            self.revision += 1
-            self.value = self.decoded = None
-            self.preview_cache.clear()
-            self.realtime.stop()
-        return self.state()
+            filename = filename.replace('\\', '/').rsplit('/', 1)[-1][:200]
+            if role.startswith('rom:'):
+                key = role[4:]
+                directory = self.directory / 'uploaded-roms'
+                directory.mkdir(exist_ok=True)
+                path = directory / PROFILES[key]['filename']
+                temporary = path.with_suffix('.tmp')
+                temporary.write_bytes(data)
+                temporary.replace(path)
+                self.source_paths[key] = (filename, path)
+                self.selected_sources.add(key)
+                self._invalidate()
+                self.select_sources(sorted(self.selected_sources & self.source_paths.keys()))
+            else:
+                self.inputs[role] = (filename, bytes(data))
+                self._invalidate()
+
+        result = self.state()
+        if role.startswith('rom:'): result['added_source'] = role[4:]
+        return result
 
     def _start(self, kind, function):
         with self.lock:
@@ -109,26 +180,26 @@ class Manager:
                 raise ValueError('Task not found')
             return copy.deepcopy(self.jobs[job_id])
 
-    def load(self):
+    def load(self, sources=None, project=None):
+        if project is not None and (not isinstance(project,dict) or project.get('schema_version') != 1 or not isinstance(project.get('pools'),dict) or not project['pools']):
+            raise ValueError('Project requires schema_version 1 and nonempty pools')
+        if sources is not None: self.select_sources(sources)
         with self.lock:
             if not {'base','pvp'} <= set(self.inputs):
                 raise ValueError('Select the original EXE4.5 ROM and the PvP BPS patch')
             inputs, revision = dict(self.inputs), self.revision
+            draft = copy.deepcopy(project if project is not None else self.project)
+            source_paths = {key:self.source_paths[key] for key in sorted(self.selected_sources & self.source_paths.keys())}
         def task(_):
             base = inputs['base'][1]
             pvp, pvp_info = apply_bps(base, inputs['pvp'][1])
-            donors = {role[4:]:content[1] for role,content in inputs.items() if role.startswith('rom:')}
+            donors = {key:path.read_bytes() for key,(_,path) in source_paths.items()}
             value, reports = catalog_originals(base, pvp, donors)
             with self.lock:
                 if revision != self.revision:
                     raise ValueError('Files changed; load tracks again')
-                try:
-                    resolve_pools(self.project, value)
-                except (ValueError, KeyError, TypeError):
-                    self.project = copy.deepcopy(self.default_project)
-                    self.project_notice = 'Previous pools used unavailable sources (including legacy Soundmod tracks). Native playback defaults restored; save to keep the new project.'
-                else:
-                    self.project_notice = ''
+                self._reconcile_project(value, draft)
+                self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in donors.items()})
                 self.value = value
                 self.decoded = (base, pvp, donors, pvp_info, reports)
             return {'tracks': sum(row['playlist_eligible'] for row in value['entries'])}

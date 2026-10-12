@@ -146,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == '/api/realtime/stop':
                     result = self.server.manager.realtime.stop(value.get('id'))
                 elif path == '/api/load':
-                    result = self.server.manager.load()
+                    result = self.server.manager.load(value.get('sources'),value.get('project'))
                 elif path == '/api/name':
                     result = self.server.manager.name(value['key'], value['name'])
                 elif path == '/api/project':

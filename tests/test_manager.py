@@ -81,8 +81,7 @@ class ManagerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.manager = Manager(self.temp.name)
-        # Keep integration checks small; full shared-directory inventory is checked separately.
-        self.manager.inputs = {key:value for key,value in self.manager.inputs.items() if key in ('base','pvp','rom:exegp','rom:exe1')}
+        self.manager.select_sources(['exe1','exegp'])
         finish(self.manager,self.manager.load())
     def tearDown(self):
         self.manager.close()
@@ -145,6 +144,54 @@ class ManagerTests(unittest.TestCase):
         row=next(r for r in state['catalog']['entries'] if r['key']=='exe1:0')
         self.assertEqual(row['target_index'],PROFILES['exe1']['target_slot_start'])
         with self.assertRaises(ValueError):identify(b'unknown ROM')
+
+    def test_source_selection_reads_only_enabled_roms_and_persists(self):
+        self.manager.select_sources(['exe1'])
+        self.assertFalse(any(key.startswith('rom:') for key in self.manager.inputs))
+        finish(self.manager,self.manager.load())
+        self.assertEqual(set(self.manager.decoded[2]),{'exe1'})
+        self.assertEqual(len(self.manager.state()['catalog']['entries']),499+PROFILES['exe1']['entry_count'])
+        other=Manager(self.temp.name)
+        try:
+            self.assertEqual(other.state()['selected_sources'],['exe1'])
+            self.assertFalse(any(key.startswith('rom:') for key in other.inputs))
+            original_read=Path.read_bytes
+            with patch.object(Path,'read_bytes',autospec=True,side_effect=original_read) as read:
+                finish(other,other.load())
+                self.assertFalse(any(call.args[0].name=='exegp.gba' for call in read.call_args_list))
+        finally:other.close()
+
+    def test_disabled_sources_prune_draft_pools_preserving_other_tracks(self):
+        draft=self.manager.state()['project']
+        draft['pools']['55']={'tracks':['exe1:0','exegp:1','exegp:1'],'selector_shift':5}
+        draft['pools']['64']={'tracks':['exe1:0'],'selector_shift':0}
+        self.manager.name('exe1:0','remember me')
+        finish(self.manager,self.manager.load(['exegp'],draft))
+        state=self.manager.state()
+        self.assertEqual(state['project']['pools']['55']['tracks'],['exegp:1','exegp:1'])
+        self.assertEqual(state['project']['pools']['55']['selector_shift'],0)
+        self.assertEqual(state['project']['pools']['64']['tracks'],['pvp:64'])
+        self.assertIn('Removed 2',state['project_notice'])
+        self.assertNotIn('exe1:0',state['project']['names'])
+        finish(self.manager,self.manager.load(['exe1','exegp']))
+        self.assertEqual(self.manager.state()['project']['names']['exe1:0'],'remember me')
+
+    def test_clear_sources_keeps_native_music_and_rejects_unavailable_preview(self):
+        finish(self.manager,self.manager.load([]))
+        state=self.manager.state()
+        self.assertEqual(state['selected_sources'],[])
+        self.assertEqual(len(state['catalog']['entries']),499)
+        self.assertEqual(sum(row['playlist_eligible'] for row in state['catalog']['entries']),48)
+        self.assertEqual(self.manager.decoded[2],{})
+        with self.assertRaises(ValueError):self.manager.live_preview('exe1:0')
+        with self.assertRaises(ValueError):self.manager.preview('exe1:0')
+
+    def test_invalid_source_selection_leaves_loaded_catalog_intact(self):
+        revision=self.manager.revision
+        for sources in (['unknown'], 'exe1', [None]):
+            with self.assertRaises(ValueError):self.manager.select_sources(sources)
+        self.assertEqual(self.manager.revision,revision)
+        self.assertIsNotNone(self.manager.value)
 
     def test_wrong_input_rejects_and_invalidates_catalog(self):
         self.manager.upload('rom:exegp','other.gba',b'bad ROM')

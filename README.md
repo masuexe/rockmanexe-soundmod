@@ -10,7 +10,7 @@ The tools provide **read-only audio table scanning, verified BPS decoding, patch
 python3 scripts/manage_sound.py
 ```
 
-Open `http://127.0.0.1:8765/` if the browser does not open automatically. Original ROMs in `../roms/` and the PvP patch in `references/` are preloaded; you can also choose files in the interface. Load the catalog, select a track and click **Play now** for realtime preview, edit its name, choose a playback event, check its tracks, then build and download the patch. The BPS applies to the **original EXE4.5 ROM**, and already includes PvP.
+Open `http://127.0.0.1:8765/` if the browser does not open automatically. The base ROM and PvP patch are preloaded. Original music ROMs in `../roms/` appear as checkboxes; select the games you need and click **Load tracks**. Only checked ROMs are read and analyzed, and the selection is remembered. You can also add files in the interface. After loading the catalog, select a track and click **Play now** for realtime preview, edit its name, choose a playback event, check its tracks, then build and download the patch. The BPS applies to the **original EXE4.5 ROM**, and already includes PvP.
 
 Catalog editing and export require only Python 3.10+. Realtime preview uses a locally built agbplay core: run `python3 scripts/build_realtime.py --fetch-deps` once in the tested Ubuntu environment. See [realtime setup](docs/realtime-preview.md). The optional mGBA verification capture additionally requires Linux, the mGBA SDL executable (tested with 0.10.2), `cc`, and SDL2 development headers. See [manager usage and preview details](docs/manager.md) for supported versions, saved projects, and limitations.
 

@@ -3,3 +3,5 @@
 .donor-files{display:flex;gap:16px;justify-content:space-between;align-items:center;margin-top:18px}.donor-files strong{font-size:13px}.donor-files p{font-size:12px;margin-bottom:0}#donor-list{margin-top:10px;line-height:1.8}.input-grid{grid-template-columns:repeat(2,1fr)}
 
 details{margin:16px 0}summary{color:var(--muted);font-size:12px;cursor:pointer}#live-status{margin-top:10px;color:var(--accent)}
+
+.source-actions{display:flex;align-items:center;gap:10px;margin:16px 0}.source-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:290px;overflow:auto}.source-choice{display:flex;align-items:center;gap:10px;margin:0;padding:10px;border:1px solid var(--line);border-radius:9px;cursor:pointer}.source-choice strong{display:block;font-size:12px;color:var(--text)}.source-choice small{display:block;font-size:11px;color:var(--muted)}.source-choice input{flex-shrink:0}@media(max-width:900px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.source-actions{flex-wrap:wrap}}@media(max-width:500px){.source-grid{grid-template-columns:1fr}}

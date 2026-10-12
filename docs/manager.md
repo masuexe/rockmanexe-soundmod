@@ -18,7 +18,7 @@ python3 scripts/manage_sound.py --no-browser --port 8766
 
 Python 3.10 or newer is sufficient for the catalog and export. No third-party Python packages or frontend build tools are required. The HTTP server binds only to `127.0.0.1`; run it in a normal local terminal that permits listening sockets. Stop it with Ctrl+C.
 
-The default input files are:
+The default base inputs and music source directory are:
 
 | Input | Default location |
 |---|---|
@@ -26,20 +26,22 @@ The default input files are:
 | PvP patch | `references/exe45_pvp_0.6.0.bps` |
 | Original music ROMs | `../roms/*.gba` matching the configured profiles |
 
-The base ROM and PvP patch can be replaced in the interface. **Add music ROMs** accepts multiple donor files; identities are determined by content fingerprint rather than uploaded filename. The PvP BPS is decoded against original EXE4.5 in memory. Donor profiles are pinned in `config/rom-profiles.json`; unsupported revisions are rejected. The shared directory is `/home/harp/projects/gba/roms` in this workspace. Restart the server after changing files there, or add files through the interface.
+The base ROM and PvP patch can be replaced in the interface. Music sources appear as checkboxes with game names and filenames. Use **Select all** or **Clear selection**, then check only the games you want. Click **Load tracks** to apply the choice. The server lists available files at startup, but reads and analyzes donor ROM bytes only when selected for loading. **Add music ROMs** accepts multiple donor files and checks the added sources; identities are determined by content fingerprint rather than uploaded filename. Uploaded donor copies persist under the local data directory's `uploaded-roms/` folder. The PvP BPS is decoded against original EXE4.5 in memory. Donor profiles are pinned in `config/rom-profiles.json`; unsupported revisions are rejected. The shared directory is `/home/harp/projects/gba/roms` in this workspace. Restart the server after changing files there, or add files through the interface.
 
 Supported local profiles cover Japanese Rockman EXE 1–6, Black/Blue Moon/Team Colonel/Falzar variants, Battle Chip GP, and corresponding English Battle Network/Chip Challenge ROMs. Each source has its own game label and stable key such as `exe1:0`, `bn2:1`, or `exegp:1`. Song titles remain user-assigned metadata. Regional variants are listed separately; this count is not a count of unique compositions.
 
 ## Choose and export
 
-1. Select the base ROM and PvP patch, add music ROMs if needed, then click **Load tracks**. Defaults are preloaded when present.
-2. Browse the 740 available music-player candidates in the current full library. Search by stable ID or assigned name and filter by source. Enable the other-audio option to see all 8,455 entries, including reserved effects, empty entries, and the incompatible nine-voice EXEGP entry. Those entries cannot be selected.
+1. Select the base ROM and PvP patch, check the music ROM sources you need, add files if necessary, then click **Load tracks**. The source counter distinguishes selected, available, and loaded ROMs. Native PvP music is always included; clearing every donor source loads only its 48 eligible entries.
+2. Browse the music-player candidates from checked sources. With all 22 donor sources enabled, the current library has 740 available candidates. Search by stable ID or assigned name and filter by source. Enable the other-audio option to see all 8,455 entries, including reserved effects, empty entries, and the incompatible nine-voice EXEGP entry. Those entries cannot be selected.
 3. Click a row, then **Play now** for realtime playback or **Stop** to end it. A row change also stops playback. Use the verification section for an mGBA recording, or save an assigned name. Source IDs are retained because verified song titles are not embedded in the ROM catalog.
 4. Choose **When to play** and check tracks for that event. The title screen and the five original Soundmod triggers are configured by default. Other events are shown by numeric ID because their gameplay contexts have not been verified. Imported projects may configure other native music triggers supported by the builder.
 5. Optionally apply the selected pool to every configured event. Every pool needs 1–255 entries before saving or exporting.
 6. Click **Build & export patch** and download `unified.bps`. Apply it directly to the original EXE4.5 ROM, not to an already patched PvP ROM. `unified.gba`, `project.json`, and `catalog.csv` can also be downloaded.
 
-New projects default to native PvP music for the title screen and five music triggers. Saved legacy Soundmod pools are rejected because their keys no longer identify sources; the manager reports that native defaults were restored. The old project file is kept until you save or export. Names for absent sources are retained on disk but excluded from current project downloads. Imported valid pools preserve repeated entries and selector shifts until edited. Checking tracks, clearing a pool, adding visible tracks, or applying a pool to all events resets that pool's shift to zero. Checkbox edits collapse duplicate entries into one entry per selected track. Every pool is limited to 255 entries so its entries remain reachable from the existing 8-bit selector. Filter by game before using **Add visible tracks**, or choose a smaller subset if the pool exceeds the limit. Weighted pools can still be imported through project JSON. Selection uses Soundmod's existing selector byte; uniform randomness is not established. A finite song does not cause automatic playlist advancement.
+New projects default to native PvP music for the title screen and five music triggers. When sources are disabled or legacy keys are unavailable, their entries are removed from the current playback pools. Other selections, including repeated entries, remain. A pool with no remaining tracks falls back to its native PvP trigger song; the manager reports the changes. Pools changed by pruning reset their selector shift to zero. Invalid project structures restore the native defaults. The old project file is kept until you save or export. Names for absent sources are retained on disk but excluded from current project downloads. Imported valid pools preserve repeated entries and selector shifts until edited. Checking tracks, clearing a pool, adding visible tracks, or applying a pool to all events resets that pool's shift to zero. Checkbox edits collapse duplicate entries into one entry per selected track. Every pool is limited to 255 entries so its entries remain reachable from the existing 8-bit selector. Filter by game before using **Add visible tracks**, or choose a smaller subset if the pool exceeds the limit. Weighted pools can still be imported through project JSON. Selection uses Soundmod's existing selector byte; uniform randomness is not established. A finite song does not cause automatic playlist advancement.
+
+Source choices persist automatically when applied in `out/manager/sources.json`, including an empty choice. The next server start restores checkboxes without reading unchecked donors. Changing checkboxes marks the choice as pending and disables preview/export until **Load tracks** applies it. Current unsaved pool edits are carried through that reload and pruned as described above. Applying sources also stops live preview and clears recordings cached for the previous input revision.
 
 Names and the saved project persist in `out/manager/track-names.json` and `out/manager/project.json`. **Save project** persists the current configuration; exporting also saves it and writes a downloadable project with names. Use **Import project** to restore such a JSON file after loading the catalog. Names are metadata and are not embedded in the ROM. Each build gets its own output directory; source files are never overwritten. `--data-dir PATH` changes the local state/output directory.
 
@@ -69,7 +71,7 @@ The output directory must be new.
 
 ## Verification
 
-The Python suite passes 50 tests, including manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity and selected-only packing, and BPS reconstruction. Run:
+The Python suite passes 54 tests, including manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity, selected-only packing/loading, source-choice persistence, disabled-source pool pruning, native-only catalogs, and BPS reconstruction. Run:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -77,7 +79,7 @@ node tests/test_manager_ui.mjs
 node tests/test_audio_worklet.mjs
 ```
 
-The Node check uses a lightweight DOM/API fixture to exercise catalog loading, unavailable rows, pool edits, names, preview links, export links, and project saves. It does not replace a real browser layout or end-to-end HTTP test. A real Chromium/HTTP smoke test additionally loaded the complete catalog, filtered original game sources, generated EXE1 and EXE6 previews, edited a mixed pool, and downloaded all four exported files without JavaScript errors. Results and a screenshot are in `out/original-browser-validation/`. The HTTP handler is also tested using in-memory requests.
+The Node check uses a lightweight DOM/API fixture to exercise catalog loading, unavailable rows, pool edits, names, preview links, export links, and project saves. It does not replace a real browser layout or end-to-end HTTP test. A real Chromium/HTTP smoke test additionally loaded the complete catalog, filtered original game sources, generated EXE1 and EXE6 previews, edited a mixed pool, and downloaded all four exported files without JavaScript errors. Results and a screenshot are in `out/original-browser-validation/`. A further browser check loaded only EXE1 and GP (83 available entries), disabled EXE1 while carrying unsaved pool edits, retained the GP selection (63 entries), exported successfully, and restored the checkboxes on page reload and server restart (with zero donor files loaded until Load tracks). Evidence is under `out/source-selection-browser-validation/`. The HTTP handler is also tested using in-memory requests.
 
 Actual mGBA capture succeeded for original EXE1 entry 0 and EXE6 entry 1 through the browser: each produced a nonzero 3-second, 44.1 kHz stereo signed 16-bit WAV. Earlier EXEGP and Soundmod captures remain historical evidence for the capture mechanism. Default manager projects now use native PvP music and therefore do not reproduce the earlier Soundmod reference ROM.
 
