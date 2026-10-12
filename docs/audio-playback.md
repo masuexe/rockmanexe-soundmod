@@ -1,6 +1,6 @@
 # Audio playback entry points and runtime validation
 
-Status: entry-point disassembly, table lookup, player selection, and player header/tone-bank initialization verified on the local ROM versions. Track instruction execution, audible output, complete dependencies, and BGM/SFX names remain unverified.
+Status: entry-point disassembly, table lookup, player selection, and player header/tone-bank initialization verified on the local ROM versions. This document covers initialization only. Sustained execution and dependencies for EXEGP song 1 are now covered in [song transplantation](song-transplant.md); audible listening and general BGM/SFX names remain unverified.
 
 ## Baselines
 
@@ -120,4 +120,4 @@ python3 scripts/validate_playback.py roms/exe45.gba \
 
 These are initialization checks, not listening tests. The dummy audio backend discards output, and the debugger stops immediately after the initialization call. Neither long-running track execution nor complete sample validity has been verified. Controlled injections are explicitly distinct from natural game behavior; selector tests do not prove its distribution during gameplay.
 
-Next, decode track control flow and tone/sample dependencies for EXEGP entry 1 as a concrete transplantation candidate, and verify its sustained playback before moving it into the PvP ROM. Preserve player-capacity requirements and distinguish sequence/instrument data from code patches during relocation.
+Follow-up work decoded EXEGP entry 1, validated its sustained execution, and transplanted it into a PvP experiment; see [the transplantation record](song-transplant.md) for results. Preserve player-capacity requirements and distinguish sequence/instrument data from code patches during relocation.

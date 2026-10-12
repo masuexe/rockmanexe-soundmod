@@ -2,7 +2,7 @@
 
 ROM audio analysis and transplantation tools for Rockman EXE. The eventual goal is a manager that combines EXE4.5 PvP with Soundmod and music from other games, lets users select tracks for random playback, and exports a patch.
 
-The first stage provides **read-only audio table scanning, verified BPS decoding, and patch comparison**. It does not modify input ROMs or produce a merged ROM. Background music and sound effects are not yet classified; nonempty audio entries are not a count of music tracks.
+The tools provide **read-only audio table scanning, verified BPS decoding, patch comparison, and supported-song dependency analysis**. An experimental builder also exports PvP plus one EXEGP song. Input ROMs are never modified; the full PvP/Soundmod merge is still pending. Background music and sound effects are not yet classified; nonempty audio entries are not a count of music tracks.
 
 ## Scan local ROMs
 
@@ -36,14 +36,16 @@ Addresses include both file offsets and `0x08000000 + offset` ROM addresses. Tab
 python3 -m unittest discover -s tests -v
 ```
 
-Tests cover all four BPS actions, overlapping copies, backward relative offsets, checksum failures, invalid references, and audio-header rules. When local ROMs and patches are available, they also verify discovered tables, target checksums, and the PvP conflict indices. Those integration tests are skipped when their inputs are absent.
+Tests cover BPS decoding/export, overlapping copies, checksums, invalid references, sequence patterns and running commands, PCM boundaries, sparse drum dependencies, preservation of existing PvP data, and relocated sample contents. When local ROMs and patches are available, they also verify discovered tables, target checksums, and the PvP conflict indices. Those integration tests are skipped when their inputs are absent.
 
 ## Research and next steps
 
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
-Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. Audible output and sustained playback remain unverified.
+Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. Audible listening remains unverified; sustained donor and transplanted execution are covered in the transplantation research.
 
-The next stage decodes track instructions, tone banks, and sample dependencies. A single EXEGP track will be transplanted into a PvP-based ROM before batch transplantation, random playback, or a manager UI is implemented.
+EXEGP song 1 has now been decoded, relocated, and validated through sustained playback in a PvP-based experiment. See [song transplantation](docs/song-transplant.md) for build commands, the startup mixer adjustment, BPS output, and limitations. The experimental song occupies a provisional empty slot and requires debugger selection; it does not automatically replace gameplay music.
+
+The next milestone is a unified PvP/Soundmod/EXEGP catalog with stable IDs, supported dependency extraction, and a permanent selection hook. Batch transplantation, track preview, random playback, and the manager UI follow from that foundation.
 
 ROMs, saves, BPS files, and generated reports remain local and are excluded from version control.
