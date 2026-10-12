@@ -4,6 +4,8 @@ The manager's **Play now** button streams music from the original ROM through ag
 
 The separate **Verify playback in the exported game** section retains mGBA WAV capture. Use it to check the transplanted song with the target game's actual audio driver. agbplay has an enhanced mixer and does not enforce the target PCM channel budget, so source playback is not proof of transplant compatibility. Neither this feature nor its playback settings modify the exported ROM or saved pools.
 
+Recorded previews now include measured runtime mixer configuration in `preview.json`. For original/target WAV comparisons, source-matched mixer experiments, and per-track state probes, see [audio fidelity diagnosis](audio-fidelity.md).
+
 ## Build once
 
 The source is the unmodified [ipatix/agbplay](https://github.com/ipatix/agbplay) core, pinned to commit `0b87da48d2502da359e45718eec8566ac40fa9d7`. The default reference checkout is `../references/agbplay`, in the shared GBA references directory.

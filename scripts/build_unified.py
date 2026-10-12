@@ -15,6 +15,7 @@ from scan_audio import ROM_BASE, MAX_ROM_SIZE, apply_bps, fingerprint
 from transplant_song import make_bps
 from unified_catalog import catalog, write_catalog
 from target_profiles import validate_target, LAYOUTS, AUDIO_LAYOUT, check_layout
+from pcm_compatibility import FIXED_PCM_RATES, resample_fixed_pcm
 
 TABLE_REFERENCES = LAYOUTS[AUDIO_LAYOUT]['table_references']  # Legacy public constant.
 
@@ -215,10 +216,11 @@ The game fade helper uses this query before fading the original music player.
 
 
 class Relocator:
-    def __init__(self, target_rom, reports):
+    def __init__(self, target_rom, reports, target_pcm_rate=None):
         self.output = bytearray(target_rom)
         self.tables, self.cache = {}, {}
         self.mapping_reports = []
+        self.target_pcm_rate = target_pcm_rate
         self.stats = {'resource_allocations': 0, 'resource_cache_hits': 0, 'pointer_writes': 0}
         requirements = {}
         for source, report in reports:
@@ -293,7 +295,42 @@ class Relocator:
                 fields.append({'source_site': field['site']['file_offset'], 'target_site': site, 'target_offset': target, 'kind': field['kind']})
                 self.stats['pointer_writes'] += 1
         new_header = sites(report['header']['file_offset'])[0]
-        self.mapping_reports.append({'key': f"{source}:{report['index']}", 'header_offset': new_header, 'resources': local, 'pointers': fields})
+        adjustments = []
+        source_rate = FIXED_PCM_RATES.get(report['rom_fingerprint']['sha256'])
+        if source_rate and self.target_pcm_rate and source_rate != self.target_pcm_rate:
+            samples = {s['file_offset']: s for s in report['samples']}
+            for tone in report['tones']:
+                if tone['type_raw'] != 8:
+                    continue
+                offset = tone['file_offset']
+                wave_offset = struct.unpack_from('<I', data, offset+4)[0]-ROM_BASE
+                sample = samples[wave_offset]
+                raw = data[wave_offset:wave_offset+sample['size_bytes']]
+                converted = resample_fixed_pcm(raw, source_rate, self.target_pcm_rate)
+                key = ('fixed_pcm_wave', source_rate, self.target_pcm_rate, fingerprint(raw)['sha256'])
+                if key in self.cache:
+                    target = self.cache[key]
+                    self.stats['resource_cache_hits'] += 1
+                else:
+                    target = self.allocate(converted)
+                    self.cache[key] = target
+                    self.stats['resource_allocations'] += 1
+                for site in placements[offset]:
+                    struct.pack_into('<I', self.output, site+4, ROM_BASE+target)
+                    for field in fields:
+                        if field['target_site'] == site+4:
+                            field['target_offset'] = target
+                            field['audio_adjustment'] = 'fixed_pcm_rate'
+                    self.stats['pointer_writes'] += 1
+                adjustments.append({'kind': 'fixed_pcm_rate', 'source_tone_offset': offset,
+                                    'source_wave_offset': wave_offset, 'target_wave_offset': target,
+                                    'source_rate': source_rate, 'target_rate': self.target_pcm_rate,
+                                    'source_size_bytes': len(raw), 'target_size_bytes': len(converted),
+                                    'source_sha256': fingerprint(raw)['sha256'],
+                                    'target_sha256': fingerprint(converted)['sha256'],
+                                    'method': 'signed 8-bit linear interpolation; fixed mode retained'})
+        self.mapping_reports.append({'key': f"{source}:{report['index']}", 'header_offset': new_header,
+                                     'resources': local, 'pointers': fields, 'audio_adjustments': adjustments})
         return new_header
 
 
@@ -342,7 +379,7 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
     if not 4 <= pcm_channels <= 12:
         raise ValueError('PCM channel budget must be 4..12')
     selected_reports = [(key.split(':')[0], report) for key, report in reports.items()]
-    relocator = Relocator(target_rom, selected_reports)
+    relocator = Relocator(target_rom, selected_reports, layout['pcm_rate'])
     native_count, native_table = layout['entry_count'], layout['table_offset']
     table = bytearray(target_rom[native_table:native_table + native_count * 8])
     empty = next((table[i*8:(i+1)*8] for i in range(native_count) if table[i*8:i*8+4] == b'\0'*4),None)
@@ -415,10 +452,20 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
             if old['notes'] != new['notes'] or old['ticks_before_repeat'] != new['ticks_before_repeat'] or old['termination'] != new['termination']:
                 raise AssertionError(f"Relocated sequence differs: {row['key']}")
         donor = sources[row['source']]
-        old_samples = {donor[s['file_offset']:s['file_offset'] + s['size_bytes']] for s in original['samples']}
+        samples = {s['file_offset']: s for s in original['samples']}
+        source_rate = FIXED_PCM_RATES.get(original['rom_fingerprint']['sha256'])
+        old_samples = set()
+        for tone in original['tones']:
+            if tone['type_raw'] not in (0, 8):
+                continue
+            wave_offset = struct.unpack_from('<I', donor, tone['file_offset']+4)[0]-ROM_BASE
+            raw = donor[wave_offset:wave_offset+samples[wave_offset]['size_bytes']]
+            if tone['type_raw'] == 8 and source_rate and source_rate != layout['pcm_rate']:
+                raw = resample_fixed_pcm(raw, source_rate, layout['pcm_rate'])
+            old_samples.add(raw)
         new_samples = {result[s['file_offset']:s['file_offset'] + s['size_bytes']] for s in relocated['samples']}
         if old_samples != new_samples:
-            raise AssertionError(f"Relocated PCM differs: {row['key']}")
+            raise AssertionError(f"Relocated PCM differs from declared rate adaptation: {row['key']}")
     manifest = {'schema_version': 1, 'target_profile': target['key'], 'target_label':target['label'], 'audio_layout':target['audio_layout'], 'target_base_fingerprint': fingerprint(target_rom),
                 'output_fingerprint': fingerprint(result), 'original_fingerprint': fingerprint(base),
                 'sources': value['sources'], 'target_table_file_offset': table_offset, 'table_entry_count': value['table_entry_count'],

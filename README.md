@@ -14,6 +14,10 @@ Open `http://127.0.0.1:8765/` if the browser does not open automatically. Choose
 
 Catalog editing and export require only Python 3.10+. Realtime preview uses a locally built agbplay core: run `python3 scripts/build_realtime.py --fetch-deps` once in the tested Ubuntu environment. See [realtime setup](docs/realtime-preview.md). The optional mGBA verification capture additionally requires Linux, the mGBA SDL executable (tested with 0.10.2), `cc`, and SDL2 development headers. See [manager usage and preview details](docs/manager.md) for supported versions, saved projects, and limitations.
 
+For differences between original and transplanted music, see [same-emulator fidelity comparisons](docs/audio-fidelity.md). The diagnostic tools record original/target pairs, generate normalized listening pages, and probe sequence and mixer state without changing manager export defaults.
+
+EXE1 JP fixed-step PCM drums are automatically adapted to the target mixer rate during export. This corrects accelerated percussion in GP imports, including `exe1:0`; see the [drum correction evidence](docs/audio-fidelity.md#exe1-opening-drum-correction).
+
 ## Scan local ROMs
 
 Requires Python 3.10 or newer, with no third-party Python dependencies. Run from the project root:
