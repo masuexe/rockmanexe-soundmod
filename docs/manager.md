@@ -31,6 +31,8 @@ Choose **Game to modify** first. The original target ROM and any required PvP pa
 
 Supported local profiles cover Japanese Rockman EXE 1–6, Black/Blue Moon/Team Colonel/Falzar variants, Battle Chip GP, and corresponding English Battle Network/Chip Challenge ROMs. Each source has its own game label and stable key such as `exe1:0`, `bn2:1`, or `exegp:1`. Song titles remain user-assigned metadata. Regional variants are listed separately; this count is not a count of unique compositions.
 
+For GP with ChipControl, select **Rockman EXE Battle Chip GP (JP) + ChipControl 1.1.0**. The manager reads the Japanese IPS from `../patches/MegaManBCC-ChipControl-Ver1.1.0.zip` and retains saved GP music pools. The exported BPS includes ChipControl and music changes and applies to original `exegp.gba`. See [setup and verification](chipcontrol.md).
+
 ## Choose and export
 
 1. Select **Game to modify**, supply the original target ROM and any required pre-patch, check the music ROM sources you need, then click **Load tracks**. The source counter distinguishes selected, available, and loaded ROMs. Native target music is always included; clearing every donor source loads only those entries (48 for PvP, 16 for GP).

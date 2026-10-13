@@ -14,6 +14,7 @@ from transplant_song import make_bps
 from unified_catalog import write_catalog
 from original_catalog import catalog_originals, PROFILES, identify
 from target_profiles import TARGETS, target_profile, identify_target
+from prepatch import apply_prepatch, find_prepatch, prepatch_available
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_DIRECTORY = ROOT.parent / 'roms'
@@ -89,14 +90,12 @@ class Manager:
                 raise ValueError('Target input ROM does not match the supported revision')
             replacement = {'base':(base_path.name,base)} if base is not None else {}
             if profile['patch_filename']:
-                patch_path = PATCH_DIRECTORY / profile['patch_filename']
-                if not patch_path.is_file(): patch_path = ROOT / 'references' / profile['patch_filename']
-                if patch_path.is_file():
-                    patch = patch_path.read_bytes()
-                    if base is not None and identify_target(apply_bps(base,patch)[0])['key'] != key:
-                        raise ValueError('Pre-patch does not produce the selected target')
-                    replacement['pvp'] = (patch_path.name,patch)
-            project_path = self.directory / ('project.json' if profile['audio_layout']=='exe45-audio-v1' else f'project-{key}.json')
+                patch_input = find_prepatch(profile,[PATCH_DIRECTORY,ROOT / 'references'])
+                if patch_input:
+                    if base is not None: apply_prepatch(base,patch_input[1],profile)
+                    replacement['pvp'] = patch_input
+            project_path = self.directory / profile.get('project_filename',
+                'project.json' if profile['audio_layout']=='exe45-audio-v1' else f'project-{key}.json')
             default_project = self._default_project(profile)
             project = json.loads(project_path.read_text()) if project_path.exists() else copy.deepcopy(default_project)
             self.selected_target = key
@@ -193,8 +192,10 @@ class Manager:
             return {'inputs': {role: {'filename': value[0], 'size_bytes': len(value[1])} for role, value in self.inputs.items()},
                     'revision': self.revision, 'catalog': value, 'project': project,
                     'selected_target':self.selected_target,
-                    'target_options':[{'key':key,'label':profile['label'],'available':(ROM_DIRECTORY/profile['filename']).is_file() and (not profile['patch_filename'] or (PATCH_DIRECTORY/profile['patch_filename']).is_file() or (ROOT/'references'/profile['patch_filename']).is_file())} for key,profile in TARGETS.items()],
+                    'target_options':[{'key':key,'label':profile['label'],'available':(ROM_DIRECTORY/profile['filename']).is_file() and prepatch_available(profile,[PATCH_DIRECTORY,ROOT/'references'])} for key,profile in TARGETS.items()],
                     'patch_required':bool(TARGETS[self.selected_target]['patch_filename']),
+                    'patch_label':TARGETS[self.selected_target].get('patch_label','PvP BPS pre-patch'),
+                    'patch_accept':'.ips' if TARGETS[self.selected_target].get('patch_format')=='ips' else '.bps',
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
@@ -207,7 +208,7 @@ class Manager:
         if role == 'rom':
             role = 'rom:' + identify(data)
         if role not in INPUTS or not data or len(data) > 32 * 1024 * 1024:
-            raise ValueError('Choose a supported ROM or BPS file, no larger than 32 MiB')
+            raise ValueError('Choose a supported ROM, BPS or IPS file, no larger than 32 MiB')
         with self.lock:
             if self.active:
                 raise ValueError('Wait for the current task before changing files')
@@ -230,6 +231,10 @@ class Manager:
                         raise ValueError('ROM does not match the selected target revision')
                 if role=='pvp' and not TARGETS[self.selected_target]['patch_filename']:
                     raise ValueError('This target uses its original ROM without a pre-patch')
+                if role=='pvp' and TARGETS[self.selected_target].get('patch_format')=='ips':
+                    profile = target_profile(self.selected_target)
+                    if fingerprint(data)['sha256'] != profile['patch_sha256']:
+                        raise ValueError('Pre-patch does not match ChipControl 1.1.0 Japanese IPS')
                 self.inputs[role] = (filename, bytes(data))
                 self._invalidate()
 
@@ -274,11 +279,17 @@ class Manager:
             if 'base' not in self.inputs or (TARGETS[self.selected_target]['patch_filename'] and 'pvp' not in self.inputs):
                 raise ValueError('Select the target ROM and its required pre-patch')
             inputs, revision = dict(self.inputs), self.revision
+            profile = target_profile(self.selected_target)
             draft = copy.deepcopy(project if project is not None else self.project)
             source_paths = {key:self.source_paths[key] for key in sorted(self.selected_sources & self.source_paths.keys())}
         def task(_):
             base = inputs['base'][1]
-            pvp, pvp_info = apply_bps(base, inputs['pvp'][1]) if 'pvp' in inputs else (base,None)
+            if 'pvp' not in inputs:
+                pvp, pvp_info = base, None
+            elif profile.get('patch_format') == 'ips':
+                pvp, pvp_info = apply_prepatch(base,inputs['pvp'][1],profile)
+            else:
+                pvp, pvp_info = apply_bps(base,inputs['pvp'][1])
             donors = {key:path.read_bytes() for key,(_,path) in source_paths.items()}
             value, reports = catalog_originals(base, pvp, donors)
             with self.lock:
@@ -342,7 +353,8 @@ class Manager:
                 raise AssertionError('Export verification failed')
             for row in value['entries']:
                 row['name'] = names.get(row['key'], '')
-            manifest.update(source_patches={'pvp':pvp_info} if pvp_info else {}, manager=True, music_sources='original ROMs')
+            patch_role = TARGETS[value['target_profile']].get('patch_role','pvp')
+            manifest.update(source_patches={patch_role:pvp_info} if pvp_info else {}, manager=True, music_sources='original ROMs')
             (directory / 'unified.gba').write_bytes(output)
             (directory / 'unified.bps').write_bytes(patch)
             (directory / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')

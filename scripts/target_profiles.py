@@ -62,6 +62,17 @@ _gp = next(p for p in _originals['profiles'] if p['key']=='exegp')
 TARGETS['exegp'] = {'label':_gp['label'], 'native_label':_gp['label']+' (target)',
                       'fingerprint':_gp['fingerprint'], 'audio_layout':'exegp-audio-v1',
                       'base_sha256':_gp['fingerprint']['sha256'], 'filename':_gp['filename'], 'patch_filename':None}
+TARGETS['exegp-chipcontrol'] = {
+    **TARGETS['exegp'], 'label':'Rockman EXE Battle Chip GP (JP) + ChipControl 1.1.0',
+    'native_label':_gp['label']+' (ChipControl target)',
+    'fingerprint':{'size_bytes':8388608,'crc32':'A3DD3C4B',
+        'sha256':'f0128df1da668aa933bf717756aa1a5998e9d0b93689b9406d2d67368c3bb484'},
+    'patch_filename':'RockmanEXEBCGP-ChipControl-Ver1.1.0-Japanese.ips',
+    'patch_archive':'MegaManBCC-ChipControl-Ver1.1.0.zip', 'patch_format':'ips',
+    'patch_sha256':'bf8ee7bd208ac97fb559ab8a08388d3926176b84d0609b2c73271217a2124417',
+    'patch_label':'ChipControl 1.1.0 IPS pre-patch', 'patch_role':'chipcontrol',
+    'project_filename':'project-exegp.json',
+}
 
 
 def target_profile(key):

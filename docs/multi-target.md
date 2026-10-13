@@ -1,10 +1,10 @@
 # Multiple target ROMs
 
-The manager separates the **target game** (the ROM being modified), optional **pre-patch**, and **music sources**. A supported music source is not automatically a supported patch target. The current targets are EXE4.5 JP PvP 0.6.0, BN4.5 English PvP 0.6.0, and the original Japanese EXE Battle Chip GP ROM. EXE1 and BN2 remain music sources; their target adapters are the next expansion.
+The manager separates the **target game** (the ROM being modified), optional **pre-patch**, and **music sources**. A supported music source is not automatically a supported patch target. The current targets are EXE4.5 JP PvP 0.6.0, BN4.5 English PvP 0.6.0, and Japanese EXE Battle Chip GP with or without ChipControl 1.1.0. The [ChipControl preset](chipcontrol.md) applies the pinned Japanese IPS before music changes and shares the original GP audio layout and saved music project. EXE1 and BN2 remain music sources; their target adapters are the next expansion.
 
 ## Use EXE GP as the target
 
-Choose **Rockman EXE Battle Chip GP (JP)** under **Game to modify**, then click **Load tracks**. Its input defaults to `../roms/exegp.gba`, or use **Choose file** to provide the supported original revision. No PvP patch is required. Select the original games to use as music sources separately.
+Choose **Rockman EXE Battle Chip GP (JP)** under **Game to modify**, then click **Load tracks**. Its input defaults to `../roms/exegp.gba`, or use **Choose file** to provide the supported original revision. The ordinary GP preset needs no pre-patch. The ChipControl preset loads its Japanese IPS from the supplied ZIP automatically. Select the original games to use as music sources separately.
 
 The GP catalog preserves all 170 native audio IDs. Sixteen entries belong to its music player; these become the default configurable music events. **Title screen** is event 1. **Communication battles (music #12–14)** edits all three IDs used by the native communication battle selector. Those IDs are shared with some single-player battles. Select an event or this group, clear its old pool if needed, check the desired tracks, and export. Older saved title-only GP projects gain the missing native events on loading; existing pools and weights are retained. Save the project to persist the added events. See [communication battle setup and evidence](communication-battle-music.md#exe-gp-communication-battles). Apply `unified.bps` to the original **EXE GP ROM**, or use the exported `unified.gba` directly. Do not apply it to EXE4.5.
 
@@ -18,7 +18,7 @@ python3 scripts/manage_sound.py --target exe45-pvp
 
 `--target` and `--pvp-patch` are mutually exclusive startup overrides. Without either, the manager restores the selected target from `out/manager/target.json`, falling back to Japanese EXE4.5 PvP. The UI remembers target changes. Uploaded input files and custom pre-patches remain session-local.
 
-EXE4.5 JP/English pools continue to use `project.json`; GP pools use `project-exegp.json`. Switching targets stops live audio, invalidates the catalog and preview cache, and clears stale download links. Saved projects are restored separately. Exported projects record their target; importing a project for another target is rejected. Existing EXE4.5 projects without a target field remain usable. Native GP keys use `native-exegp:*`, while legacy/native EXE4.5 keys retain `pvp:*`. Donor keys and fixed slot assignments remain unchanged.
+EXE4.5 JP/English pools continue to use `project.json`; Both GP presets use `project-exegp.json`, retaining saved music selections across pre-patch changes. Switching targets stops live audio, invalidates the catalog and preview cache, and clears stale download links. Saved projects are restored separately. Exported projects record their target; importing a project for another target is rejected. Existing EXE4.5 projects without a target field remain usable. Native GP keys use `native-exegp:*`, while legacy/native EXE4.5 keys retain `pvp:*`. Donor keys and fixed slot assignments remain unchanged.
 
 ## Shared implementation
 
