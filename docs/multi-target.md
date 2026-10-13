@@ -6,7 +6,7 @@ The manager separates the **target game** (the ROM being modified), optional **p
 
 Choose **Rockman EXE Battle Chip GP (JP)** under **Game to modify**, then click **Load tracks**. Its input defaults to `../roms/exegp.gba`, or use **Choose file** to provide the supported original revision. No PvP patch is required. Select the original games to use as music sources separately.
 
-The GP catalog preserves all 170 native audio IDs. Sixteen entries belong to its music player; these become the default configurable music events. **Title screen** is event 1. Select an event, check its pool tracks, and export. Apply `unified.bps` to the original **EXE GP ROM**, or use the exported `unified.gba` directly. Do not apply it to EXE4.5.
+The GP catalog preserves all 170 native audio IDs. Sixteen entries belong to its music player; these become the default configurable music events. **Title screen** is event 1. **Communication battles (music #12–14)** edits all three IDs used by the native communication battle selector. Those IDs are shared with some single-player battles. Select an event or this group, clear its old pool if needed, check the desired tracks, and export. Older saved title-only GP projects gain the missing native events on loading; existing pools and weights are retained. Save the project to persist the added events. See [communication battle setup and evidence](communication-battle-music.md#exe-gp-communication-battles). Apply `unified.bps` to the original **EXE GP ROM**, or use the exported `unified.gba` directly. Do not apply it to EXE4.5.
 
 A target can also be chosen at startup:
 

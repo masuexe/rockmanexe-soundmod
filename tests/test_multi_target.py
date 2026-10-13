@@ -81,6 +81,43 @@ class MultiTargetTests(unittest.TestCase):
         data=bytearray(self.gp);data[0x2FFC]^=1
         with self.assertRaisesRegex(ValueError,'table reference'):check_layout(data,target_profile('exegp')['layout'])
 
+    def test_saved_gp_title_project_gains_events_without_changing_pools(self):
+        with tempfile.TemporaryDirectory() as temp:
+            m = Manager(temp, target='exegp')
+            try:
+                old = copy.deepcopy(self.project)
+                old['pools']['1']['tracks'] = ['exe1:0', 'exe1:0', 'native-exegp:1']
+                old['pools']['1']['selector_shift'] = 2
+                old['pools']['12'] = {'tracks':['exegp:5'], 'selector_shift':3}
+                m.project_path.write_text(json.dumps(old))
+                m.select_target('exegp')
+                finish(m, m.load(['exe1','exegp']))
+                self.assertEqual(len(m.project['pools']),16)
+                for trigger, pool in old['pools'].items():
+                    self.assertEqual(m.project['pools'][trigger],pool)
+                self.assertEqual(m.project['pools']['13']['tracks'],['native-exegp:13'])
+                self.assertIn('Added 14 native music events',m.project_notice)
+                m.save_project(m.project)
+                m.select_target('exegp')
+                finish(m, m.load(['exe1','exegp']))
+                self.assertEqual(m.project_notice,'')
+                self.assertEqual(m.project['pools']['12'],old['pools']['12'])
+            finally:
+                m.close()
+
+    def test_gp_communication_group_exports_all_native_choices(self):
+        group = self.value['event_groups']['communication']
+        self.assertEqual(group['events'],[12,13,14])
+        # Native communication selection: RNG -> modulo 3 -> add 12.
+        self.assertEqual(self.gp[0x489CC:0x489D8].hex(),'032105f00ff90c300004000c')
+        project = {'schema_version':1,'target_profile':'exegp','pools':{
+            str(i):{'tracks':['exe1:0','native-exegp:13']} for i in group['events']}}
+        output, _, manifest = build_catalog(self.gp,self.gp,self.value,self.reports,self.donors,project,selected_only=True)
+        self.assertEqual([r['trigger_id'] for r in manifest['hook']['rules']],group['events'])
+        self.assertEqual(len(manifest['imports']),1)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table+170*8],self.gp[0x160658:0x160658+170*8])
+
     def test_manager_target_switch_export_and_project_isolation(self):
         with tempfile.TemporaryDirectory() as temp:
             m=Manager(temp)

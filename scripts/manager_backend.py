@@ -151,7 +151,15 @@ class Manager:
             project = copy.deepcopy(self.default_project)
         project['target_profile'] = profile['key']
         removed = fallback = 0
+        added = 0
         try:
+            # Catalog-derived events become known only after loading the ROM.
+            # Older saved projects may contain just the preview/title event.
+            if profile['layout']['default_events'] is None:
+                for trigger, pool in self.default_project['pools'].items():
+                    if trigger not in project['pools']:
+                        project['pools'][trigger] = copy.deepcopy(pool)
+                        added += 1
             for trigger, pool in project['pools'].items():
                 old = pool['tracks']
                 if not isinstance(old, list): raise ValueError('Invalid tracks list')
@@ -170,6 +178,8 @@ class Manager:
         else:
             self.project = {'schema_version':1,'target_profile':profile['key'],'pools':project['pools']}
             self.project_notice = f'Removed {removed} unavailable playlist entries; {fallback} empty pools restored to native target music. Save to keep these changes.' if removed or fallback else ''
+            if added:
+                self.project_notice += (' ' if self.project_notice else '') + f'Added {added} native music events; existing pools retained. Save to keep these changes.'
 
     def state(self):
         with self.lock:

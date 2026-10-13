@@ -35,3 +35,23 @@ Disassemblies and the controlled execution transcript are retained under `out/co
 ## English target confirmation
 
 The supplied `bn45_us_pvp_0.6.0.bps` also starts from original EXE4.5 CRC32 `A646601B`. Its descriptor lookup, descriptor-99 music byte, and battle-start selection code match the Japanese target. Music event 98 therefore remains the communication pool. English target dispatch/ABI probes and natural imported playback also pass; see [English target validation](english-pvp.md).
+
+## EXE GP communication battles
+
+Choose **Rockman EXE Battle Chip GP (JP)** as the target and click **Load tracks**. Under **When to play**, select **Communication battles (music #12–14)**. Click **Clear pool**, check the tracks you want to participate, then save and export. Apply `unified.bps` to the supported original `exegp.gba`, or run `unified.gba` directly. The title pool remains independent.
+
+This group writes ordinary pools for IDs **12, 13, and 14**. GP's native communication battle code chooses among those three before requesting playback, so configuring only one would leave two native choices unchanged. The group synchronizes checkbox edits, clearing, and adding visible tracks. If the three existing pools differ, the UI shows the first pool and explains that an edit will apply it to all three. Merely selecting the group does not change any pool. The numbered events remain available for individual editing.
+
+IDs 12–14 also appear in single-player battle paths. Changing this group changes every request for these IDs, including those battles. An exclusively communication-only scene hook would require a separate adapter extension. The existing random selector chooses one pool entry on each music start; repeats are possible.
+
+Older GP projects containing only a customized title pool gain the other 15 native music events when the catalog is loaded. Existing tracks, duplicate entries (weights), and selector shifts are retained. Added events initially contain only their original native song. Save the project to persist the expansion.
+
+### GP selection evidence
+
+Supported target CRC32: `9217FB18`; SHA-256: `6c3ac853d06b0fa70d9ac5a0705841ddb4f0e06cd246894e60bcb1cf824ef025`.
+
+The main menu dispatcher at `0x08035BAC` uses table `0x082A9094`; slot 7 points to communication handler `0x08047F5D`. Its substate dispatcher at `0x08047F5C` uses table `0x082AE618`. Substate 7 points to `0x08048975`. Its first selection branch calls the game RNG at `0x0803FDC8`, masks to 16 bits, takes the remainder modulo 3 via `0x0804DBF0`, adds 12, and requests music through `0x08049FE4` at `0x080489D8`. That wrapper reaches the M4A entry at `0x0804C3BC`. The subsequent communication lifecycle includes the native link reset helper at `0x0804A114`, which updates the link state at `0x02002EE0` and calls `0x08000F28`.
+
+Single-player call sites include explicit requests for ID 12 at `0x08039C56`, ID 13 at `0x08039C40`, and ID 14 at `0x08039C70`. These demonstrate why the group is described as shared battle music.
+
+Controlled mGBA execution entered the native modulo/add branch with RNG inputs 0, 1, and 2 and confirmed requests 12, 13, and 14. A GP export mapping all three to `exe1:0` and `exe4:0` passed nine dispatch/header checks at controlled scheduler ticks, native status-query checks with an explicitly injected nonzero player status (including an unconfigured title query that must return zero), and BPS reconstruction. This injected branch state and did **not** perform a complete two-peer communication battle. Runtime reports and disassemblies are retained under `out/gp-link-research/`. Browser workflow checks cover group edits, distinct initial pools, title isolation, and save/reload.

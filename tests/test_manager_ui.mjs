@@ -27,7 +27,7 @@ async function fetch(path, options){const body=options.body?JSON.parse(options.b
  else if(path==='/api/name'){value=body;fixture.project.names[body.key]=body.name;}
  else if(path==='/api/target'){fixture.selected_target=body.target;fixture.patch_required=false;fixture.inputs={base:{filename:'exegp.gba'}};fixture.catalog=null;fixture.project={schema_version:1,target_profile:'exegp',pools:{'1':{tracks:['exegp:1'],selector_shift:0}},names:{}};value=structuredClone(fixture);}
  else if(path==='/api/project'){persisted=body;fixture.project=body;value=fixture;}
- else {const id=String(++next);if(path==='/api/load'){fixture.selected_sources=body.sources;fixture.source_options.forEach(o=>o.loaded=body.sources.includes(o.key));fixture.catalog={entries:rows,source_labels:{pvp:'EXE4.5 PvP',exegp:'Battle Chip GP'},preview_trigger:fixture.selected_target==='exegp'?1:55,event_labels:fixture.selected_target==='exegp'?{'1':'Title screen'}:{'55':'Title screen'}};value={tracks:2};}else if(path==='/api/export'){exported=body;value={size_bytes:9585460,files:['unified.bps','unified.gba','project.json','catalog.csv']};}else if(path==='/api/preview'){previewed=body;value={files:['preview.wav']};}else throw new Error(path);jobs[id]={id,status:'done',result:value};value={job_id:id};}
+ else {const id=String(++next);if(path==='/api/load'){if(fixture.selected_target==='exegp'){for(const id of [12,13,14])fixture.project.pools[id] ||= {tracks:[`native-exegp:${id}`],selector_shift:0};}fixture.selected_sources=body.sources;fixture.source_options.forEach(o=>o.loaded=body.sources.includes(o.key));fixture.catalog={entries:rows,source_labels:{pvp:'EXE4.5 PvP',exegp:'Battle Chip GP'},preview_trigger:fixture.selected_target==='exegp'?1:55,event_groups:fixture.selected_target==='exegp'?{communication:{label:'Communication battles (music #12–14)',events:[12,13,14],description:'Also used by single-player battles.'}}:{},event_labels:fixture.selected_target==='exegp'?{'1':'Title screen'}:{'55':'Title screen'}};value={tracks:2};}else if(path==='/api/export'){exported=body;value={size_bytes:9585460,files:['unified.bps','unified.gba','project.json','catalog.csv']};}else if(path==='/api/preview'){previewed=body;value={files:['preview.wav']};}else throw new Error(path);jobs[id]={id,status:'done',result:value};value={job_id:id};}
  return {ok:true,json:async()=>value};
 }
 const context=vm.createContext({document,window:{MANAGER_TOKEN:'fixture-token',addEventListener(){},ExeRealtime:class{constructor(token,callback){this.callback=callback;this.active=false;}async play(key){this.active=true;this.callback({type:'playing',key,latency_ms:40});}async stop(){this.active=false;this.callback({type:'stopped'});}}},fetch,File:class{},setTimeout,Promise,console,encodeURIComponent,Set,JSON});
@@ -52,3 +52,22 @@ assert.equal(el('inputs').children.length,1);assert.equal(el('export').disabled,
 await el('load').onclick();assert.equal(el('rule').children[0].value,'1');assert.equal(el('rule').children[0].textContent,'Title screen');
 await el('export').onclick();assert.match(el('status').textContent,/apply BPS to exegp.gba/);
 console.log('Target switching checks passed: separate target input, pool IDs, title label and patch application ROM.');
+
+const titlePool=structuredClone(exported.pools['1']);
+assert.equal(el('rule').children.at(-1).value,'group:communication');
+el('rule').value='group:communication';el('rule').listeners.change();
+assert.match(el('pool-info').textContent,/Pools differ/);
+await el('export').onclick();
+for(const id of [12,13,14])assert.deepEqual(exported.pools[id].tracks,[`native-exegp:${id}`]);
+el('clear').onclick();assert.equal(el('export').disabled,true);
+const groupCheck=el('tracks').children[0].children[0];groupCheck.checked=true;groupCheck.listeners.change();
+await el('export').onclick();
+for(const id of [12,13,14])assert.deepEqual(exported.pools[id],{tracks:['exegp:1'],selector_shift:0});
+assert.deepEqual(exported.pools['1'],titlePool);
+assert.match(el('pool-info').textContent,/single-player/);
+el('all-visible').onclick();await el('save-project').onclick();
+for(const id of [12,13,14])assert.deepEqual(persisted.pools[id].tracks,['exegp:1','pvp:64']);
+await el('load').onclick();assert.equal(el('rule').value,'group:communication');
+el('rule').value='12';el('rule').listeners.change();el('clear').onclick();el('all-visible').onclick();
+await el('export').onclick();assert.deepEqual(exported.pools['13'].tracks,['exegp:1','pvp:64']);
+console.log('Communication group checks passed: distinct defaults, synchronized editing, title isolation, save/reload and individual events.');
