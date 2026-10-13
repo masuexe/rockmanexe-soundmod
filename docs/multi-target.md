@@ -1,6 +1,6 @@
 # Multiple target ROMs
 
-The manager separates the **target game** (the ROM being modified), optional **pre-patch**, and **music sources**. A supported music source is not automatically a supported patch target. The current targets are EXE4.5 JP PvP 0.6.0, BN4.5 English PvP 0.6.0, and Japanese EXE Battle Chip GP with or without ChipControl 1.1.0. The [ChipControl preset](chipcontrol.md) applies the pinned Japanese IPS before music changes and shares the original GP audio layout and saved music project. EXE1 and BN2 remain music sources; their target adapters are the next expansion.
+The manager separates the **target game** (the ROM being modified), optional **pre-patch**, and **music sources**. A supported music source is not automatically a supported patch target. The current targets are EXE4.5 JP PvP 0.6.0, BN4.5 English PvP 0.6.0, Japanese EXE Battle Chip GP with or without ChipControl 1.1.0, and both original Japanese EXE6 variants. See [EXE6 target setup](exe6.md). The [ChipControl preset](chipcontrol.md) applies the pinned Japanese IPS before music changes and shares the original GP audio layout and saved music project. EXE1 and BN2 remain music sources; their target adapters are the next expansion.
 
 ## Use EXE GP as the target
 
@@ -22,7 +22,7 @@ EXE4.5 JP/English pools continue to use `project.json`; Both GP presets use `pro
 
 ## Shared implementation
 
-`scripts/target_profiles.py` holds ROM fingerprints, required original inputs, pre-patch presets, and verified driver layouts. Both EXE4.5 PvP variants share `exe45-audio-v1`; GP uses `exegp-audio-v1`.
+`scripts/target_profiles.py` holds ROM fingerprints, required original inputs, pre-patch presets, and verified driver layouts. Both EXE4.5 PvP variants share `exe45-audio-v1`; GP uses `exegp-audio-v1`; Japanese EXE6 uses `exe6-audio-v1` and `exe6f-audio-v1` with distinct driver/table offsets. Their common selector reads the verified 16-bit frame counter.
 
 The common code handles catalog construction, conservative sequence/dependency analysis, sparse tone banks, resource allocation and deduplication, pointer relocation, stable donor slots, pool rules, Thumb encoding, native table/prefix preservation, relocation reparsing, and BPS reconstruction. Realtime playback, names, source selection, jobs, and downloads are also shared.
 

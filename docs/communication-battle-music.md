@@ -55,3 +55,7 @@ The main menu dispatcher at `0x08035BAC` uses table `0x082A9094`; slot 7 points 
 Single-player call sites include explicit requests for ID 12 at `0x08039C56`, ID 13 at `0x08039C40`, and ID 14 at `0x08039C70`. These demonstrate why the group is described as shared battle music.
 
 Controlled mGBA execution entered the native modulo/add branch with RNG inputs 0, 1, and 2 and confirmed requests 12, 13, and 14. A GP export mapping all three to `exe1:0` and `exe4:0` passed nine dispatch/header checks at controlled scheduler ticks, native status-query checks with an explicitly injected nonzero player status (including an unconfigured title query that must return zero), and BPS reconstruction. This injected branch state and did **not** perform a complete two-peer communication battle. Runtime reports and disassemblies are retained under `out/gp-link-research/`. Browser workflow checks cover group edits, distinct initial pools, title isolation, and save/reload.
+
+## Japanese EXE6 communication battles
+
+For both Gregar and Falzar, choose **Communication battles (shared music #21)**, clear its previous pool if needed, select the desired tracks, and export. The BPS applies to the original ROM of the selected variant. ID 21 is also used outside communication battles; this is a shared music-ID rule. See [EXE6 descriptors, selection branch, and runtime checks](exe6.md#communication-battle-music).

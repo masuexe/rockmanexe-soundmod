@@ -113,7 +113,7 @@ def selector_hook(offset, rule_address, table_address, layout=None):
     code.emit(0x78E9)  # ldrb r1,[r5,#3] : count
     code.load(0, layout['selector_address'])
     if layout.get('selector_mode') == 'clock-xorshift32':
-        code.emit(0x6800)  # ldr r0,[r0] : existing scheduler tick, read only
+        code.emit(0x8800 if layout.get('selector_width') == 2 else 0x6800)  # ldrh/ldr : read-only existing counter
         code.emit(0x0343)  # lsl r3,r0,#13
         code.emit(0x4058)  # eor r0,r3
         code.emit(0x0C43)  # lsr r3,r0,#17

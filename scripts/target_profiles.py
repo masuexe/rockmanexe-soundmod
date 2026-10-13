@@ -59,6 +59,31 @@ TARGETS = {
 }
 _originals = json.loads((Path(__file__).resolve().parents[1] / 'config/rom-profiles.json').read_text())
 _gp = next(p for p in _originals['profiles'] if p['key']=='exegp')
+for _key, _entry, _core, _players, _refs in [
+    ('exe6',0x15B338,0x15BB18,0x164C8C,[0x15B360,0x15B394,0x15B3E0,0x15B434,0x15B468]),
+    ('exe6f',0x1597FC,0x159FDC,0x163150,[0x159824,0x159858,0x1598A4,0x1598F8,0x15992C]),
+]:
+    _original = next(p for p in _originals['profiles'] if p['key']==_key)
+    _layout_key = _key+'-audio-v1'
+    LAYOUTS[_layout_key] = {
+        'table_offset':_original['table_offset'],'entry_count':474,
+        'player_table_offset':_players,'music_player':31,
+        'entry_offset':_entry,'core_offset':_core,'table_references':_refs,
+        'entry_signature':'00b50004','stub_capacity':0x24,
+        'sound_mode_offset':0x59C,'sound_mode':0x0093040D,'pcm_rate':10512,
+        'selector_address':0x0200A210,'selector_mode':'clock-xorshift32','selector_width':2,
+        'selector_description':'Read-only 16-bit game frame counter mixed with xorshift32; timing based, deterministic',
+        'preview_trigger':1,'event_labels':{'1':'Title screen',
+            '21':'Communication battles (shared music #21)'},
+        'default_events':None,'preservation_probes':[100,129,133],
+        'native_source':'native-exe6',
+    }
+    TARGETS[_key] = {
+        'label':_original['label'],'native_label':_original['label']+' (target)',
+        'fingerprint':_original['fingerprint'],'audio_layout':_layout_key,
+        'base_sha256':_original['fingerprint']['sha256'],
+        'filename':_original['filename'],'patch_filename':None,
+    }
 TARGETS['exegp'] = {'label':_gp['label'], 'native_label':_gp['label']+' (target)',
                       'fingerprint':_gp['fingerprint'], 'audio_layout':'exegp-audio-v1',
                       'base_sha256':_gp['fingerprint']['sha256'], 'filename':_gp['filename'], 'patch_filename':None}
@@ -129,6 +154,7 @@ def check_layout(data, layout):
 
 def selector_value(layout, raw):
     if layout.get('selector_mode') == 'clock-xorshift32':
+        if layout.get('selector_width') == 2: raw &= 0xFFFF
         raw ^= (raw << 13) & 0xFFFFFFFF
         raw ^= raw >> 17
         raw ^= (raw << 5) & 0xFFFFFFFF
