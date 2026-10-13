@@ -332,7 +332,24 @@
       "music_player": 0,
       "target_slot_start": 8285,
       "evidence": "structural table and conservative sequence dependencies; exhaustive donor runtime validation pending"
+    },
+    {
+      "key": "exe45",
+      "label": "Rockman EXE 4.5 Real Operation (JP)",
+      "filename": "exe45.gba",
+      "fingerprint": {
+        "size_bytes": 8388608,
+        "crc32": "A646601B",
+        "sha256": "588a77da006fb0dca0c8addbcc316d7bd4b1c3a42db24750bcfe17b170ac5ef8"
+      },
+      "table_offset": 1266196,
+      "entry_count": 499,
+      "music_player": 31,
+      "target_slot_start": 8455,
+      "fixed_pcm_rate": 10512,
+      "evidence": "verified original EXE4.5 playback layout and runtime 10,512 Hz mixer; representative donor playback validated"
     }
   ],
-  "table_entry_count": 8455
+  "minimum_table_entry_count": 8455,
+  "table_entry_count": 8954
 }

@@ -1,6 +1,6 @@
 # Original-ROM music library
 
-The local manager now reads music from original ROMs in `../roms/`, replacing Soundmod BPS as its music source. The legacy Soundmod-based CLI remains available for reproducing previous experiments. The shared directory currently contains original EXE4.5 plus 22 supported donor profiles.
+The local manager now reads music from original ROMs in `../roms/`, replacing Soundmod BPS as its music source. The legacy Soundmod-based CLI remains available for reproducing previous experiments. The shared directory has 23 supported donor profiles, including original EXE4.5 as both a pre-patch input and an independent music source.
 
 ## Discovery and profiles
 
@@ -27,19 +27,24 @@ The profiles use player 31 for the EXE/BN RPG entries and player 0 for Battle Ch
 | Rockman EXE 3 Black (JP) (`exe3b`) | `0x149518` | 330 | 34 |
 | Rockman EXE 4 Red Sun (JP) (`exe4`) | `0x155E64` | 457 | 34 |
 | Rockman EXE 4 Blue Moon (JP) (`exe4b`) | `0x155E78` | 457 | 34 |
+| Rockman EXE 4.5 Real Operation (JP) (`exe45`) | `0x135214` | 499 | 47 |
 | Rockman EXE 5 Team Blues (JP) (`exe5`) | `0x155674` | 372 | 35 |
 | Rockman EXE 5 Team Colonel (JP) (`exe5k`) | `0x15575C` | 372 | 35 |
 | Rockman EXE 6 Gregar (JP) (`exe6`) | `0x164E0C` | 474 | 35 |
 | Rockman EXE 6 Falzar (JP) (`exe6f`) | `0x1632D0` | 474 | 35 |
 | Rockman EXE Battle Chip GP (JP) (`exegp`) | `0x160658` | 170 | 15 |
 
-The full library has **8,455 entries**, of which **740 are playlist-eligible**: 48 native PvP entries and 692 original-ROM donor entries. English/Japanese and version variants remain separate sources, so these counts include duplicate compositions.
+With every source selected for EXE4.5, the full library has **8,954 entries**, of which **787 are playlist-eligible**: 48 native PvP entries and 739 original-ROM donor entries. English/Japanese and version variants remain separate sources, so these counts include duplicate compositions.
 
-Foreign candidates must fit the target eight-track capacity and pass conservative sequence/tone/PCM dependency analysis. Two GP/Challenge entries exceed capacity. Twenty candidates use notes before explicit VOICE initialization; eight use the unsupported `0xB9` command. These 28 entries remain visible but unavailable. Unknown commands are rejected rather than transplanted speculatively.
+Foreign candidates must fit the target eight-track capacity and pass conservative sequence/tone/PCM dependency analysis. Over-capacity entries, notes before explicit VOICE initialization, and unsupported commands remain visible but unavailable.
 
 ## Packing and preservation
 
 Native PvP IDs 0–498 remain unchanged. Every donor profile has a fixed reserved range covering all of its table entries, including effects and empty entries. IDs stay stable when other ROMs are absent or added. Keys such as `exe1:0` and `exe6:1` are the project-facing identifiers. Numeric target IDs differ from the older Soundmod-based allocation.
+
+Original EXE4.5 uses keys such as `exe45:55` and an appended slot range 8,455–8,953. The table keeps its existing 8,455-slot span when this source is not selected, preserving previous outputs. Selecting EXE4.5 extends it to 8,954 slots. The original file is recognized by its SHA-256 even if uploaded under another filename. PvP/translated/exported ROMs are not accepted as original music sources.
+
+When EXE4.5 is the target, `pvp:*` continues to identify native target playback and `exe45:*` identifies the original donor; compositions can overlap. With GP as the target, selecting `exe45.gba` provides 47 importable original EXE4.5 candidates. Its verified 10,512 Hz fixed-PCM rate is adapted through the shared exporter. Original/title and GP-transplanted three-second mGBA clips, live agbplay PCM and source-role upload/export checks are recorded under `out/exe45-source-check/`.
 
 The manager packs only foreign entries referenced by the export pools. It uses the same checked sparse-bank relocation, PCM deduplication, start-by-ID hook, and ten-channel mixer setting as the previous unified builder. Original PvP table entries and resources are preserved. Unselected foreign table slots remain empty. Every imported song is reparsed after packing, comparing notes, timing, termination, and sample contents.
 

@@ -17,7 +17,7 @@ def identify(data):
     for key, profile in PROFILES.items():
         if digest == profile['fingerprint']['sha256']:
             return key
-    raise ValueError('Unsupported original ROM revision; choose one of the cataloged EXE/BN ROMs')
+    raise ValueError('Unsupported original music ROM revision; choose an original ROM listed in Original music ROMs')
 
 
 def catalog_originals(base, target_rom, donors):
@@ -68,8 +68,10 @@ def catalog_originals(base, target_rom, donors):
                                dependency_summary={'tone_records':len(report['tones']),'pcm_samples':len(report['samples']),
                                                    'covered_bytes':report['covered_bytes']})
             rows.append(row)
+    minimum = PROFILE_DATA.get('minimum_table_entry_count', PROFILE_DATA['table_entry_count'])
+    table_count = max(minimum, *(p['target_slot_start']+p['entry_count'] for _, _, p in sources))
     return {'schema_version':1,'target_profile':target['key'],'target_label':target['label'],'sources':source_info,'source_labels':labels,'native_source':native, 'target_player':layout['music_player'], 'event_labels':layout['event_labels'], 'preview_trigger':layout['preview_trigger'],
-            'target_track_capacity':capacity,'table_entry_count':PROFILE_DATA['table_entry_count'],
-            'allocation_policy':'Native IDs preserved; fixed original-ROM profile ranges including absent sources',
+            'target_track_capacity':capacity,'table_entry_count':table_count,
+            'allocation_policy':'Native and existing donor IDs preserved; optional donor ranges extend the reserved table when selected',
             'classification_basis':'Profile music-player candidates, not verified song titles; donor runtime coverage is representative',
             'entries':rows}, reports
