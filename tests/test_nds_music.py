@@ -1,0 +1,169 @@
+from pathlib import Path
+import struct
+import sys
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+from analyze_song import analyze, trace_track
+from build_nds_experiment import build_experiment
+from nds_music import (NoteDefinition, SoundArchive, convert_song, decode_adpcm,
+                       nds_sdat, note_bytes, read_event, trace_sequence, wait_bytes)
+from scan_audio import apply_bps
+
+
+def note(key=60, velocity=100, length=12):
+    return bytes([key, velocity, length])
+
+
+class SequenceConversionTests(unittest.TestCase):
+    def test_mod_delay_is_u16_and_does_not_create_phantom_note(self):
+        raw = b'\xE0\x00\x00\xCC\x00\xC7\x00\x81\x02' + note() + b'\x80\x0C\xFF'
+        event = read_event(raw, 0)
+        self.assertEqual(event['next'], 3)
+        self.assertEqual(read_event(raw, 3)['opcode'], 0xCC)
+        track = trace_sequence(raw)[0]
+        self.assertEqual(track['notes'], [(2, 60)])
+        self.assertEqual(track['end_ticks'], 12)
+
+    def test_note_wait_and_polyphonic_chord_have_different_timing(self):
+        waited = trace_sequence(b'\x81\x02' + note() + note(64) + b'\xFF')[0]
+        poly = trace_sequence(b'\xC7\x00\x81\x02' + note() + note(64) + b'\x80\x0C\xFF')[0]
+        self.assertEqual([a['ticks'] for a in waited['actions'] if a['name'] == 'note'], [0, 12])
+        self.assertEqual([a['ticks'] for a in poly['actions'] if a['name'] == 'note'], [0, 0])
+        self.assertEqual((waited['end_ticks'], poly['end_ticks']), (24, 12))
+
+    def test_calls_and_finite_loops_execute_exactly(self):
+        raw = bytearray(b'\xC7\x00\x81\x02\xD4\x02\x95\x10\x00\x00\xFC\xFF')
+        raw.extend(bytes(16 - len(raw)))
+        raw.extend(note() + b'\x80\x0C\xFD')
+        track = trace_sequence(bytes(raw))[0]
+        self.assertEqual(track['end_ticks'], 24)
+        self.assertEqual([a['ticks'] for a in track['actions'] if a['name'] == 'note'], [0, 12])
+
+    def test_repeat_state_keeps_controller_state(self):
+        raw = b'\xC7\x00\x81\x02' + note() + b'\x80\x0C\x94\x04\x00\x00'
+        track = trace_sequence(raw)[0]
+        self.assertEqual((track['loop_start_ticks'], track['loop_ticks']), (0, 12))
+
+    def test_unsupported_executed_controls_and_bad_paths_fail(self):
+        for raw in [b'\xA0\x00', b'\xD3\x7F\xFF', b'\xFD',
+                    b'\x94\xFF\xFF\xFF', b'\x94\x00\x00\x00',
+                    b'\x81\x81\x00\xFF', b'\xCA\x01' + note() + b'\xFF',
+                    note() + b'\xCA\x01\xFF']:
+            with self.subTest(raw=raw.hex()), self.assertRaises(ValueError):
+                trace_sequence(raw)
+
+    def test_argument_bounds_and_truncation_fail(self):
+        for raw in [b'\xE0\x00', b'\x80\x80\x80\x80\x80', note(60, 200), note(length=0)]:
+            with self.subTest(raw=raw.hex()), self.assertRaises(ValueError):
+                trace_sequence(raw)
+
+    def test_mplay_lengths_preserve_odd_gate_and_long_wait(self):
+        for duration in [1, 11, 23, 43, 95, 127, 223]:
+            raw = b'\xBD\x00' + note_bytes(60, 90, duration) + wait_bytes(321) + b'\xB1'
+            decoded = trace_track(raw, 0)
+            played = next(e for e in decoded['events'] if e['name'] == 'NOTE')
+            self.assertEqual(played['duration_ticks'], duration)
+            self.assertEqual(decoded['ticks_before_repeat'], 321)
+
+
+class SampleConversionTests(unittest.TestCase):
+    def test_invalid_song_gain_fails_before_reading_source(self):
+        for gain in [float('nan'), float('inf'), -25, 13, '3.5', True]:
+            with self.subTest(gain=gain), self.assertRaisesRegex(ValueError, 'Song gain'):
+                convert_song(None, 0, song_gain_db=gain)
+
+    def test_signed_header_and_low_nibble_first(self):
+        self.assertEqual(decode_adpcm(struct.pack('<hH', -100, 0) + bytes(4)), [-100] * 8)
+        self.assertEqual(decode_adpcm(bytes(4) + b'\x71\x00\x00\x00'), [1, 12, 14, 15, 16, 17, 18, 19])
+
+    def test_predictor_clamps_and_malformed_headers_fail(self):
+        self.assertEqual(decode_adpcm(struct.pack('<hH', 32760, 88) + b'\x77' * 4), [32767] * 8)
+        for raw in [bytes(3), bytes(5), struct.pack('<hH', 0, 89) + bytes(4)]:
+            with self.subTest(raw=raw.hex()), self.assertRaises(ValueError):
+                decode_adpcm(raw)
+
+    def test_generated_pcm_header_tuning_pan_loop_and_gba_reparse(self):
+        class Fixture:
+            def sequence(self, index):
+                return b'\xC7\x00\xE1\x78\x00\x81\x02' + note() + b'\x80\x0C\x94\x07\x00\x00', {'bank_id': 0, 'volume': 127}
+            def bank(self, index):
+                return None, [0]
+            def note_definition(self, bank, instrument, key):
+                return NoteDefinition(0, 0, 72, 127, 127, 127, 127, 90)
+            def wave(self, archive, index):
+                return [-32768, 0, 32767, 0], {'effective_rate_hz': 22050, 'looped': True,
+                                             'loop_start_samples': 1, 'sample_count': 4}
+        blob, dependency, report = convert_song(Fixture(), 0)
+        wave = dependency['samples'][0]
+        self.assertEqual(wave['frequency_raw'], 11025 * 1024)
+        self.assertEqual((wave['loop_start'], wave['sample_count']), (1, 4))
+        self.assertEqual(blob[wave['file_offset'] + 16:wave['file_offset'] + 20], b'\x80\x00\x7F\x00')
+        child = next(t for t in dependency['tones'] if t['type_raw'] == 0)
+        raw = bytes.fromhex(child['raw_hex'])
+        self.assertEqual((raw[1], raw[3]), (60, 218))
+        self.assertTrue(report['note_timing_check'])
+
+
+NDS = Path('/home/harp/projects/nds/roms/ssr3b.nds')
+BASE = ROOT.parent / 'roms/exe6.gba'
+
+
+@unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
+class LocalNdsExperimentTests(unittest.TestCase):
+    def test_room_execution_and_bps_preserve_native_target(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, catalog, sdat = build_experiment(source, base, song_gain_db=0)
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(conversion['track_count'], 6)
+        self.assertEqual(len(dependency['samples']), 15)
+        self.assertEqual({t['loop_ticks'] for t in conversion['tracks']}, {1536})
+        self.assertTrue(all(a['duration'] > 0 for t in conversion['tracks'] for a in t['actions'] if a['name'] == 'note'))
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+        original_table = base[0x164E0C:0x164E0C + 474 * 8]
+        target_table = manifest['target_table_file_offset']
+        self.assertEqual(output[target_table:target_table + len(original_table)], original_table)
+        with self.assertRaisesRegex(ValueError, 'capacity'):
+            convert_song(SoundArchive(sdat), 2, track_capacity=5)
+
+    def test_wrong_source_revision_rejected(self):
+        raw = bytearray(NDS.read_bytes())
+        raw[-1] ^= 1
+        with self.assertRaisesRegex(ValueError, 'verified'):
+            build_experiment(bytes(raw), BASE.read_bytes())
+
+    def test_calibrated_gain_changes_only_imported_volume_operands(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        old, _, old_manifest, _, _, _, _, _ = build_experiment(source, base, song_gain_db=0)
+        new, patch, manifest, conversion, _, _, _, _ = build_experiment(source, base)
+        self.assertEqual(conversion['song_gain_db'], 3.5)
+        self.assertEqual(len(old), len(new))
+        self.assertEqual(old[:len(base)], new[:len(base)])
+        self.assertEqual(old_manifest['sound_mode_change'], manifest['sound_mode_change'])
+        old_dep = analyze(old, old_manifest['target_table_file_offset'], 474)
+        new_dep = analyze(new, manifest['target_table_file_offset'], 474)
+        allowed = set()
+        for old_track, new_track in zip(old_dep['tracks'], new_dep['tracks']):
+            self.assertEqual(old_track['notes'], new_track['notes'])
+            self.assertEqual(old_track['loop_ticks'], new_track['loop_ticks'])
+            for old_event, new_event in zip(old_track['events'], new_track['events']):
+                if old_event['name'] == 'VOL':
+                    self.assertGreaterEqual(new_event['value'], old_event['value'])
+                    self.assertLessEqual(new_event['value'], 127)
+                    allowed.add(old_event['file_offset'] + 1)
+                else:
+                    self.assertEqual(old_event, new_event)
+        changed = {i for i, (a, b) in enumerate(zip(old, new)) if a != b}
+        self.assertTrue(changed)
+        self.assertLessEqual(changed, allowed)
+        self.assertEqual(apply_bps(base, patch)[0], new)
+        with self.assertRaisesRegex(ValueError, 'headroom'):
+            build_experiment(source, base, song_gain_db=12)
+
+
+if __name__ == '__main__':
+    unittest.main()

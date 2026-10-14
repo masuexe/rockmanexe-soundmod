@@ -71,6 +71,8 @@ Tests cover BPS decoding/export, overlapping copies, checksums, invalid referenc
 
 ## Research and next steps
 
+The first [NDS music conversion experiment](docs/nds-import-research.md) imports Star Force 3 `BGM_ROOM` into Japanese EXE6 through a separate checked CLI. Six tracks and 15 original samples pass independent DS execution/decoding comparisons and sustained natural GBA playback through two loops. The experiment includes measured song-volume compensation after title-screen listening feedback. NDS import and preview are not yet supported by the manager; voice allocation and envelope fidelity remain research work.
+
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
 Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. The user has confirmed that the unified ROM sounds correct during their listening test; sustained donor and transplanted execution are covered in the transplantation research.
