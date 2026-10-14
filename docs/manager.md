@@ -33,7 +33,7 @@ Supported local profiles cover Japanese Rockman EXE 1–6, Black/Blue Moon/Team 
 
 For GP with ChipControl, select **Rockman EXE Battle Chip GP (JP) + ChipControl 1.1.0**. The manager reads the Japanese IPS from `../patches/MegaManBCC-ChipControl-Ver1.1.0.zip` and retains saved GP music pools. The exported BPS includes ChipControl and music changes and applies to original `exegp.gba`. See [setup and verification](chipcontrol.md).
 
-Japanese EXE6 Gregar and Falzar are also targets. Select the matching original ROM; no pre-patch is needed. Both expose 37 native music events, including title ID 1 and communication battle ID 21. Saved projects remain separate by variant. See [EXE6 details](exe6.md).
+Japanese EXE6 Gregar and Falzar are also targets. Select the matching original ROM; no pre-patch is needed. Both expose 37 native music events plus **Communication battles only**. Title ID 1 and the ordinary ID-21 pool remain independent; older projects inherit the new scene pool from their previous ID-21 choices. Saved projects remain separate by variant. See [EXE6 details](exe6.md).
 
 ## Choose and export
 

@@ -58,4 +58,4 @@ Controlled mGBA execution entered the native modulo/add branch with RNG inputs 0
 
 ## Japanese EXE6 communication battles
 
-For both Gregar and Falzar, choose **Communication battles (shared music #21)**, clear its previous pool if needed, select the desired tracks, and export. The BPS applies to the original ROM of the selected variant. ID 21 is also used outside communication battles; this is a shared music-ID rule. See [EXE6 descriptors, selection branch, and runtime checks](exe6.md#communication-battle-music).
+For both Gregar and Falzar, choose **Communication battles only**, clear its previous pool if needed, select the desired tracks, and export. **Music #21 / other scenes** remains an independent numbered pool. The BPS applies to the original ROM of the selected variant. The new scene rule overrides only communication battle starts. Legacy numeric-only projects still apply ID 21 wherever requested. Older manager projects inherit their existing ID-21 choices into the new scene pool without changing the numbered pool. See [EXE6 descriptors, selection branch, and runtime checks](exe6.md#communication-battle-music).

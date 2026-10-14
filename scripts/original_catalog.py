@@ -72,6 +72,7 @@ def catalog_originals(base, target_rom, donors):
     table_count = max(minimum, *(p['target_slot_start']+p['entry_count'] for _, _, p in sources))
     return {'schema_version':1,'target_profile':target['key'],'target_label':target['label'],'sources':source_info,'source_labels':labels,'native_source':native, 'target_player':layout['music_player'], 'event_labels':layout['event_labels'], 'preview_trigger':layout['preview_trigger'],
             'event_groups':layout.get('event_groups',{}),
+            'scene_events':layout.get('scene_events',{}),
             'target_track_capacity':capacity,'table_entry_count':table_count,
             'allocation_policy':'Native and existing donor IDs preserved; optional donor ranges extend the reserved table when selected',
             'classification_basis':'Profile music-player candidates, not verified song titles; donor runtime coverage is representative',

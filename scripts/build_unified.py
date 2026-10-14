@@ -91,7 +91,7 @@ def entry_stub(hook_address, layout=None, returns_value=False):
     return code.finish()
 
 
-def selector_hook(offset, rule_address, table_address, layout=None):
+def selector_hook(offset, rule_address, table_address, layout=None, scene_selector=False):
     layout = layout or LAYOUTS[AUDIO_LAYOUT]
     code = Thumb(offset)
     code.emit(0xB5F0)  # push r4-r7,lr
@@ -114,6 +114,15 @@ def selector_hook(offset, rule_address, table_address, layout=None):
     code.load(0, layout['selector_address'])
     if layout.get('selector_mode') == 'clock-xorshift32':
         code.emit(0x8800 if layout.get('selector_width') == 2 else 0x6800)  # ldrh/ldr : read-only existing counter
+        if scene_selector:
+            scene = layout['scene_selector']
+            code.load(3, scene['trigger_id'])
+            code.emit(0x429C)  # cmp r4,r3 : virtual communication trigger only
+            code.branch('mix_selector', condition=1)
+            code.load(3, scene['address'])
+            code.emit(0x681B)  # ldr r3,[r3] : read local RNG1 without advancing it
+            code.emit(0x4058)  # eor r0,r3
+            code.label('mix_selector')
         code.emit(0x0343)  # lsl r3,r0,#13
         code.emit(0x4058)  # eor r0,r3
         code.emit(0x0C43)  # lsr r3,r0,#17
@@ -212,6 +221,45 @@ The game fade helper uses this query before fading the original music player.
     code.emit(0x2000)
     code.label('return')
     code.emit(0xBDF0)
+    return code.finish()
+
+
+def queued_scene_hook(offset, layout, trigger):
+    """Capture the native communication flag before asynchronous audio dispatch.
+
+    The virtual ID's low byte (254) distinguishes it in the existing current
+    music indicator. Native IDs 1..37 therefore restart correctly on exit;
+    repeated communication starts also restart since 65534 != any stored byte.
+    Native effect ID 254 remains independent: only 65534 is a scene rule.
+    """
+    hook = layout['scene_hook']; code = Thumb(offset)
+    code.emit(0xB5FE)  # preserve r1-r7 and lr, as the original music wrapper does
+    code.emit(0x2100 | hook['communication_flag'])
+    code.emit(0x4208)  # tst r0,r1 : flags supplied by the native battle function
+    code.branch('ordinary',condition=0)
+    code.load(0,trigger)
+    code.branch('return')
+    code.label('ordinary')
+    code.emit(0x6BE8)  # ldr r0,[r5,#60] : native battle descriptor
+    code.emit(0x7880)  # ldrb r0,[r0,#2] : native music ID
+    code.emit(0x2863)  # native ID 99 means leave music unchanged
+    code.branch('return',condition=1)
+    # Preserve native "leave music unchanged" ID 99 without calling the
+    # wrapper (where 99 would stop music). Resume after the original BL.
+    code.load(3,(ROM_BASE+hook['skip_offset'])|1)
+    code.emit(0x9307)  # str r3,[sp,#28] : replace only this helper's saved lr
+    code.label('return')
+    code.emit(0xBDFE)
+    return code.finish()
+
+
+def inline_scene_stub(handler, layout):
+    hook = layout['scene_hook']; code = Thumb(hook['entry_offset'])
+    code.load(3,(ROM_BASE+handler)|1)
+    code.branch('far_call',link=True)
+    code.branch('resume')
+    code.label('far_call'); code.emit(0x4718)
+    code.labels['resume'] = hook['resume_offset']-hook['entry_offset']
     return code.finish()
 
 
@@ -343,8 +391,10 @@ def resolve_pools(config, value):
     native = {row['source_index']: row for row in value['entries'] if row['source'] == value.get('native_source','pvp')}
     rules = []
     for trigger, pool in config['pools'].items():
-        trigger = int(trigger)
-        if trigger not in native or not native[trigger]['playlist_eligible']:
+        scene = value.get('scene_events',{}).get(trigger)
+        native_trigger = scene['native_event'] if scene else int(trigger)
+        trigger_id = scene['trigger_id'] if scene else native_trigger
+        if native_trigger not in native or not native[native_trigger]['playlist_eligible']:
             raise ValueError(f'Trigger {trigger} is not native target music; effects cannot be remapped')
         if not isinstance(pool, dict) or not isinstance(pool.get('tracks'), list):
             raise ValueError('Each pool requires a tracks list')
@@ -353,7 +403,9 @@ def resolve_pools(config, value):
             raise ValueError('Pool requires 1..255 tracks and selector_shift 0..7')
         if any(not isinstance(key, str) or key not in entries or not entries[key]['playlist_eligible'] for key in keys):
             raise ValueError(f'Pool {trigger} contains an unknown, unavailable, or nonmusic track')
-        rules.append({'trigger_id': trigger, 'keys': keys, 'ids': [entries[key]['target_index'] for key in keys], 'selector_shift': shift})
+        rule = {'trigger_id':trigger_id,'keys':keys,'ids':[entries[key]['target_index'] for key in keys],'selector_shift':shift}
+        if scene: rule['scene_event'] = trigger
+        rules.append(rule)
     if len({rule['trigger_id'] for rule in rules}) != len(rules):
         raise ValueError('Duplicate normalized trigger ID')
     return sorted(rules, key=lambda r: r['trigger_id'])
@@ -409,7 +461,9 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
     rule_bytes.extend(struct.pack('<HBBI', 0xFFFF, 0, 0, 0))
     rule_offset = relocator.allocate(rule_bytes)
     hook_offset = (len(output) + 3) & ~3
-    code, labels = selector_hook(hook_offset, ROM_BASE + rule_offset, ROM_BASE + table_offset, layout)
+    scene_selector = bool(layout.get('scene_selector') and any(
+        r['trigger_id'] == layout['scene_selector']['trigger_id'] for r in rules))
+    code, labels = selector_hook(hook_offset, ROM_BASE + rule_offset, ROM_BASE + table_offset, layout, scene_selector)
     actual_hook = relocator.allocate(code)
     assert actual_hook == hook_offset
     stub = entry_stub(ROM_BASE + hook_offset, layout)
@@ -424,6 +478,23 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
     output[entry_offset:entry_offset + len(stub)] = stub
     allowed = [(mode_offset, mode_offset + 4), (entry_offset, entry_offset + len(stub))] + [(offset, offset + 4) for offset in layout['table_references']]
     auxiliary_hooks = {}
+    scene_rules = [rule for rule in rules if 'scene_event' in rule]
+    if scene_rules:
+        if len(scene_rules) != 1 or 'scene_hook' not in layout:
+            raise ValueError('Unsupported target scene hooks')
+        scene = scene_rules[0]
+        handler = relocator.allocate(queued_scene_hook((len(output)+3)&~3,layout,scene['trigger_id']))
+        scene_stub = inline_scene_stub(handler,layout)
+        hook = layout['scene_hook']
+        if len(scene_stub) > hook['stub_capacity']:
+            raise ValueError('Scene stub overlaps native battle continuation')
+        entry = hook['entry_offset']
+        output[entry:entry+len(scene_stub)] = scene_stub
+        allowed.append((entry,entry+len(scene_stub)))
+        auxiliary_hooks['communication'] = {'entry_address':f'0x{ROM_BASE+entry:08X}',
+            'handler_address':f'0x{ROM_BASE+handler:08X}','handler_size':len(queued_scene_hook(handler,layout,scene['trigger_id'])),
+            'virtual_trigger':scene['trigger_id'],'scene_event':scene['scene_event'],
+            'resume_address':f"0x{ROM_BASE+hook['resume_offset']:08X}"}
     if 'query_entry_offset' in layout:
         query_offset = (len(output)+3)&~3
         query_code = status_query_hook(query_offset, ROM_BASE+rule_offset, ROM_BASE+table_offset,layout)
@@ -479,10 +550,13 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
                          'rules': rules, 'scope': 'Start-by-ID only; other helpers retain their selection semantics'},
                 'auxiliary_hooks':auxiliary_hooks, 'resource_statistics': relocator.stats, 'imports': relocator.mapping_reports,
                 'limitations': ['Player-based music candidates; track names not assigned',
-                                'Selector distribution is not guaranteed uniform; identical game timing can repeat selections',
+                                ('Selector distribution is not guaranteed uniform; identical RNG1/counter inputs can repeat communication selections'
+                                 if scene_selector else 'Selector distribution is not guaranteed uniform; identical game timing can repeat selections'),
                                 'Global PCM budget affects mixer work; multiplayer not tested',
                                 'Foreign effects and over-capacity music reserved but not imported'],
                 'import_policy': 'selected tracks only' if selected_only else 'all eligible foreign tracks'}
+    if scene_selector:
+        manifest['hook']['scene_selector'] = copy.deepcopy(layout['scene_selector'])
     return result, value, manifest
 
 

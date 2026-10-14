@@ -7,7 +7,7 @@ The manager supports both original Japanese EXE6 revisions in `../roms/`:
 | Rockman EXE 6 Gregar (JP) | `exe6.gba` | `6285918A` |
 | Rockman EXE 6 Falzar (JP) | `exe6f.gba` | `2DFB603E` |
 
-Choose the matching target, select the original music ROM sources you need, and click **Load tracks**. No gameplay pre-patch is required. Configure **Title screen** or **Communication battles (shared music #21)**, clear its existing pool if needed, then select tracks and export. Run `unified.gba` directly, or apply `unified.bps` to the **original ROM of that exact variant**. A Gregar BPS cannot be applied to Falzar or an English BN6 ROM.
+Choose the matching target, select the original music ROM sources you need, and click **Load tracks**. No gameplay pre-patch is required. Configure **Title screen** or **Communication battles only**, clear its existing pool if needed, then select tracks and export. Run `unified.gba` directly, or apply `unified.bps` to the **original ROM of that exact variant**. A Gregar BPS cannot be applied to Falzar or an English BN6 ROM.
 
 Each variant exposes all 37 native music IDs, 1–37, while preserving its complete 474-entry native audio table. Native music keys are `native-exe6:*`; donor IDs such as `exe6:*` and `exe6f:*` retain their existing meanings and slot assignments. Donor and native copies may both appear when the target game is also checked as a source. Only selected donor tracks are included in an export.
 
@@ -24,11 +24,11 @@ English BN6 ROMs remain music sources. Their target layouts and any gameplay pre
 
 ## Communication battle music
 
-Both Japanese variants use music ID **21** for communication battles. The communication settings generator selects one of 164 battlefield descriptors; every descriptor has byte 2 equal to `0x15` (21). The native round startup either reads that byte or explicitly selects 21 when battle flag bit 3 is set. It requests music at `0x08009406` through `0x080005D4`.
+Both Japanese variants use music ID **21** for communication battles. The communication settings generator selects one of 164 battlefield descriptors; every descriptor has byte 2 equal to `0x15` (21). The native round startup either reads that byte or explicitly selects 21 when communication flag bit 3 is set. It requests music at `0x08009406` through `0x080005D4`. With the new scene rule, communication starts select their own pool; ordinary requests for ID 21 retain the numbered pool.
 
-This is an ID rule, not an exclusively communication-scene hook: other scenes requesting 21 use the same configured pool. Each native music start selects one pool entry. The game retains its suppression of repeated requests for the same current music ID. Finite tracks do not automatically advance, and repeated selections are possible.
+The **Communication battles only** rule is scene-specific. **Music #21 / other scenes** configures the ordinary ID pool; other single-player music IDs retain their own numbered rules. If you want native music for ordinary ID 21, select only `native-exe6:21` there. The scene pool is independent. Each native music start selects one pool entry. Ordinary requests retain same-ID suppression. Communication battle starts, including rematches, select again. Finite tracks do not automatically advance, and repeated selections are possible.
 
-An emulator or network tool that suppresses the game's BGM call also suppresses this pool. The [Trill primary hook](https://github.com/HCTOrganization/trill/blob/81bbcf16f845518a53bb3399766ae1792e7d50a0/trill-pvp/src/game/bn6/primary.rs) provides such an option; disable it when testing game-driven music.
+An emulator or network tool that suppresses the game's BGM call also suppresses this pool. The original call at `0x08009406` is retained. The [Trill primary hook](https://github.com/HCTOrganization/trill/blob/81bbcf16f845518a53bb3399766ae1792e7d50a0/trill-pvp/src/game/bn6/primary.rs) provides such an option; disable it when testing game-driven music.
 
 ## Verified layouts
 
@@ -40,9 +40,10 @@ An emulator or network tool that suppresses the game's BGM call also suppresses 
 | MPlayStart core | `0x15BB18` | `0x159FDC` |
 | Initial SoundMode literal | `0x59C` | `0x59C` |
 | Communication descriptor table | `0xB4B18` | `0xB32B8` |
-| Read-only selector (RAM address) | `0x0200A210`, 16 bits | `0x0200A210`, 16 bits |
+| Read-only frame selector (RAM address) | `0x0200A210`, 16 bits | `0x0200A210`, 16 bits |
+| Communication selector also reads local RNG1 | `0x02001120`, 32 bits | `0x02001120`, 32 bits |
 
-The original SoundMode precondition is `0x0093040D`. Five stock audio-table literals are relocated in each variant. Resource allocation, bank/sample relocation, pool dispatch, BPS generation, and native prefix/table checks are shared with the existing targets. Only layout parameters differ. The selector reads the game's 16-bit frame counter and applies the existing xorshift32 mixer; it consumes no game RNG calls and allocates no RAM. Native queue wrappers and their register/Toolkit restoration remain unchanged. GP's additional status-query hook is not installed in EXE6.
+The original SoundMode precondition is `0x0093040D`. Five stock audio-table literals are relocated in each variant. Resource allocation, bank/sample relocation, pool dispatch, BPS generation, and native prefix/table checks are shared with the existing targets. Only layout parameters differ. Numbered pools read the game's 16-bit frame counter and apply the existing xorshift32 mixer; it consumes no game RNG calls and allocates no RAM. Native queue wrappers and their register/Toolkit restoration remain unchanged. GP's additional status-query hook is not installed in EXE6. A checked inline hook captures the communication flag before the audio queue, so later map requests do not depend on stale battle flags.
 
 Gregar SHA-256: `fa6808a5c63c2cc09430ec7ad74c6e02f4f35928448e6ff5f8dbdec0795160cf`.
 
@@ -55,3 +56,21 @@ Both variants naturally started title ID 1 and played imported `exe1:0` in nonze
 Tests additionally cover strict revision identity, all 37 native events, the eight-track limit, native prefix/table preservation, both variants' original-ROM BPS reconstruction, independent saved projects, and the existing target regression cases. UI fixture checks cover both variants, event labels, title isolation, and correct patch application ROMs. Full gameplay, longer audible comparisons, and complete hardware/network communication battles remain gameplay tests.
 
 Reports, disassemblies, sample ROM/BPS pairs, and a reusable controlled probe script are in `out/exe6-target-research/`. The layout and communication records can also support the sibling reverse-engineering project. Reference sources are local in `../references/exe6f` (commit `fcdbb4734c1aca27c703a4af095a3ba7f4824798`) and `../references/trill` (commit `81bbcf16f845518a53bb3399766ae1792e7d50a0`); the [Trill offsets](https://github.com/HCTOrganization/trill/blob/81bbcf16f845518a53bb3399766ae1792e7d50a0/trill-pvp/src/game/bn6/offsets.rs) independently identify the Japanese communication music call, and the [Falzar disassembly](https://github.com/dism-exe/exe6f) pins its source ROM revision.
+
+## Scene project upgrade and transport
+
+EXE6 projects now expose 37 numbered music events plus `scene:communication`. On catalog loading or project import/save, older projects gain the scene pool as an independent copy of their existing ID-21 pool, including duplicate entries and selector shift. Existing numbered pools remain unchanged. Thus an old shared pool keeps its choices until you edit the new scene pool. Source-selection reconciliation also restores an empty scene pool to native ID 21 if its donors become unavailable.
+
+The builder uses virtual start ID `65534` internally for this scene, and adds a 16-byte inline stub at `0x080093F4`. The original wrapper BL at `0x08009406` and continuation at `0x0800940A` remain intact. The helper uses the native flags passed by `getBattleFlags`, chooses a virtual communication request or the descriptor's ordinary music ID, and preserves native descriptor ID 99 as “leave music unchanged.” Projects built directly without a scene rule retain byte-identical legacy output and do not install this inline hook.
+
+The native queue carries the complete virtual ID to the shared pool selector. The original music wrapper records its low byte, 254, in the existing current-music indicator. Since real music IDs are 1–37, an ordinary map/battle request subsequently differs and restores its native/numbered pool, including ordinary ID 21. A rematch's full ID 65534 also differs from the stored byte, allowing another selection. No extra RAM or game RNG calls are used. Real effect ID 254 still passes through the ordinary audio table; it is not the virtual scene rule. Normal stop helpers reset the indicator and stop the imported player as usual.
+
+Controlled probes for both variants cover scene vs ordinary ID 21, repeated communication starts, ordinary same-ID suppression, outside-battle map requests for IDs 21 and 2 with stale battle state, native ID 99, real effect 254, stack/Toolkit preservation, and queued stopping. The scene-hook reports and sample ROM/BPS pairs are in `out/exe6-scenes/`. A complete two-peer communication battle and full return-to-map gameplay remain user tests.
+
+## Trill communication selection
+
+Communication rules mix the read-only 32-bit local RNG1 state at `0x02001120` with the 16-bit frame counter before xorshift32. Numbered rules retain their existing frame-only selector. This avoids relying solely on startup timing: a repeatable frame counter previously produced the same song even with a multi-song pool. The referenced Trill BN6 initialization seeds RNG1 before the battle; the Windows installation used for the reported test identifies itself as 5.0.2.0. The reference checkout advertises version `5.0.4-260708-0752`, so it is not an exact source match for that installed executable. The exact counter and RNG1 values in the Windows session were not captured; fixed timing remains an inferred cause and the installed client still needs gameplay verification.
+
+The hook reads RNG1 without calling a game RNG routine, writing RNG state, or allocating RAM. Shared RNG2 is untouched. Repeats are still allowed; this is not a shuffle without replacement, and identical RNG1/counter inputs still choose the same song. The manifest records `hook.scene_selector`; validators retain the frame-only model for older manifests without that field.
+
+Controlled mGBA probes for both variants keep the frame counter fixed while varying RNG1, check that different pool entries are reached, and verify that RNG1, RNG2, the counter, Toolkit, and stack remain unchanged. They also cover rematches, restoration of numbered music, effect 254, and stopping. Evidence is in `out/exe6-trill-selector/`. This does not substitute for a Windows Trill two-peer test: export a new patch, retain the desired numbered and communication pools, and test fresh matches and rematches. Both peers must use the same exported ROM for that test.

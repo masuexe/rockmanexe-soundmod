@@ -115,8 +115,11 @@ class Manager:
         events = layout['default_events']
         if events is None:
             events = [r['source_index'] for r in value['entries'] if r['source']==layout['native_source'] and r['playlist_eligible']] if value else [layout['preview_trigger']]
-        return {'schema_version':1,'target_profile':profile['key'],
-                'pools':{str(i):{'tracks':[f"{layout['native_source']}:{i}"],'selector_shift':0} for i in events}}
+        pools = {str(i):{'tracks':[f"{layout['native_source']}:{i}"],'selector_shift':0} for i in events}
+        if value:
+            for key, scene in layout.get('scene_events',{}).items():
+                pools[key] = {'tracks':[f"{layout['native_source']}:{scene['native_event']}"],'selector_shift':0}
+        return {'schema_version':1,'target_profile':profile['key'],'pools':pools}
 
     def _invalidate(self):
         self.revision += 1
@@ -157,7 +160,9 @@ class Manager:
             if profile['layout']['default_events'] is None:
                 for trigger, pool in self.default_project['pools'].items():
                     if trigger not in project['pools']:
-                        project['pools'][trigger] = copy.deepcopy(pool)
+                        scene = value.get('scene_events',{}).get(trigger)
+                        inherited = project['pools'].get(str(scene['native_event'])) if scene else None
+                        project['pools'][trigger] = copy.deepcopy(inherited or pool)
                         added += 1
             for trigger, pool in project['pools'].items():
                 old = pool['tracks']
@@ -166,7 +171,9 @@ class Manager:
                 removed += len(old) - len(tracks)
                 if tracks != old: pool['selector_shift'] = 0
                 if not tracks:
-                    tracks = [f"{value['native_source']}:{int(trigger)}"]
+                    scene = value.get('scene_events',{}).get(trigger)
+                    native_event = scene['native_event'] if scene else int(trigger)
+                    tracks = [f"{value['native_source']}:{native_event}"]
                     pool['selector_shift'] = 0
                     fallback += 1
                 pool['tracks'] = tracks
@@ -178,7 +185,8 @@ class Manager:
             self.project = {'schema_version':1,'target_profile':profile['key'],'pools':project['pools']}
             self.project_notice = f'Removed {removed} unavailable playlist entries; {fallback} empty pools restored to native target music. Save to keep these changes.' if removed or fallback else ''
             if added:
-                self.project_notice += (' ' if self.project_notice else '') + f'Added {added} native music events; existing pools retained. Save to keep these changes.'
+                kind = 'music events' if value.get('scene_events') else 'native music events'
+                self.project_notice += (' ' if self.project_notice else '') + f'Added {added} {kind}; existing pools retained. Save to keep these changes.'
 
     def state(self):
         with self.lock:
@@ -314,6 +322,13 @@ class Manager:
                 raise ValueError('Wait for the current task before changing the project')
             if not isinstance(project, dict):
                 raise ValueError('Project must be a JSON object')
+            resolve_pools(project, self.value)
+            project = copy.deepcopy(project)
+            for key, scene in self.value.get('scene_events',{}).items():
+                if key not in project['pools']:
+                    inherited = project['pools'].get(str(scene['native_event']))
+                    project['pools'][key] = copy.deepcopy(inherited or {
+                        'tracks':[f"{self.value['native_source']}:{scene['native_event']}"],'selector_shift':0})
             resolve_pools(project, self.value)
             if 'names' in project:
                 self._validate_names(project['names'])

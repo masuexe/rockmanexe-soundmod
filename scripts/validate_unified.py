@@ -46,7 +46,9 @@ def probe(rom, data, manifest, trigger, selector, work, mgba):
             if selector is not None:
                 debugger.command(f'w/{selector_width} 0x{selector_address:08X} {selector}')
             selector_raw = debugger.read(selector_width, selector_address)
-            observed_selector = selector_value(layout,selector_raw)
+            scene = layout.get('scene_selector')
+            scene_raw = debugger.read(4,scene['address']) if scene and trigger == scene['trigger_id'] else 0
+            observed_selector = selector_value(layout,selector_raw,trigger,scene_raw)
             expected_id = trigger
             rule = next((r for r in manifest['hook']['rules'] if r['trigger_id'] == trigger), None)
             if rule:
@@ -69,6 +71,8 @@ def probe(rom, data, manifest, trigger, selector, work, mgba):
             caller = before[14] & ~1
             debugger.command(f'break/t 0x{caller:08X}')
             after = debugger.hit(caller)
+            if scene and trigger == scene['trigger_id'] and debugger.read(4,scene['address']) != scene_raw:
+                raise AssertionError('Hook changed local RNG1 state')
             if any(before[r] != after[r] for r in list(range(4, 12)) + [13]):
                 raise AssertionError('Hook changed callee-saved registers or stack')
             query_checked = False
@@ -84,7 +88,7 @@ def probe(rom, data, manifest, trigger, selector, work, mgba):
                 if any(after[r] != queried[r] for r in list(range(4,12))+[13]):
                     raise AssertionError('Status query changed callee-saved registers or stack')
                 query_checked = True
-            return {'status_query_checked':query_checked, 'trigger_id': trigger, 'selector_override': selector, 'selector_byte': observed_selector, 'selector_raw':selector_raw,
+            return {'status_query_checked':query_checked, 'trigger_id': trigger, 'selector_override': selector, 'selector_byte': observed_selector, 'selector_raw':selector_raw, 'scene_rng_raw':scene_raw,
                     'selected_id': expected_id, 'player_index': player_index, 'header': f'0x{header:08X}',
                     'tone_bank': f'0x{tone_bank:08X}', 'register_injection': True,
                     'abi_preserved': True, 'player_initialized': True}

@@ -73,10 +73,19 @@ for _key, _entry, _core, _players, _refs in [
         'sound_mode_offset':0x59C,'sound_mode':0x0093040D,'pcm_rate':10512,
         'selector_address':0x0200A210,'selector_mode':'clock-xorshift32','selector_width':2,
         'selector_description':'Read-only 16-bit game frame counter mixed with xorshift32; timing based, deterministic',
+        'scene_selector':{'trigger_id':65534,'address':0x02001120,
+            'mode':'local-rng-xor-clock-xorshift32',
+            'description':'Communication only: read-only local RNG1 XOR frame counter, mixed with xorshift32'},
         'preview_trigger':1,'event_labels':{'1':'Title screen',
-            '21':'Communication battles (shared music #21)'},
+            '21':'Music #21 / other scenes'},
         'default_events':None,'preservation_probes':[100,129,133],
         'native_source':'native-exe6',
+        'scene_events':{'scene:communication':{'label':'Communication battles only',
+            'trigger_id':65534,'native_event':21,
+            'description':'Overrides communication battle starts. Other requests for music ID 21 use their own pool.'}},
+        'scene_hook':{'entry_offset':0x93F4,'resume_offset':0x9406,'skip_offset':0x940A,'stub_capacity':0x12,
+            'signature':'0821084201d0152001e0e86b8078632801d0f7f7e5f8',
+            'queue_wrapper_offset':0x5D4,'communication_flag':8},
     }
     TARGETS[_key] = {
         'label':_original['label'],'native_label':_original['label']+' (target)',
@@ -129,7 +138,11 @@ def valid_manifest_target(manifest):
 def manifest_layout(manifest):
     if not valid_manifest_target(manifest):
         raise ValueError('Manifest does not identify a verified target')
-    return target_profile(manifest['target_profile'])['layout']
+    layout = target_profile(manifest['target_profile'])['layout']
+    # Earlier scene exports used only the counter. Model their actual code.
+    if manifest.get('hook',{}).get('scene_selector') != layout.get('scene_selector'):
+        layout.pop('scene_selector',None)
+    return layout
 
 
 def check_layout(data, layout):
@@ -148,13 +161,21 @@ def check_layout(data, layout):
         signature = bytes.fromhex(layout['query_entry_signature'])
         if data[offset:offset+len(signature)] != signature:
             raise ValueError('Unexpected target audio status query code')
+    if 'scene_hook' in layout:
+        hook = layout['scene_hook']; offset = hook['entry_offset']
+        signature = bytes.fromhex(hook['signature'])
+        if data[offset:offset+len(signature)] != signature:
+            raise ValueError('Unexpected target battle music selection code')
     if layout['selector_address'] is None:
         raise ValueError('Target selector source has not been verified')
 
 
-def selector_value(layout, raw):
+def selector_value(layout, raw, trigger=None, scene_raw=0):
     if layout.get('selector_mode') == 'clock-xorshift32':
         if layout.get('selector_width') == 2: raw &= 0xFFFF
+        scene = layout.get('scene_selector')
+        if scene and trigger == scene['trigger_id']:
+            raw ^= scene_raw & 0xFFFFFFFF
         raw ^= (raw << 13) & 0xFFFFFFFF
         raw ^= raw >> 17
         raw ^= (raw << 5) & 0xFFFFFFFF
