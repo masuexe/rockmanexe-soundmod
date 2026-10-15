@@ -15,6 +15,57 @@ from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
 
 
+def validate_loop_notes(track, base, loop_start, period):
+    """Check an intro and two whole musical loops, including boundary EOTs.
+
+    The independent decoder closes at a repeated command state, which can be
+    between commands at the same tick. Its event prefix therefore need not
+    contain every event at its final timestamp, or the EOT for its last TIE.
+    Unfold the decoded command cycle, preserving event order, before comparing
+    complete time windows with the source schedule.
+    """
+    if track['termination'] != 'repeated_state' or track['loop_ticks'] != period:
+        raise AssertionError('Compiled loop period differs from source')
+    horizon = loop_start + 2 * period
+    events = track['events']
+    body = events[track['loop_start_event']:]
+    if not body or track['loop_start_ticks'] > loop_start + period:
+        raise AssertionError('Compiled loop does not cover the source window')
+
+    def unfolded():
+        yield from events
+        turn = 1
+        while body[0]['ticks'] + turn * period <= horizon:
+            for event in body:
+                yield {**event, 'ticks': event['ticks'] + turn * period}
+            turn += 1
+
+    actual, live_ties = [], {}
+    for event in unfolded():
+        tick = event['ticks']
+        if tick > horizon:
+            break
+        if event['name'] in ('NOTE', 'TIE') and tick < horizon:
+            row = [tick, event['voice'], event['key'], event['velocity'], event.get('duration_ticks')]
+            actual.append(row)
+            if event['name'] == 'TIE':
+                if event['key'] in live_ties:
+                    raise AssertionError('Converted long notes share a live alias')
+                live_ties[event['key']] = row
+        elif event['name'] == 'EOT':
+            if event['key'] not in live_ties:
+                raise AssertionError('EOT has no matching tied note')
+            row = live_ties.pop(event['key'])
+            row[4] = tick - row[0]
+    if live_ties:
+        raise AssertionError('Unclosed tied notes in compiled loop')
+    expected = base + [[a[0] + period, *a[1:]] for a in base if a[0] >= loop_start]
+    if actual != expected:
+        raise AssertionError('Merged note/gate/timing model differs')
+    return {'checked_until_ticks': horizon, 'complete_loop_cycles': 2,
+            'note_events_compared': len(actual), 'boundary_eot_included': True}
+
+
 def expand_actions(track, end_tick):
     actions = []
     for action in track['actions']:
@@ -348,38 +399,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     dependency = analyze(blob, 0, index)
     # Independent MPlay decoding verifies every note (including tied gates)
     # and alias root pitch against the complete source execution schedule.
+    note_validation = []
     for group_index, track in enumerate(dependency['tracks']):
-        actual = []
-        live_ties = {}
-        for event in track['events']:
-            if event['name'] in ('NOTE', 'TIE'):
-                row = [event['ticks'], event['voice'], event['key'], event['velocity'], event.get('duration_ticks')]
-                actual.append(row)
-                if event['name'] == 'TIE':
-                    if event['key'] in live_ties:
-                        raise AssertionError('Converted long notes share a live alias')
-                    live_ties[event['key']] = row
-            elif event['name'] == 'EOT':
-                if event['key'] not in live_ties:
-                    raise AssertionError('EOT has no matching tied note')
-                row = live_ties.pop(event['key'])
-                row[4] = event['ticks'] - row[0]
-        if live_ties:
-            raise AssertionError('Unclosed tied notes in compiled loop')
         base = [[a['ticks'], a['gba_voice'], a['gba_key'], a['gba_velocity'], a['duration']]
                 for a in source_notes if a['target_track'] == group_index]
-        expected = base[:]
-        body = [a for a in base if a[0] >= loop_start]
-        for turn in range(1, 1 + track['ticks_before_repeat'] // period):
-            expected.extend([a[0] + turn * period, *a[1:]] for a in body)
-        if native_pitch_lfo:
-            # The decoder may close a repeated state between commands at its
-            # final timestamp, including after that tick's first note.
-            expected = expected[:len(actual)]
-        else:
-            expected = [a for a in expected if a[0] < track['ticks_before_repeat']]
-        if actual != expected or track['loop_ticks'] != period:
-            raise AssertionError(f'Merged note/gate/timing model differs on track {group_index}')
+        try:
+            note_validation.append(validate_loop_notes(track, base, loop_start, period))
+        except AssertionError as error:
+            raise AssertionError(f'{error} on track {group_index}') from error
     report = {'schema_version': 1, 'sequence_index': index, 'sequence_info': info,
               'source_track_count': len(tracks), 'track_count': len(groups), 'tracks': tracks,
               'track_groups': [list(group) for group in groups], 'merge_assessment': decisions,
@@ -390,6 +417,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
               'song_gain_scope': 'Imported sequence VOL commands only',
               'priority_mapping': {str(k): v for k, v in priority_map.items()}, 'song_priority': 20,
               'generated_bytes': len(blob), 'note_timing_check': True,
+              'note_timing_validation': note_validation,
               'long_note_aliases': [{'target_track': group, 'source_track': source,
                                      'source_key': key, 'gba_key': alias}
                                     for (group, source, key), alias in aliases.items()],
