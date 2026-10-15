@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build checked Star Force 1/3 music -> Japanese EXE6 research ROM/BPS.
+"""Build checked Star Force 1/2/3 music -> Japanese EXE6 research ROM/BPS.
 
 This bounded experiment uses the existing GBA export core, not the manager's
 production source catalog. Original ROMs are read only. Python 3.10+, stdlib.
@@ -17,6 +17,8 @@ from transplant_song import make_bps
 from nds_track_merge import BATTLE_GROUPS, convert_merged_song
 
 SOURCES = {
+    '9ea3c6e253d4111eec250d611296be5fab0e2ec2b8f6f25ece71dcc8e3492899': 'ssr2d',
+    'dfa8780c1f98059d466509e90004793ad89b87a7f9fce48210fca8ddc0ff3745': 'ssr2s',
     'b531571a442d1aadd96ba7fa63637b97a8066b39ee5c54641eb61d4e5808807c': 'ssr1d',
     '5a31dd8472f120dc95808c8d4eeb549909ed75d2fca05af894e949b52de723d8': 'ssr1l',
     'd4ec40d1c0a169925f5ca58952a00e8b6865ac41e1e8300d609688a2c72beb6b': 'ssr1p',
@@ -27,19 +29,25 @@ SDAT_SHA256 = 'bf986568be3b1b4bd0c7674694cd3b86641a266138df3271989a2f6fea240220'
 SOURCE_ARCHIVES = {
     'ssr1': {'file_id': 667, 'sha256': '2b162eced95dadba3362316e0eb49b95b2990014a7fcb119fb9d21c1b01c1fd7',
              'label': 'Star Force 1'},
+    'ssr2': {'file_id': 975, 'sha256': 'eb092e07ab410a3c81db491f0feb905f6259b891fb0b3cedfccaeca78ddc4ab4',
+             'label': 'Star Force 2'},
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
+SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
+                 'sf1-kincho': 'ssr1', 'sf2-win': 'ssr2'}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
     source_fingerprint = fingerprint(source)
     key = SOURCES.get(source_fingerprint['sha256'])
     if key is None:
-        raise ValueError('Requires one of the verified Japanese Star Force 1/3 original ROMs')
+        raise ValueError('Requires one of the verified Japanese Star Force 1/2/3 original ROMs')
     family = key[:4]
     source_archive = SOURCE_ARCHIVES[family]
-    if (song == 'sf1-kincho' and family != 'ssr1') or (song in ('room', 'battle', 'kando') and family != 'ssr3'):
-        raise ValueError('Song does not belong to the selected source game; choose sf1-kincho for Star Force 1')
+    if song not in SONG_FAMILIES:
+        raise ValueError('Unknown NDS experiment song')
+    if SONG_FAMILIES[song] != family:
+        raise ValueError('Song does not belong to the selected source game')
     target = validate_target(base, base)
     if target['key'] not in ('exe6', 'exe6f'):
         raise ValueError('NDS experiment currently targets original Japanese EXE6 only')
@@ -60,6 +68,10 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
     elif song == 'sf1-kincho':
         index, name = 23, 'BGM23KINCHO'
+        blob, dependency, conversion = convert_song(archive, index, capacity,
+                                                   song_gain_db=song_gain_db, native_effect_headroom=True)
+    elif song == 'sf2-win':
+        index, name = 30, 'BGM_WIN'
         blob, dependency, conversion = convert_song(archive, index, capacity,
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
     else:
@@ -107,7 +119,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--base', type=Path, required=True)
-    parser.add_argument('--song', choices=['room', 'battle', 'kando', 'sf1-kincho'], default='room')
+    parser.add_argument('--song', choices=tuple(SONG_FAMILIES), default='room')
     parser.add_argument('--event', action='append', help='Native music ID or scene:communication; repeatable; default 1')
     parser.add_argument('--pcm-channels', type=int, default=10)
     parser.add_argument('--song-gain-db', type=float, default=3.5,

@@ -28,6 +28,14 @@ listening, chips/Buster effects, victory/map restoration and next-encounter
 playback all pass for this song;
 the three pinned Japanese Star Force 1 originals share an identical SDAT.
 
+The [first Star Force 2 experiment](nds-sf2-research.md), `BGM_WIN`, now
+passes independent source comparisons, two natural GBA periods and controlled
+lifecycle probes using seven tracks and fifteen samples. Both pinned Japanese
+source variants share the verified archive. The user confirms sustained
+listening, chips/Buster effects, victory/map restoration and next-encounter
+playback pass. All three games now have an accepted candidate within the
+implemented subset; general song/effect compatibility remains unestablished.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,

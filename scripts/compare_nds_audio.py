@@ -18,7 +18,7 @@ from scan_audio import fingerprint
 def make_comparison(experiment, reference, destination):
     manifest = json.loads((experiment / 'build.json').read_text())
     sequence_name = manifest['nds_conversion']['sequence_name']
-    game_number = {'ssr1': '1', 'ssr3': '3'}[manifest['nds_conversion']['source_profile'][:4]]
+    game_number = {'ssr1': '1', 'ssr2': '2', 'ssr3': '3'}[manifest['nds_conversion']['source_profile'][:4]]
     game_label = f'流星 {game_number}'
     preview = experiment / 'preview/preview.wav'
     with wave.open(str(preview), 'rb') as stream:

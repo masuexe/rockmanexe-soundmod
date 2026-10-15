@@ -343,5 +343,65 @@ class LocalStarForce1Tests(unittest.TestCase):
             build_experiment(bytes(raw), BASE.read_bytes(), song='sf1-kincho')
 
 
+SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
+
+
+@unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
+class LocalStarForce2Tests(unittest.TestCase):
+    def test_win_archive_conversion_and_original_data_preservation(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, catalog, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-win')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['nds_file_id'], 975)
+        self.assertEqual(manifest['nds_conversion']['source_profile'], 'ssr2d')
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 30)
+        self.assertEqual(manifest['nds_conversion']['sequence_name'], 'BGM_WIN')
+        self.assertIn('Star Force 2', catalog['source_labels']['nds-ssr2d'])
+        self.assertEqual(conversion['track_count'], 7)
+        self.assertEqual(len(dependency['samples']), 15)
+        self.assertEqual({t['loop_ticks'] for t in conversion['tracks']}, {1536})
+        self.assertEqual(conversion['tempo_mapping'][0]['gba_parameter'], 171)
+        self.assertTrue(conversion['note_timing_check'])
+        self.assertLess(conversion['song_priority'] + max(conversion['priority_mapping'].values()), 112)
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
+    @unittest.skipUnless((SF2.parent / 'ssr2s.nds').exists(), 'local second Star Force 2 input unavailable')
+    def test_both_source_variants_produce_identical_mplay_and_target(self):
+        base, previous = BASE.read_bytes(), None
+        for key in ('ssr2d', 'ssr2s'):
+            output, _, manifest, _, _, blob, _, sdat = build_experiment(
+                (SF2.parent / (key + '.nds')).read_bytes(), base, song='sf2-win')
+            self.assertEqual(manifest['nds_conversion']['source_profile'], key)
+            current = output, blob, sdat
+            if previous is not None:
+                self.assertEqual(current, previous)
+            previous = current
+
+    def test_source_game_and_song_must_match(self):
+        base = BASE.read_bytes()
+        source = SF2.read_bytes()
+        for song in ('room', 'battle', 'kando', 'sf1-kincho'):
+            with self.subTest(song=song), self.assertRaisesRegex(ValueError, 'selected source game'):
+                build_experiment(source, base, song=song)
+        for path in (NDS, SF1):
+            if path.exists():
+                with self.subTest(path=path), self.assertRaisesRegex(ValueError, 'selected source game'):
+                    build_experiment(path.read_bytes(), base, song='sf2-win')
+
+    def test_unverified_source_revision_rejected(self):
+        raw = bytearray(SF2.read_bytes())
+        raw[-1] ^= 1
+        with self.assertRaisesRegex(ValueError, 'verified'):
+            build_experiment(bytes(raw), BASE.read_bytes(), song='sf2-win')
+
+
 if __name__ == '__main__':
     unittest.main()

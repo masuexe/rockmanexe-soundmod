@@ -117,8 +117,9 @@ rematches were not individually identified in the report.
 
 This extends user acceptance from Star Force 3 to the implemented Star Force 1
 subset. It does not establish compatibility for every song or source version.
-Star Force 2 is the next cross-game candidate; active modulation and performance
-measurements remain separate research work.
+The [Star Force 2 WIN experiment](nds-sf2-research.md) now extends the same
+subset to the third game and has also passed user listening/gameplay acceptance. Active
+modulation and performance measurements remain separate research work.
 
 ## Reproduce
 
