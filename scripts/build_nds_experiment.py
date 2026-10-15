@@ -34,7 +34,8 @@ SOURCE_ARCHIVES = {
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
 SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
-                 'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf2-win': 'ssr2'}
+                 'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1',
+                 'sf2-win': 'ssr2'}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
@@ -79,6 +80,11 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
+    elif song == 'sf1-last':
+        index, name = 17, 'BGM17LAST'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db)
     else:
         raise ValueError('Unknown NDS experiment song')
     return pack_converted_experiment(source, base, key, raw_sdat, index, name,

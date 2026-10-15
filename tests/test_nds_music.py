@@ -291,6 +291,33 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_last_preserves_boundary_tied_gate_and_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-last')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 17)
+        self.assertNotIn('native_pitch_lfo_approximation', manifest['nds_conversion'])
+        self.assertEqual(conversion['track_groups'], [[i] for i in range(8)])
+        self.assertEqual(len(dependency['samples']), 29)
+        self.assertEqual(conversion['merged_loop_start_ticks'], 3072)
+        self.assertEqual(conversion['merged_loop_ticks'], 7104)
+        self.assertTrue(all(v['complete_loop_cycles'] == 2 for v in conversion['note_timing_validation']))
+        alias = next(a for a in conversion['long_note_aliases']
+                     if a['target_track'] == 7 and a['source_key'] == 59)
+        events = dependency['tracks'][7]['events']
+        self.assertTrue(any(e['name'] == 'TIE' and e['ticks'] == 9792 and e['key'] == alias['gba_key']
+                            for e in events))
+        self.assertEqual(events[dependency['tracks'][7]['loop_start_event']]['name'], 'EOT')
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_battle_pitch_lfo_is_explicit_and_keeps_long_gates(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, _, sdat = build_experiment(

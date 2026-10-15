@@ -66,6 +66,8 @@ def main():
     parser.add_argument('--frames', type=int, default=3000, help='Maximum frames; must reach sequence completion')
     parser.add_argument('--loop-cycles', type=int, default=2,
                         help='Complete periods to check after each track loop start; default 2')
+    parser.add_argument('--window-ticks', type=int,
+                        help='Check only this initial tick window; reports partial loop/sample coverage')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--mgba', default='/usr/games/mgba')
     args = parser.parse_args()
@@ -99,12 +101,17 @@ def main():
         parser.error('Requires the verified EXEGP baseline or an explicit transplant manifest')
     if args.id is None:
         args.id = 1
-    if args.id < 0 or args.id >= count or args.frames < 1 or args.loop_cycles < 1:
+    if (args.id < 0 or args.id >= count or args.frames < 1 or args.loop_cycles < 1
+            or (args.window_ticks is not None and args.window_ticks < 1)):
         parser.error('Invalid ID or frame limit')
     dependency = analyze(data, table, args.id)
     validation_clock = max((track['loop_start_ticks'] + args.loop_cycles * track['loop_ticks']
                             if track['termination'] == 'repeated_state' else track['ticks_before_repeat']) + 1
                            for track in dependency['tracks'])
+    loop_validation_clock = validation_clock
+    if args.window_ticks is not None:
+        validation_clock = min(validation_clock, args.window_ticks)
+    full_coverage = validation_clock == loop_validation_clock
     args.out.mkdir(parents=True, exist_ok=False)
     work = args.out.resolve()
     rom = work / 'test.gba'
@@ -118,6 +125,10 @@ def main():
               'complete': False, 'clock_restarts': 0, 'snapshots': snapshots,
               'profile': profile, 'transplant_manifest': str(args.transplant) if args.transplant else None,
               'keep_song': args.keep_song, 'core_header_redirects': [],
+              'coverage': 'full_sequence' if full_coverage else 'bounded_window',
+              'requested_window_ticks': args.window_ticks,
+              'loop_validation_clock_target': loop_validation_clock,
+              'complete_loop_coverage': False,
               'unified_manifest': str(args.unified) if args.unified else None, 'startup_calls': []}
     bank = dependency['header']['tone_bank']['file_offset']
     track_count = len(dependency['tracks'])
@@ -232,13 +243,18 @@ def main():
                           player_address=f'0x{player:08X}', track_base=f'0x{track_base:08X}',
                           sound_info=f'0x{sound:08X}', observed_samples=[f'0x{wave:08X}' for wave in sorted(seen_waves)],
                           nonzero_pcm_hashes=sorted(pcm_hashes))
-            if seen_waves != allowed_waves or len(pcm_hashes) < 2:
+            if (not seen_waves or len(pcm_hashes) < 2
+                    or (full_coverage and seen_waves != allowed_waves)):
                 raise AssertionError('Sample coverage or changing PCM evidence incomplete')
             report['complete'] = True
+            report['complete_loop_coverage'] = full_coverage
+            report['complete_sample_coverage'] = seen_waves == allowed_waves
+            report['decoded_sample_count'] = len(allowed_waves)
             report['validation_clock_target'] = validation_clock
             report['requested_loop_cycles'] = args.loop_cycles
             report['terminations'] = sorted({track['termination'] for track in dependency['tracks']})
-            print(f"Passed {len(snapshots)} frames, {track_count} tracks, all {len(seen_waves)} samples; final clock {clock}", flush=True)
+            print(f"Passed {report['coverage']}: {len(snapshots)} frames, {track_count} tracks, "
+                  f"{len(seen_waves)}/{len(allowed_waves)} samples; final clock {clock}", flush=True)
         except BaseException as exc:
             report['error'] = repr(exc)
             raise
