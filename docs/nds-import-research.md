@@ -36,6 +36,16 @@ listening, chips/Buster effects, victory/map restoration and next-encounter
 playback pass. All three games now have an accepted candidate within the
 implemented subset; general song/effect compatibility remains unestablished.
 
+The next [native pitch-LFO experiment](nds-lfo-research.md) now converts Star
+Force 1 ordinary BATTLE using a bounded GBA triangle-LFO approximation. It
+retains seven tracks and twenty-two samples and checks source modulation and
+actual native-LFO execution. Shared phases and waveform/quantization errors
+are explicitly measured. The user reports no issues with the requested long
+listening/loop, effects coexistence, map restoration and next-encounter tests,
+accepting the approximation in the tested configuration. Automated full-loop
+state validation and exact per-voice modulation remain separate limitations.
+Other active effect types remain outside this mode.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,

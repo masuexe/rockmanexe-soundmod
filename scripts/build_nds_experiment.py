@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from build_unified import build_catalog
-from nds_music import SoundArchive, convert_song, nds_sdat
+from nds_music import SoundArchive, convert_song, nds_sdat, trace_sequence
 from original_catalog import catalog_originals
 from scan_audio import apply_bps, fingerprint
 from target_profiles import validate_target
@@ -34,7 +34,7 @@ SOURCE_ARCHIVES = {
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
 SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
-                 'sf1-kincho': 'ssr1', 'sf2-win': 'ssr2'}
+                 'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf2-win': 'ssr2'}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
@@ -74,6 +74,11 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         index, name = 30, 'BGM_WIN'
         blob, dependency, conversion = convert_song(archive, index, capacity,
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
+    elif song == 'sf1-battle-lfo':
+        index, name = 27, 'BGM27BATTLE'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
     else:
         raise ValueError('Unknown NDS experiment song')
     catalog, reports = catalog_originals(base, base, {})
@@ -112,6 +117,8 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         'song_gain_db': conversion['song_gain_db'],
         'song_gain_scope': conversion['song_gain_scope'],
         'conversion_report': 'conversion.json', 'production_manager_support': False})
+    if conversion.get('native_pitch_lfo'):
+        manifest['nds_conversion']['native_pitch_lfo_approximation'] = True
     return output, patch, manifest, conversion, dependency, blob, catalog, raw_sdat
 
 

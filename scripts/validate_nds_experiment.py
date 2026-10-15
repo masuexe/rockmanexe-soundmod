@@ -14,6 +14,7 @@ import re
 import struct
 
 from nds_music import SoundArchive
+from nds_lfo import ds_pitch_units
 from render_preview import runtime_sound_config, start_preview_song
 from scan_audio import ROM_BASE, fingerprint
 from target_profiles import manifest_layout, valid_manifest_target
@@ -84,10 +85,26 @@ def check_reference(experiment, reference):
                 if actual != expected:
                     raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
                 control_matches += len(actual)
+    modulation_matches = 0
+    modulation_file = reference / 'modulation.csv'
+    if conversion.get('native_pitch_lfo') and not modulation_file.is_file():
+        raise AssertionError('LFO conversion needs a per-voice modulation reference')
+    if modulation_file.is_file():
+        with modulation_file.open() as stream:
+            for raw in csv.DictReader(stream):
+                row = {k: int(v) for k, v in raw.items()}
+                if row['type'] != 0:
+                    raise AssertionError('Only pitch modulation reference is currently checked')
+                if ds_pitch_units(row['phase'], row['depth'], row['range']) != row['value']:
+                    raise AssertionError('Independent DS sine modulation value differs')
+                modulation_matches += 1
+    if conversion.get('native_pitch_lfo') and not modulation_matches:
+        raise AssertionError('No active DS modulation observed')
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
+            'source_pitch_modulation_matches': modulation_matches,
             'complete': True}
 
 

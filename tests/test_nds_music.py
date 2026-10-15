@@ -9,7 +9,7 @@ from analyze_song import analyze, trace_track
 from build_nds_experiment import build_experiment
 from nds_music import (NoteDefinition, SoundArchive, convert_song, decode_adpcm,
                        nds_sdat, note_bytes, read_event, trace_sequence, wait_bytes)
-from nds_track_merge import BATTLE_GROUPS, assess_groups, expand_actions, pitch_commands
+from nds_track_merge import BATTLE_GROUPS, assess_groups, convert_merged_song, expand_actions, pitch_commands
 from scan_audio import apply_bps
 
 
@@ -291,6 +291,40 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_battle_pitch_lfo_is_explicit_and_keeps_long_gates(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, sdat = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-battle-lfo')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_approximation'])
+        self.assertTrue(conversion['native_pitch_lfo']['approximation'])
+        self.assertEqual(conversion['track_groups'], [[i] for i in range(7)])
+        self.assertEqual(len(dependency['samples']), 22)
+        self.assertEqual({t['loop_ticks'] for t in conversion['tracks']}, {4608})
+        self.assertEqual(conversion['merged_loop_start_ticks'], 9216)
+        self.assertEqual({c['lfos'] for c in conversion['native_pitch_lfo']['configs']}, {13, 16})
+        self.assertEqual({c['mod'] for c in conversion['native_pitch_lfo']['configs']}, {2, 3})
+        # These source depth changes occur AFTER a note at the same tick.
+        # Moving all controls before notes would restore stale per-note depth.
+        for track, tick, depth in [(1, 0, 2), (2, 3072, 3), (3, 2304, 2)]:
+            events = [e for e in dependency['tracks'][track]['events'] if e['ticks'] == tick]
+            self.assertEqual([e['value'] for e in events if e['name'] == 'MOD'][-1], depth)
+        self.assertEqual({a['source_key'] for a in conversion['long_note_aliases']}, {72, 74})
+        bank = dependency['header']['tone_bank']['file_offset']
+        for alias in conversion['long_note_aliases']:
+            voice = next(a['gba_voice'] for a in conversion['note_mapping']
+                         if a['source_key'] == alias['source_key'] and a['long_note'])
+            children = struct.unpack_from('<I', blob, bank + voice * 12 + 4)[0] - 0x08000000
+            self.assertEqual(blob[children + alias['gba_key'] * 12 + 1], alias['source_key'])
+        with self.assertRaisesRegex(ValueError, 'Unsupported merged-conversion effect'):
+            convert_merged_song(SoundArchive(sdat), 27, [(i,) for i in range(7)])
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_kincho_archive_conversion_and_original_data_preservation(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, catalog, _ = build_experiment(
@@ -388,7 +422,7 @@ class LocalStarForce2Tests(unittest.TestCase):
     def test_source_game_and_song_must_match(self):
         base = BASE.read_bytes()
         source = SF2.read_bytes()
-        for song in ('room', 'battle', 'kando', 'sf1-kincho'):
+        for song in ('room', 'battle', 'kando', 'sf1-kincho', 'sf1-battle-lfo'):
             with self.subTest(song=song), self.assertRaisesRegex(ValueError, 'selected source game'):
                 build_experiment(source, base, song=song)
         for path in (NDS, SF1):

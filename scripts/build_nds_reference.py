@@ -22,7 +22,7 @@ def main():
         parser.error('Output directory must be new')
     hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in args.core.iterdir()
               if p.is_file() and p.suffix in ('.cpp', '.h')}
-    required = ('Player.cpp', 'Track.cpp', 'convert.h', 'SDAT.cpp')
+    required = ('Player.cpp', 'Track.cpp', 'Channel.cpp', 'convert.h', 'SDAT.cpp')
     if any(name not in hashes for name in required):
         parser.error('Expected SSEQPlayer core files not found')
     args.out.mkdir(parents=True)
@@ -44,7 +44,19 @@ def main():
     marker = '\t\tthis->tempoCount -= 240;'
     if text.count(marker) != 1:
         raise ValueError('Unknown upstream sequence tick; trace hook not installed')
-    player.write_text('extern unsigned researchSequenceClock;\n' + text.replace(marker, marker + '\n\t\t++researchSequenceClock;'))
+    text = text.replace(marker, marker + '\n\t\t++researchSequenceClock;')
+    timer = 'void Player::Timer()\n{'
+    if text.count(timer) != 1:
+        raise ValueError('Unknown upstream timer; modulation clock hook not installed')
+    player.write_text('extern unsigned researchSequenceClock;\nextern unsigned researchTimerClock;\n' +
+                      text.replace(timer, timer + '\n\t++researchTimerClock;'))
+    channel = copied / 'Channel.cpp'
+    text = channel.read_text()
+    marker = '\t\t\tmodParam >>= 8; // tmr/pan: adjust to 7.6'
+    if text.count(marker) != 1:
+        raise ValueError('Unknown upstream modulation calculation; hook not installed')
+    channel.write_text('class Channel;\nextern void researchModulation(const Channel&, int);\n' +
+                       text.replace(marker, marker + '\n\t\tresearchModulation(*this, modParam);'))
     track = copied / 'Track.cpp'
     text = track.read_text()
     marker = 'int Track::NoteOn(int key, int vel, int len)\n{'
@@ -67,9 +79,10 @@ def main():
                *(str(p) for p in sorted(copied.glob('*.cpp'))), '-o', str(binary)]
     subprocess.run(command, check=True)
     report = {'core': str(args.core.resolve()), 'upstream_files_sha256': hashes,
+              'research_renderer_sha256': hashlib.sha256((Path(__file__).resolve().parents[1] / 'native/nds_reference.cpp').read_bytes()).hexdigest(),
               'renderer': 'kode54/SSEQPlayer', 'compiler_command': command,
               'modifications': ['Use standard codecvt on modern GCC',
-                                'Observe sequence ticks, NoteOn and pan/bend/expression controls; no synthesis changes'],
+                                'Observe sequence/timer clocks, NoteOn, controls and per-voice modulation; no synthesis changes'],
               'limitations': ['Software DS reference, not hardware or DS emulator output']}
     (args.out / 'build.json').write_text(json.dumps(report, indent=2) + '\n')
     print(binary)

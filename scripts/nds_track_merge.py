@@ -10,6 +10,7 @@ import struct
 from analyze_song import analyze
 from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
                        convert_envelope, level, note_bytes, trace_sequence, wait_bytes)
+from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
 
@@ -123,7 +124,8 @@ def assess_groups(tracks, groups):
     return loop_start, period, expanded, decisions
 
 
-def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0):
+def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
+                        native_pitch_lfo=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -138,13 +140,36 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         for action in track['actions']:
             if action['name'] == 'control':
                 op = action['opcode']
-                if op not in permitted or (op in (0xCA, 0xCE) and action['value']):
+                if op not in permitted or (op == 0xCE and action['value']) or (op == 0xCA and action['value'] and not native_pitch_lfo):
                     raise ValueError(f'Unsupported merged-conversion effect {op:#x}')
                 if op == 0xE1 and track['track'] != 0:
                     raise ValueError('Merged experiment requires tempo in source track 0')
             if action['name'] == 'note' and not 1 <= action['duration'] <= 65535:
                 raise ValueError('Unsupported merged note duration')
     loop_start, period, expanded, decisions = assess_groups(tracks, groups)
+    lfo_tempo, lfo_configs = None, {}
+    if native_pitch_lfo:
+        if any(len(group) != 1 for group in groups):
+            raise ValueError('Native pitch LFO experiment requires one source track per target track')
+        tempos = {a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}
+        if len(tempos) != 1:
+            raise ValueError('Native pitch LFO experiment requires a fixed tempo')
+        lfo_tempo = round(tempos.pop() * DS_CLOCK_HZ * 75 / (240 * GBA_FPS))
+        # A common timestamp can fall inside a source's partial-tick loop
+        # closure. Compile a complete warmup period before looping this mode.
+        loop_start += period
+        expanded = {t['track']: expand_actions(t, loop_start + 2 * period) for t in tracks}
+        for actions in expanded.values():
+            for order, action in enumerate(actions):
+                action['event_order'] = order
+        for t in tracks:
+            for a in t['actions']:
+                if a['name'] == 'note':
+                    state = a['state_after']
+                    map_pitch_lfo(state, lfo_tempo)
+                    if state['mod_depth']:
+                        key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
+                        lfo_configs[key] = compare_config(state, lfo_tempo)
     end_tick = loop_start + period
     bank, archives = archive.bank(info['bank_id'])
     source_map = {n: i for i, group in enumerate(groups) for n in group}
@@ -279,17 +304,24 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 command = bytes([0xBE, volume(value, state['expression'])])
             elif op in (0xC4, 0xC5):
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
+            elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
+                value = map_pitch_lfo(state, lfo_tempo)
+                command = bytes([0xC4, value['mod'], 0xC2, value['lfos']])
             if command:
-                events.append((action['ticks'], 1, primary, command, None))
+                order = 1 + action['event_order'] if native_pitch_lfo else 1
+                events.append((action['ticks'], order, primary, command, None))
         for note in (a for a in source_notes if a['target_track'] == group_index):
             command = bytes([0xBA, note['gba_priority'], 0xBD, note['gba_voice']])
+            if native_pitch_lfo:
+                command += note_lfo_commands(note['state_after'], lfo_tempo)
             if note['duration'] <= 223:
                 command += note_bytes(note['gba_key'], note['gba_velocity'], note['duration'])
             else:
                 command += bytes([0xCF, note['gba_key'], note['gba_velocity']])
                 events.append((note['ticks'] + note['duration'], 0, note['source_track'],
                                bytes([0xCE, note['gba_key']]), None))
-            events.append((note['ticks'], 2, note['source_track'], command, note))
+            order = 1 + note['event_order'] if native_pitch_lfo else 2
+            events.append((note['ticks'], order, note['source_track'], command, note))
         events.append((loop_start, -1, 0, b'', None))
         events.sort(key=lambda event: event[:3])
         code = bytearray([0xBD, 0, 0xBE, volume(group_volume[group_index], 127), 0xBF, 64])
@@ -340,7 +372,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         body = [a for a in base if a[0] >= loop_start]
         for turn in range(1, 1 + track['ticks_before_repeat'] // period):
             expected.extend([a[0] + turn * period, *a[1:]] for a in body)
-        expected = [a for a in expected if a[0] < track['ticks_before_repeat']]
+        if native_pitch_lfo:
+            # The decoder may close a repeated state between commands at its
+            # final timestamp, including after that tick's first note.
+            expected = expected[:len(actual)]
+        else:
+            expected = [a for a in expected if a[0] < track['ticks_before_repeat']]
         if actual != expected or track['loop_ticks'] != period:
             raise AssertionError(f'Merged note/gate/timing model differs on track {group_index}')
     report = {'schema_version': 1, 'sequence_index': index, 'sequence_info': info,
@@ -362,4 +399,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                               'Relative music priorities mapped below native effect priorities.',
                               'Target PCM voice allocation is separate from sequence track merging.',
                               'Independent source execution and actual GBA playback must still be validated.']}
+    if native_pitch_lfo:
+        report['native_pitch_lfo'] = {'approximation': True, 'configs': list(lfo_configs.values()),
+                                    'method': 'MPlay triangle pitch LFO; reset on every note with one-tick onset delay',
+                                    'limitations': ['DS sine replaced by coarsely quantized triangle.',
+                                                    'Track phase is shared; new notes reset older overlapping voices.',
+                                                    'Release tails follow shared GBA phase rather than independent DS phase.']}
     return blob, dependency, report

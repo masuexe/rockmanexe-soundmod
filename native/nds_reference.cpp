@@ -12,8 +12,21 @@
 
 // Instrumentation hooks installed only in the disposable reference build.
 unsigned researchSequenceClock = 0;
+unsigned researchTimerClock = 0;
 static std::ofstream noteLog;
 static std::ofstream controlLog;
+static std::ofstream modulationLog;
+void researchModulation(const Channel& channel, int value) {
+    if (channel.trackId < 0) return;
+    modulationLog << researchTimerClock - 1 << ',' << researchSequenceClock << ','
+                  << static_cast<unsigned>(channel.ply->tracks[channel.trackId].num) << ','
+                  << (&channel - &channel.ply->channels[0]) << ',' << static_cast<unsigned>(channel.key) << ','
+                  << static_cast<unsigned>(channel.modType) << ','
+                  << static_cast<unsigned>(channel.modSpeed) << ','
+                  << static_cast<unsigned>(channel.modDepth) << ','
+                  << static_cast<unsigned>(channel.modRange) << ','
+                  << channel.modCounter << ',' << value << '\n';
+}
 void researchNote(const Track& track, int key, int velocity, int duration) {
     noteLog << researchSequenceClock - 1 << ',' << static_cast<unsigned>(track.num)
             << ',' << track.patch << ',' << key << ',' << velocity << ',' << duration << '\n';
@@ -55,6 +68,9 @@ int main(int argc, char** argv) {
         controlLog.open(directory + "/controls.csv");
         if (!controlLog) throw std::runtime_error("cannot create reference control log");
         controlLog << "tick,track,opcode,value,held_voices,release_voices\n";
+        modulationLog.open(directory + "/modulation.csv");
+        if (!modulationLog) throw std::runtime_error("cannot create modulation log");
+        modulationLog << "timer_frame,tick,track,channel,key,type,speed,depth,range,phase,value\n";
         Player player;
         player.sampleRate = 44100;
         player.interpolation = INTERPOLATION_NONE;
