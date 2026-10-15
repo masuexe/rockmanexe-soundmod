@@ -16,6 +16,23 @@ unsigned researchTimerClock = 0;
 static std::ofstream noteLog;
 static std::ofstream controlLog;
 static std::ofstream modulationLog;
+static std::ofstream envelopeLog;
+static std::ofstream envelopeNoteLog;
+void researchEnvelopeNote(const Track& track, int key, int velocity, int duration,
+                          int attack, int decay, int sustain, int release) {
+    envelopeNoteLog << researchSequenceClock - 1 << ',' << static_cast<unsigned>(track.num)
+                    << ',' << track.patch << ',' << key << ',' << velocity << ',' << duration
+                    << ',' << attack << ',' << decay << ',' << sustain << ',' << release << '\n';
+}
+void researchEnvelope(const Channel& channel, int beforeState, int beforeAmpl) {
+    if (channel.trackId < 0) return;
+    envelopeLog << researchTimerClock - 1 << ',' << researchSequenceClock << ','
+                << static_cast<unsigned>(channel.ply->tracks[channel.trackId].num) << ','
+                << (&channel - &channel.ply->channels[0]) << ',' << static_cast<unsigned>(channel.key) << ','
+                << beforeState << ',' << static_cast<unsigned>(channel.state) << ',' << beforeAmpl << ',' << channel.ampl << ','
+                << static_cast<unsigned>(channel.attackLvl) << ',' << channel.decayRate << ','
+                << static_cast<unsigned>(channel.sustainLvl) << ',' << channel.releaseRate << '\n';
+}
 void researchModulation(const Channel& channel, int value) {
     if (channel.trackId < 0) return;
     modulationLog << researchTimerClock - 1 << ',' << researchSequenceClock << ','
@@ -71,6 +88,11 @@ int main(int argc, char** argv) {
         modulationLog.open(directory + "/modulation.csv");
         if (!modulationLog) throw std::runtime_error("cannot create modulation log");
         modulationLog << "timer_frame,tick,track,channel,key,type,speed,depth,range,phase,value\n";
+        envelopeLog.open(directory + "/envelopes.csv");
+        envelopeNoteLog.open(directory + "/note-envelopes.csv");
+        if (!envelopeLog || !envelopeNoteLog) throw std::runtime_error("cannot create envelope logs");
+        envelopeLog << "timer_frame,tick,track,channel,key,before_state,state,before_ampl,ampl,attack_coefficient,decay_rate,sustain,release_rate\n";
+        envelopeNoteLog << "tick,track,instrument,key,velocity,duration,attack,decay,sustain,release\n";
         Player player;
         player.sampleRate = 44100;
         player.interpolation = INTERPOLATION_NONE;

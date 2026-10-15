@@ -13,13 +13,73 @@ from pathlib import Path
 import re
 import struct
 
-from nds_music import SoundArchive
+from nds_music import SoundArchive, SUSTAIN_DB
 from nds_lfo import ds_pitch_units
 from render_preview import runtime_sound_config, start_preview_song
 from scan_audio import ROM_BASE, fingerprint
 from target_profiles import manifest_layout, valid_manifest_target
 from validate_playback import Debugger
 from validate_song import memory
+
+
+def check_envelope_reference(conversion, archive, reference):
+    """Compare note-on ADSR and per-voice DS updates with independent logs."""
+    fields = ('attack', 'decay', 'sustain', 'release')
+    with (reference / 'note-envelopes.csv').open() as stream:
+        actual = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
+    bank, _ = archive.bank(conversion['sequence_info']['bank_id'])
+    checked = 0
+    for track in conversion['tracks']:
+        rows = [r for r in actual if r['track'] == track['track']]
+        if not rows:
+            raise AssertionError('DS envelope reference does not cover all tracks')
+        last = rows[-1]['tick']
+        basis = [a for a in track['actions'] if a['name'] == 'note']
+        body = [a for a in track['actions'][track['loop_action']:] if a['name'] == 'note']
+        expanded = basis + [{**a, 'ticks': a['ticks'] + turn * track['loop_ticks']}
+                            for turn in range(1, 1 + last // track['loop_ticks']) for a in body]
+        expected = []
+        for a in expanded:
+            if a['ticks'] > last:
+                continue
+            definition = archive.note_definition(bank, a['instrument'], a['key'])
+            values = [a['state_after'][f] if a['state_after'][f] is not None else getattr(definition, f)
+                      for f in fields]
+            expected.append((a['ticks'], a['instrument'], a['key'], a['velocity'], a['duration'], *values))
+        observed = [tuple(r[f] for f in ('tick', 'instrument', 'key', 'velocity', 'duration', *fields)) for r in rows]
+        if observed != expected:
+            raise AssertionError(f'Independent note-on envelope differs on track {track["track"]}')
+        checked += len(rows)
+    updates = attacks = 0
+    with (reference / 'envelopes.csv').open() as stream:
+        for raw in csv.DictReader(stream):
+            r = {k: int(v) for k, v in raw.items()}
+            before, state, amplitude = r['before_state'], r['before_state'], r['before_ampl']
+            if before in (1, 2):
+                amplitude = -723 * 128 if before == 1 else amplitude
+                old = amplitude >> 7
+                while True:
+                    amplitude = -((-amplitude * r['attack_coefficient']) // 256)
+                    if amplitude >> 7 != old:
+                        break
+                state = 3 if amplitude == 0 else 2
+                attacks += int(r['attack_coefficient'] != 0)
+            elif before == 3:
+                amplitude -= r['decay_rate']
+                sustain = SUSTAIN_DB[r['sustain']] << 7
+                if amplitude <= sustain:
+                    amplitude, state = sustain, 4
+            elif before == 5:
+                amplitude -= r['release_rate']
+            elif before != 4:
+                raise AssertionError('Unexpected live DS envelope stage')
+            if (amplitude, state) != (r['ampl'], r['state']):
+                raise AssertionError('Independent DS envelope update differs')
+            updates += 1
+    if not updates:
+        raise AssertionError('Empty DS envelope update reference')
+    return {'note_on_snapshots': checked, 'per_voice_timer_updates': updates,
+            'noninstant_attack_updates': attacks, 'complete': True}
 
 
 def check_reference(experiment, reference):
@@ -100,12 +160,14 @@ def check_reference(experiment, reference):
                 modulation_matches += 1
     if conversion.get('native_pitch_lfo') and not modulation_matches:
         raise AssertionError('No active DS modulation observed')
+    envelope = (check_envelope_reference(conversion, archive, reference)
+                if conversion.get('envelope_approximation') else None)
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
-            'complete': True}
+            'envelope_reference': envelope, 'complete': True}
 
 
 def probe_runtime(data, manifest, directory, mgba, lifecycle=False):

@@ -87,6 +87,8 @@ The [batch compatibility audit](docs/nds-compatibility-audit.md) covers all 132 
 
 The [Star Force 1 LAST experiment](docs/nds-last-research.md) provides a separate eight-track test ROM for the recovered tied-note boundary case. Bounded natural playback and controlled effects/lifecycle checks pass. The user reports no issues with the requested sustained loop listening, chips/Buster effects, map restoration and next-encounter tests, accepting this build. Instrumented full GBA loops and communication rematches remain separate uncompleted checks.
 
+The [envelope experiments](docs/nds-envelope-research.md) add opt-in note-on ADSR snapshots and bounded gradual-attack fitting. Star Force 3 HOKORA tests non-instant attack; FRIEND tests release overrides alongside the existing pitch-LFO approximation. Independent DS envelope traces and bounded native GBA envelope checks pass. The user reports both builds passed the requested listening/gameplay tests, accepting these approximations for their tested configurations. The default audit policy remains unchanged.
+
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
 Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. The user has confirmed that the unified ROM sounds correct during their listening test; sustained donor and transplanted execution are covered in the transplantation research.

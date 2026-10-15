@@ -6,10 +6,11 @@ GBA release-tail controls and volume quantization remain fidelity limits.
 """
 import math
 import struct
+from dataclasses import replace
 
 from analyze_song import analyze
 from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
-                       convert_envelope, level, note_bytes, trace_sequence, wait_bytes)
+                       convert_envelope, fit_attack_parameter, level, note_bytes, trace_sequence, wait_bytes)
 from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
@@ -176,21 +177,27 @@ def assess_groups(tracks, groups):
 
 
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
-                        native_pitch_lfo=False):
+                        native_pitch_lfo=False, envelope_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
+    if envelope_support and any(len(group) != 1 for group in groups):
+        raise ValueError('Envelope experiment requires singleton target tracks')
     # Audit mode records effects broadly; this compiler accepts only the
     # specifically implemented controls, never silently drops active effects.
     permitted = {0xFE, 0xC0, 0xC1, 0xC4, 0xC5, 0xC6, 0xC7,
                  0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xD4, 0xD5, 0xE0, 0xE1}
+    if envelope_support:
+        permitted.update((0xD0, 0xD1, 0xD2, 0xD3))
     for track in tracks:
         for action in track['actions']:
             if action['name'] == 'control':
                 op = action['opcode']
+                if 0xD0 <= op <= 0xD3 and not 0 <= action['value'] <= 127:
+                    raise ValueError('Envelope override outside supported 0..127 range')
                 if op not in permitted or (op == 0xCE and action['value']) or (op == 0xCA and action['value'] and not native_pitch_lfo):
                     raise ValueError(f'Unsupported merged-conversion effect {op:#x}')
                 if op == 0xE1 and track['track'] != 0:
@@ -215,7 +222,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 action['event_order'] = order
         for t in tracks:
             for a in t['actions']:
-                if a['name'] == 'note':
+                if a['name'] == 'note' or (a['name'] == 'control' and a['opcode'] == 0xCA and a['value']):
                     state = a['state_after']
                     map_pitch_lfo(state, lfo_tempo)
                     if state['mod_depth']:
@@ -262,6 +269,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         group = note['target_track']
         pan_shift = note['state_after']['pan'] - 64 if len(groups[group]) > 1 else 0
         context = (note['instrument'], pan_shift)
+        if envelope_support:
+            definition = archive.note_definition(bank, note['instrument'], note['key'])
+            envelope = {field: note['state_after'][field] if note['state_after'][field] is not None
+                        else getattr(definition, field) for field in ('attack', 'decay', 'sustain', 'release')}
+            note['source_envelope'] = envelope
+            context += tuple(envelope.values())
         if context not in voice_contexts:
             voice_contexts[context] = len(voice_contexts)
         played_key = aliases.get((group, note['source_track'], note['key']), note['key']) if note['duration'] > 223 else note['key']
@@ -276,6 +289,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                          'target_track': group, 'gba_voice': note['gba_voice'],
                          'gba_key': played_key, 'gba_velocity': velocity,
                          'long_note': note['duration'] > 223})
+        if envelope_support:
+            mappings[-1]['source_envelope'] = note['source_envelope']
     if len(voice_contexts) > 128:
         raise ValueError('Merged voice contexts exceed GBA bank capacity')
     output = bytearray((index + 1) * 8)
@@ -290,6 +305,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     tone_map, wave_cache, sample_reports = {}, {}, []
     for note in source_notes:
         definition = archive.note_definition(bank, note['instrument'], note['key'])
+        if envelope_support:
+            definition = replace(definition, **note['source_envelope'])
         if definition.kind != 1 or not 0 <= definition.archive_slot < len(archives):
             raise ValueError('Merged experiment requires valid PCM instruments')
         source_wave = (archives[definition.archive_slot], definition.wave_id)
@@ -308,7 +325,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                    'pcm8_bytes': len(pcm8)})
         pan = max(0, min(127, definition.pan + note['pan_shift']))
         raw = struct.pack('<BBBBI4B', 0, note['key'], 0, 128 + pan,
-                          ROM_BASE + wave_cache[cache_key], *convert_envelope(definition))
+                          ROM_BASE + wave_cache[cache_key], *convert_envelope(definition, envelope_support))
         site = (note['gba_voice'], note['gba_key'])
         if site in tone_map and tone_map[site] != raw:
             raise ValueError('Conflicting per-note alias/instrument definition')
@@ -323,6 +340,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                          0x80, 0, 0, 0, ROM_BASE + children, 0, 0, 0, 0)
         instrument_reports.append({'instrument_id': voice, 'source_instrument': context[0],
                                    'pan_shift': context[1], 'keys': keys, 'gba_children_offset': children})
+        if envelope_support:
+            instrument_reports[-1]['source_envelope'] = dict(zip(('attack', 'decay', 'sustain', 'release'), context[2:]))
+            instrument_reports[-1]['gba_envelope'] = list(tone_map[voice, keys[0]][8:12])
     track_offsets, schedules, tempo_reports = [], [], []
 
     def volume(value, expression):
@@ -433,4 +453,16 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                     'limitations': ['DS sine replaced by coarsely quantized triangle.',
                                                     'Track phase is shared; new notes reset older overlapping voices.',
                                                     'Release tails follow shared GBA phase rather than independent DS phase.']}
+    if envelope_support:
+        attacks = sorted({n['source_envelope']['attack'] for n in source_notes})
+        report['envelope_approximation'] = {
+            'method': 'Note-on ADSR snapshots in independent rhythm-bank voice contexts; fitted native GBA attack',
+            'overrides_affect_existing_voices': False,
+            'attack_fits': [{'ds_attack': a, 'gba_attack': fit_attack_parameter(a)[0],
+                             'rms_amplitude_error': fit_attack_parameter(a)[1],
+                             'max_amplitude_error': fit_attack_parameter(a)[2],
+                             'ds_timer_updates_to_peak': fit_attack_parameter(a)[3]} for a in attacks],
+            'limitations': ['Attack-only fitting at zero-aligned model updates; onset phase may differ by one GBA frame.',
+                            'GBA linear amplitude attack approximates DS exponential attenuation attack.',
+                            'Decay, sustain and release retain the existing GBA quantization and frame-rate approximation.']}
     return blob, dependency, report

@@ -54,16 +54,21 @@ def make_comparison(experiment, reference, destination):
     if manifest['nds_conversion'].get('native_pitch_lfo_approximation'):
         metadata['native_pitch_lfo_approximation'] = True
         metadata['limitations'].append('Native triangle pitch LFO approximates per-voice DS sine; overlapping notes share/reset track phase.')
+    if manifest['nds_conversion'].get('envelope_approximation'):
+        metadata['envelope_approximation'] = True
+        metadata['limitations'].append('Note-on ADSR snapshots; native linear attack fits DS attenuation attack with frame-rate and shape differences.')
     (destination / 'comparison.json').write_text(json.dumps(metadata, indent=2) + '\n')
     lfo_notice = ('<p>本版以 GBA 原生颤音近似 DS 效果，波形及重叠长音的相位会有差异，请留意长音和叠音的听感。</p>'
                   if manifest['nds_conversion'].get('native_pitch_lfo_approximation') else '')
+    envelope_notice = ('<p>本版按音符开始时的参数生成包络；渐入起音由 GBA 包络近似，变化曲线和时间精度存在差异，请留意起音与尾音。</p>'
+                       if manifest['nds_conversion'].get('envelope_approximation') else '')
     content = ['<!doctype html><html lang="zh-CN"><meta charset="utf-8">',
                '<meta name="viewport" content="width=device-width, initial-scale=1">',
                f'<title>{game_label} → EXE6：{html.escape(sequence_name)} 试听</title>',
                '<style>body{font:17px/1.65 system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#101720;color:#e6edf3}section{padding:20px;margin:20px 0;background:#1b2532;border-radius:12px}audio{width:100%}p{color:#b8c7d8}button{font:inherit;padding:6px 14px;cursor:pointer}</style>',
                f'<h1>{game_label} → EXE6：{html.escape(sequence_name)}</h1>',
                f'<p>第一阶段单曲实验。两段各 {metadata["duration_seconds"]:g} 秒，已统一整体响度。DS 一侧是软件参考合成，EXE6 一侧是导出 ROM 的真实模拟器录音。</p>',
-               '<p>此页面用于比较听感，不证明整曲循环或游戏场景验证通过。GBA 的发声预算、8 位采样和包络近似仍会影响听感，具体检查结果见实验报告。</p>', lfo_notice]
+               '<p>此页面用于比较听感，不证明整曲循环或游戏场景验证通过。GBA 的发声预算、8 位采样和包络近似仍会影响听感，具体检查结果见实验报告。</p>', lfo_notice, envelope_notice]
     for run in runs:
         key = run['key']
         encoded = base64.b64encode((destination / (key + '-normalized.wav')).read_bytes()).decode()

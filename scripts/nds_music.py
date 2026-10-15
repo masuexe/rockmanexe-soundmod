@@ -4,6 +4,7 @@ SDAT/SBNK/SWAR layouts and DS synthesis semantics are checked against
 kode54/SSEQPlayer. Unsupported executed instructions fail explicitly.
 """
 from dataclasses import dataclass
+from functools import lru_cache
 import math
 import struct
 
@@ -399,12 +400,52 @@ def fall_rate(value):
     return 2 * value + 1 if value < 50 else 7680 // (126 - value)
 
 
-def convert_envelope(note):
-    # Initial experiment requires the instant attack used by BGM_ROOM.
-    if note.attack != 127:
+def attack_curve(value):
+    """SSEQPlayer attenuation after each DS timer update (C++ truncation)."""
+    if type(value) is not int or not 0 <= value <= 127:
+        raise ValueError('Invalid DS attack parameter')
+    table = (0, 1, 5, 14, 26, 38, 51, 63, 73, 84, 92, 100, 109, 116, 123, 127, 132, 137, 143)
+    coefficient = table[127 - value] if value >= 109 else 255 - value
+    attenuation, result = -723 * 128, []
+    while attenuation:
+        old = attenuation >> 7
+        while True:
+            attenuation = -((-attenuation * coefficient) // 256)
+            if attenuation >> 7 != old:
+                break
+        result.append(attenuation)
+    return result
+
+
+@lru_cache(maxsize=128)
+def fit_attack_parameter(value):
+    """Fit attack-only amplitude at DS timer resolution; no gate/decay fitting.
+
+    Both models start their first update at time zero. Real onset alignment
+    can differ by one GBA frame. Keep poor fits outside the bounded experiment.
+    """
+    curve = attack_curve(value)
+    levels = [10 ** ((a >> 7) / 200) for a in curve]
+    levels += [1.0] * math.ceil(2 * DS_CLOCK_HZ / GBA_FPS)
+    def errors(parameter):
+        differences = [min(255, (int(i * GBA_FPS / DS_CLOCK_HZ) + 1) * parameter) / 255 - amplitude
+                       for i, amplitude in enumerate(levels)]
+        return (math.sqrt(sum(d * d for d in differences) / len(differences)),
+                max(map(abs, differences)))
+    parameter = min(range(1, 256), key=lambda a: errors(a)[0])
+    rms, peak = errors(parameter)
+    if rms > 0.12 or peak > 0.30:
+        raise ValueError('DS attack exceeds bounded GBA fitting error limits')
+    return parameter, rms, peak, len(curve)
+
+
+def convert_envelope(note, approximate_attack=False):
+    # Keep the earlier instant-only policy unless fitting is explicitly enabled.
+    if note.attack != 127 and not approximate_attack:
         raise ValueError('Non-instant DS attack requires envelope fitting')
+    attack = fit_attack_parameter(note.attack)[0] if approximate_attack else 255
     multiplier = lambda v: min(255, round(256 * 10 ** (-fall_rate(v) * DS_CLOCK_HZ / (128 * 200 * GBA_FPS))))
-    return (255, multiplier(note.decay), round(255 * level(note.sustain)), multiplier(note.release))
+    return (attack, multiplier(note.decay), round(255 * level(note.sustain)), multiplier(note.release))
 
 
 def wait_bytes(ticks):

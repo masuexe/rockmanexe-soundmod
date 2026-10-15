@@ -187,6 +187,33 @@ BASE = ROOT.parent / 'roms/exe6.gba'
 
 @unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
 class LocalNdsExperimentTests(unittest.TestCase):
+    def test_envelope_experiments_preserve_native_data_and_explicit_policy(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        for song, index, samples in [('sf3-hokora-envelope', 10, 18), ('sf3-friend-envelope', 29, 23)]:
+            with self.subTest(song=song):
+                output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+                    source, base, events=('1', '21', 'scene:communication'), song=song)
+                self.assertEqual(apply_bps(base, patch)[0], output)
+                self.assertEqual(manifest['nds_conversion']['sequence_index'], index)
+                self.assertTrue(manifest['nds_conversion']['envelope_approximation'])
+                self.assertEqual(conversion['track_count'], 8)
+                self.assertEqual(len(dependency['samples']), samples)
+                self.assertFalse(conversion['envelope_approximation']['overrides_affect_existing_voices'])
+                if index == 10:
+                    self.assertNotIn('native_pitch_lfo_approximation', manifest['nds_conversion'])
+                    self.assertTrue(any(a['ds_attack'] == 100 and a['gba_attack'] == 74
+                                        for a in conversion['envelope_approximation']['attack_fits']))
+                else:
+                    self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_approximation'])
+                    self.assertTrue(conversion['native_pitch_lfo']['configs'])
+                    self.assertTrue(any(n['source_envelope']['release'] == 115 for n in conversion['note_mapping']))
+                table = manifest['target_table_file_offset']
+                self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+                expected = bytearray(base)
+                for start, end in manifest['declared_prefix_ranges']:
+                    expected[start:end] = output[start:end]
+                self.assertEqual(output[:len(base)], expected)
+
     def test_kando_keeps_seven_tracks_and_preserves_original_data(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

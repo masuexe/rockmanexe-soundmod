@@ -55,23 +55,40 @@ def main():
     marker = '\t\t\tmodParam >>= 8; // tmr/pan: adjust to 7.6'
     if text.count(marker) != 1:
         raise ValueError('Unknown upstream modulation calculation; hook not installed')
-    channel.write_text('class Channel;\nextern void researchModulation(const Channel&, int);\n' +
-                       text.replace(marker, marker + '\n\t\tresearchModulation(*this, modParam);'))
+    text = text.replace(marker, marker + '\n\t\tresearchModulation(*this, modParam);')
+    marker = '\tswitch (this->state)\n\t{'
+    after = '\tif (bModulation && this->modDelayCnt < this->modDelay)'
+    if text.count(marker) != 1 or text.count(after) != 1:
+        raise ValueError('Unknown upstream envelope update; hook not installed')
+    text = text.replace(marker, '\tint beforeState = this->state, beforeAmpl = this->ampl;\n' + marker)
+    text = text.replace(after, '\tresearchEnvelope(*this, beforeState, beforeAmpl);\n\n' + after)
+    channel.write_text('class Channel;\nextern void researchModulation(const Channel&, int);\n'
+                       'extern void researchEnvelope(const Channel&, int, int);\n' + text)
     track = copied / 'Track.cpp'
     text = track.read_text()
     marker = 'int Track::NoteOn(int key, int vel, int len)\n{'
     if text.count(marker) != 1:
         raise ValueError('Unknown upstream NoteOn; trace hook not installed')
     declaration = '\nextern void researchNote(const Track&, int, int, int);\nextern void researchControl(const Track&, int, int);\n'
+    declaration += 'extern void researchEnvelopeNote(const Track&, int, int, int, int, int, int, int);\n'
     text = text.replace(marker, declaration + marker + '\n\tresearchNote(*this, key, vel, len);')
     for statement, opcode, value in [
         ('this->pan = this->overriding.val(pData, read8) - 64;', 0xC0, 'this->pan + 64'),
         ('this->pitchBend = this->overriding.val(pData, read8);', 0xC4, 'this->pitchBend'),
         ('this->expr = this->overriding.val(pData, read8);', 0xD5, 'this->expr'),
+        *((f'this->{field} = this->overriding.val(pData, read8);', 0xD0 + i, f'this->{field}')
+          for i, field in enumerate(('a', 'd', 's', 'r'))),
     ]:
         if text.count(statement) != 1:
             raise ValueError('Unknown upstream control statement; trace hook not installed')
         text = text.replace(statement, statement + f'\n\t\t\t\t\tresearchControl(*this, {opcode}, {value});')
+    marker = '\tif (bIsPCM)\n\t{'
+    if text.count(marker) != 1:
+        raise ValueError('Unknown upstream PCM note definition; hook not installed')
+    envelope_args = ', '.join(f'this->{field} == 0xFF ? noteDef->{source} : this->{field}'
+                     for field, source in [('a', 'attackRate'), ('d', 'decayRate'),
+                                            ('s', 'sustainLevel'), ('r', 'releaseRate')])
+    text = text.replace(marker, marker + f'\n\t\tresearchEnvelopeNote(*this, key, vel, len, {envelope_args});')
     track.write_text(text)
     binary = args.out / 'nds-reference'
     command = ['g++', '-std=c++11', '-O2', '-I', str(copied),
@@ -82,7 +99,7 @@ def main():
               'research_renderer_sha256': hashlib.sha256((Path(__file__).resolve().parents[1] / 'native/nds_reference.cpp').read_bytes()).hexdigest(),
               'renderer': 'kode54/SSEQPlayer', 'compiler_command': command,
               'modifications': ['Use standard codecvt on modern GCC',
-                                'Observe sequence/timer clocks, NoteOn, controls and per-voice modulation; no synthesis changes'],
+                                'Observe sequence/timer clocks, NoteOn ADSR, controls, per-voice envelopes and modulation; no synthesis changes'],
               'limitations': ['Software DS reference, not hardware or DS emulator output']}
     (args.out / 'build.json').write_text(json.dumps(report, indent=2) + '\n')
     print(binary)
