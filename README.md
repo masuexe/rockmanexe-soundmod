@@ -77,6 +77,8 @@ The second [BGM_BATTLE experiment](docs/nds-battle-research.md) maps all eleven 
 
 The next [BGM_KANDO experiment](docs/nds-kando-research.md) retains seven original tracks and fourteen samples. Independent source comparisons, one natural GBA loop and controlled lifecycle checks pass. The user also reports successful sustained listening, chips/Buster effects, victory/map restoration and next-encounter playback, establishing a second tested gameplay baseline. Its separate ROM replaces title, ordinary music 21 and communication battles.
 
+The first [Star Force 1 experiment](docs/nds-sf1-research.md) converts `BGM23KINCHO` with eight original tracks and fifteen samples. All three pinned Japanese source variants share the verified archive. Independent source comparisons, one natural GBA loop and controlled lifecycle checks pass. The user also confirms sustained listening, chips/Buster effects, victory/map restoration and next-encounter playback, establishing the first accepted Star Force 1 gameplay baseline. Star Force 2 and active modulation remain research work.
+
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
 Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. The user has confirmed that the unified ROM sounds correct during their listening test; sustained donor and transplanted execution are covered in the transplantation research.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build checked Star Force 3 music -> Japanese EXE6 research ROM/BPS.
+"""Build checked Star Force 1/3 music -> Japanese EXE6 research ROM/BPS.
 
 This bounded experiment uses the existing GBA export core, not the manager's
 production source catalog. Original ROMs are read only. Python 3.10+, stdlib.
@@ -17,23 +17,35 @@ from transplant_song import make_bps
 from nds_track_merge import BATTLE_GROUPS, convert_merged_song
 
 SOURCES = {
+    'b531571a442d1aadd96ba7fa63637b97a8066b39ee5c54641eb61d4e5808807c': 'ssr1d',
+    '5a31dd8472f120dc95808c8d4eeb549909ed75d2fca05af894e949b52de723d8': 'ssr1l',
+    'd4ec40d1c0a169925f5ca58952a00e8b6865ac41e1e8300d609688a2c72beb6b': 'ssr1p',
     '64ff3011d41dbcb56990f355254fe765c5088daf2915f695e31420114356743a': 'ssr3b',
     'eaa53a29170a6740ac2f9476321149ccf95f0bc54835fdb51ca66cf5165aca1b': 'ssr3r',
 }
 SDAT_SHA256 = 'bf986568be3b1b4bd0c7674694cd3b86641a266138df3271989a2f6fea240220'
+SOURCE_ARCHIVES = {
+    'ssr1': {'file_id': 667, 'sha256': '2b162eced95dadba3362316e0eb49b95b2990014a7fcb119fb9d21c1b01c1fd7',
+             'label': 'Star Force 1'},
+    'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
+}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
     source_fingerprint = fingerprint(source)
     key = SOURCES.get(source_fingerprint['sha256'])
     if key is None:
-        raise ValueError('Requires one of the verified Japanese Star Force 3 original ROMs')
+        raise ValueError('Requires one of the verified Japanese Star Force 1/3 original ROMs')
+    family = key[:4]
+    source_archive = SOURCE_ARCHIVES[family]
+    if (song == 'sf1-kincho' and family != 'ssr1') or (song in ('room', 'battle', 'kando') and family != 'ssr3'):
+        raise ValueError('Song does not belong to the selected source game; choose sf1-kincho for Star Force 1')
     target = validate_target(base, base)
     if target['key'] not in ('exe6', 'exe6f'):
         raise ValueError('NDS experiment currently targets original Japanese EXE6 only')
-    raw_sdat = nds_sdat(source, 187)
-    if fingerprint(raw_sdat)['sha256'] != SDAT_SHA256:
-        raise ValueError('Star Force 3 SDAT fingerprint mismatch')
+    raw_sdat = nds_sdat(source, source_archive['file_id'])
+    if fingerprint(raw_sdat)['sha256'] != source_archive['sha256']:
+        raise ValueError(source_archive['label'] + ' SDAT fingerprint mismatch')
     archive = SoundArchive(raw_sdat)
     capacity = base[target['layout']['player_table_offset'] + target['layout']['music_player'] * 12 + 8]
     if song == 'room':
@@ -46,6 +58,10 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         index, name = 31, 'BGM_KANDO'
         blob, dependency, conversion = convert_song(archive, index, capacity,
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
+    elif song == 'sf1-kincho':
+        index, name = 23, 'BGM23KINCHO'
+        blob, dependency, conversion = convert_song(archive, index, capacity,
+                                                   song_gain_db=song_gain_db, native_effect_headroom=True)
     else:
         raise ValueError('Unknown NDS experiment song')
     catalog, reports = catalog_originals(base, base, {})
@@ -54,7 +70,7 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
     slot = target['layout']['entry_count']
     catalog['table_entry_count'] = slot + 1
     catalog['sources'][source_key] = fingerprint(blob)
-    catalog['source_labels'][source_key] = f'Star Force 3: converted {name} (research)'
+    catalog['source_labels'][source_key] = f'{source_archive["label"]}: converted {name} (research)'
     catalog['entries'].append({'key': song_key, 'source': source_key, 'source_index': index,
                                'source_label': catalog['source_labels'][source_key],
                                'target_index': slot, 'track_count': conversion['track_count'],
@@ -77,7 +93,7 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         raise AssertionError('NDS experiment BPS reconstruction differs')
     manifest.update(bps=patch_info, nds_conversion={
         'source_profile': key, 'source_rom_fingerprint': source_fingerprint,
-        'sdat_fingerprint': fingerprint(raw_sdat), 'nds_file_id': 187,
+        'sdat_fingerprint': fingerprint(raw_sdat), 'nds_file_id': source_archive['file_id'],
         'sequence_index': index, 'sequence_name': name,
         'generated_mplay_fingerprint': fingerprint(blob),
         'note_timing_check': conversion['note_timing_check'],
@@ -91,7 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--base', type=Path, required=True)
-    parser.add_argument('--song', choices=['room', 'battle', 'kando'], default='room')
+    parser.add_argument('--song', choices=['room', 'battle', 'kando', 'sf1-kincho'], default='room')
     parser.add_argument('--event', action='append', help='Native music ID or scene:communication; repeatable; default 1')
     parser.add_argument('--pcm-channels', type=int, default=10)
     parser.add_argument('--song-gain-db', type=float, default=3.5,

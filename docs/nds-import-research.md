@@ -20,6 +20,14 @@ The user also confirms its requested sustained listening, effects coexistence,
 victory/map restoration and next-encounter tests pass, establishing a second
 tested gameplay baseline.
 
+The [first Star Force 1 experiment](nds-sf1-research.md), `BGM23KINCHO`, now
+checks the same conversion subset against a second game's archive/bank layout.
+Eight tracks and fifteen samples pass independent source comparisons, one
+natural GBA loop and controlled lifecycle checks. The user confirms sustained
+listening, chips/Buster effects, victory/map restoration and next-encounter
+playback all pass for this song;
+the three pinned Japanese Star Force 1 originals share an identical SDAT.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,

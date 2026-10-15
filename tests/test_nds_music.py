@@ -286,5 +286,62 @@ class LocalNdsExperimentTests(unittest.TestCase):
             build_experiment(source, base, song_gain_db=12)
 
 
+SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
+
+
+@unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
+class LocalStarForce1Tests(unittest.TestCase):
+    def test_kincho_archive_conversion_and_original_data_preservation(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, catalog, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-kincho')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['nds_file_id'], 667)
+        self.assertEqual(manifest['nds_conversion']['source_profile'], 'ssr1d')
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 23)
+        self.assertEqual(manifest['nds_conversion']['sequence_name'], 'BGM23KINCHO')
+        self.assertIn('Star Force 1', catalog['source_labels']['nds-ssr1d'])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 15)
+        self.assertEqual({t['loop_ticks'] for t in conversion['tracks']}, {2304})
+        self.assertEqual(conversion['tempo_mapping'][0]['gba_parameter'], 115)
+        self.assertTrue(conversion['note_timing_check'])
+        self.assertLess(conversion['song_priority'] + max(conversion['priority_mapping'].values()), 112)
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
+    @unittest.skipUnless(all((SF1.parent / (key + '.nds')).exists() for key in ('ssr1l', 'ssr1p')),
+                         'local Leo/Pegasus inputs unavailable')
+    def test_three_source_variants_produce_identical_mplay_and_target(self):
+        base, previous = BASE.read_bytes(), None
+        for key in ('ssr1d', 'ssr1l', 'ssr1p'):
+            output, _, manifest, _, _, blob, _, sdat = build_experiment(
+                (SF1.parent / (key + '.nds')).read_bytes(), base, song='sf1-kincho')
+            self.assertEqual(manifest['nds_conversion']['source_profile'], key)
+            current = output, blob, sdat
+            if previous is not None:
+                self.assertEqual(current, previous)
+            previous = current
+
+    def test_source_game_and_song_must_match(self):
+        with self.assertRaisesRegex(ValueError, 'selected source game'):
+            build_experiment(SF1.read_bytes(), BASE.read_bytes(), song='room')
+        if NDS.exists():
+            with self.assertRaisesRegex(ValueError, 'selected source game'):
+                build_experiment(NDS.read_bytes(), BASE.read_bytes(), song='sf1-kincho')
+
+    def test_unverified_source_revision_rejected(self):
+        raw = bytearray(SF1.read_bytes())
+        raw[-1] ^= 1
+        with self.assertRaisesRegex(ValueError, 'verified'):
+            build_experiment(bytes(raw), BASE.read_bytes(), song='sf1-kincho')
+
+
 if __name__ == '__main__':
     unittest.main()
