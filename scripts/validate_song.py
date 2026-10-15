@@ -64,6 +64,8 @@ def main():
     parser.add_argument('--transplant', type=Path, help='Manifest authorizing the verified experimental PvP image')
     parser.add_argument('--keep-song', action='store_true', help='Redirect later starts on the selected player to this header in debugger RAM')
     parser.add_argument('--frames', type=int, default=3000, help='Maximum frames; must reach sequence completion')
+    parser.add_argument('--loop-cycles', type=int, default=2,
+                        help='Complete periods to check after each track loop start; default 2')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--mgba', default='/usr/games/mgba')
     args = parser.parse_args()
@@ -97,10 +99,12 @@ def main():
         parser.error('Requires the verified EXEGP baseline or an explicit transplant manifest')
     if args.id is None:
         args.id = 1
-    if args.id < 0 or args.id >= count or args.frames < 1:
+    if args.id < 0 or args.id >= count or args.frames < 1 or args.loop_cycles < 1:
         parser.error('Invalid ID or frame limit')
     dependency = analyze(data, table, args.id)
-    validation_clock = max(track['ticks_before_repeat'] + (track['loop_ticks'] if track['termination'] == 'repeated_state' else 0) + 1 for track in dependency['tracks'])
+    validation_clock = max((track['loop_start_ticks'] + args.loop_cycles * track['loop_ticks']
+                            if track['termination'] == 'repeated_state' else track['ticks_before_repeat']) + 1
+                           for track in dependency['tracks'])
     args.out.mkdir(parents=True, exist_ok=False)
     work = args.out.resolve()
     rom = work / 'test.gba'
@@ -232,6 +236,7 @@ def main():
                 raise AssertionError('Sample coverage or changing PCM evidence incomplete')
             report['complete'] = True
             report['validation_clock_target'] = validation_clock
+            report['requested_loop_cycles'] = args.loop_cycles
             report['terminations'] = sorted({track['termination'] for track in dependency['tracks']})
             print(f"Passed {len(snapshots)} frames, {track_count} tracks, all {len(seen_waves)} samples; final clock {clock}", flush=True)
         except BaseException as exc:

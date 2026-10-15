@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build checked Star Force 3 room/battle music -> Japanese EXE6 research ROM/BPS.
+"""Build checked Star Force 3 music -> Japanese EXE6 research ROM/BPS.
 
 This bounded experiment uses the existing GBA export core, not the manager's
 production source catalog. Original ROMs are read only. Python 3.10+, stdlib.
@@ -42,6 +42,10 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
     elif song == 'battle':
         index, name = 35, 'BGM_BATTLE'
         blob, dependency, conversion = convert_merged_song(archive, index, BATTLE_GROUPS, capacity, song_gain_db)
+    elif song == 'kando':
+        index, name = 31, 'BGM_KANDO'
+        blob, dependency, conversion = convert_song(archive, index, capacity,
+                                                   song_gain_db=song_gain_db, native_effect_headroom=True)
     else:
         raise ValueError('Unknown NDS experiment song')
     catalog, reports = catalog_originals(base, base, {})
@@ -87,7 +91,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--base', type=Path, required=True)
-    parser.add_argument('--song', choices=['room', 'battle'], default='room')
+    parser.add_argument('--song', choices=['room', 'battle', 'kando'], default='room')
     parser.add_argument('--event', action='append', help='Native music ID or scene:communication; repeatable; default 1')
     parser.add_argument('--pcm-channels', type=int, default=10)
     parser.add_argument('--song-gain-db', type=float, default=3.5,

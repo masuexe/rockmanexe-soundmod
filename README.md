@@ -75,6 +75,8 @@ The first [NDS music conversion experiment](docs/nds-import-research.md) imports
 
 The second [BGM_BATTLE experiment](docs/nds-battle-research.md) maps all eleven source tracks into eight EXE6 tracks and checks the source notes, controls, decoded samples and controlled scene lifecycle. The user reports successful three-minute communication playback alongside chips and Buster effects, plus virus-battle playback, victory/map music restoration and restarting on the next encounter. This establishes the tested single-song gameplay baseline; communication rematches remain an unreported gameplay check.
 
+The next [BGM_KANDO experiment](docs/nds-kando-research.md) retains seven original tracks and fourteen samples. Independent source comparisons, one natural GBA loop and controlled lifecycle checks pass. The user also reports successful sustained listening, chips/Buster effects, victory/map restoration and next-encounter playback, establishing a second tested gameplay baseline. Its separate ROM replaces title, ordinary music 21 and communication battles.
+
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
 Playback entry points and representative header/tone-bank initialization have now been verified in mGBA; see [playback validation](docs/audio-playback.md) for results and commands. Soundmod's existing ID-selection hook has also been identified. The user has confirmed that the unified ROM sounds correct during their listening test; sustained donor and transplanted execution are covered in the transplantation research.

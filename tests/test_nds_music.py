@@ -70,6 +70,37 @@ class SequenceConversionTests(unittest.TestCase):
 
 
 class SampleConversionTests(unittest.TestCase):
+    @staticmethod
+    def archive_for(raw):
+        class Fixture:
+            def sequence(self, index):
+                return raw, {'bank_id': 0, 'volume': 75}
+            def bank(self, index):
+                return None, [0]
+            def note_definition(self, bank, instrument, key):
+                return NoteDefinition(0, 0, 60, 127, 127, 127, 127, 64)
+            def wave(self, archive, index):
+                return [0, 32767, 0, -32768], {'effective_rate_hz': 22050, 'looped': True,
+                                              'loop_start_samples': 0, 'sample_count': 4}
+        return Fixture()
+
+    def test_high_tempo_and_optional_music_priority_headroom(self):
+        raw = b'\xC7\x00\xE1\x96\x00\xC6\x7F\x81\x02' + note() + b'\x80\x0C\x94\x09\x00\x00'
+        _, dependency, report = convert_song(self.archive_for(raw), 0, native_effect_headroom=True)
+        self.assertEqual(report['tempo_mapping'][0]['gba_parameter'], 151)
+        self.assertEqual(dependency['header']['priority'], 20)
+        self.assertEqual(report['priority_mapping'], {'127': 0})
+        self.assertEqual([e['value'] for e in dependency['tracks'][0]['events'] if e['name'] == 'PRIO'], [0])
+        with self.assertRaisesRegex(ValueError, 'Tempo outside'):
+            convert_song(self.archive_for(raw.replace(b'\xE1\x96\x00', b'\xE1\xFF\x00')), 0)
+
+    def test_direct_conversion_repeat_excludes_simultaneous_prefix_note(self):
+        raw = b'\xC7\x00\xE1\x78\x00\x81\x02' + note(60) + note(64) + b'\x80\x0C\x94\x0A\x00\x00'
+        _, dependency, report = convert_song(self.archive_for(raw), 0)
+        self.assertTrue(report['note_timing_check'])
+        notes = [(e['ticks'], e['key']) for e in dependency['tracks'][0]['events'] if e['name'] == 'NOTE']
+        self.assertEqual(notes, [(0, 60), (0, 64), (12, 64)])
+
     def test_invalid_song_gain_fails_before_reading_source(self):
         for gain in [float('nan'), float('inf'), -25, 13, '3.5', True]:
             with self.subTest(gain=gain), self.assertRaisesRegex(ValueError, 'Song gain'):
@@ -156,6 +187,24 @@ BASE = ROOT.parent / 'roms/exe6.gba'
 
 @unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
 class LocalNdsExperimentTests(unittest.TestCase):
+    def test_kando_keeps_seven_tracks_and_preserves_original_data(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            source, base, events=('1', '21', 'scene:communication'), song='kando')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(conversion['track_count'], 7)
+        self.assertEqual(len(dependency['samples']), 14)
+        self.assertEqual({t['loop_ticks'] for t in conversion['tracks']}, {3072})
+        self.assertEqual(conversion['tempo_mapping'][0]['gba_parameter'], 151)
+        self.assertTrue(conversion['note_timing_check'])
+        self.assertLess(conversion['song_priority'] + max(conversion['priority_mapping'].values()), 112)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_battle_merges_all_notes_and_keeps_long_echoes_independent(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(

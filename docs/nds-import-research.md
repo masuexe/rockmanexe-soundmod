@@ -13,6 +13,13 @@ passes three-minute communication playback with chips/Buster effects and the
 virus-battle start/victory/map/next-encounter sequence. Automated full-loop
 state comparison remains incomplete; see its report for the separate evidence.
 
+The next [BGM_KANDO experiment](nds-kando-research.md) retains seven source
+tracks and checks a different intro/pan pattern without merging. Source
+comparisons, one natural GBA loop and controlled lifecycle checks pass.
+The user also confirms its requested sustained listening, effects coexistence,
+victory/map restoration and next-encounter tests pass, establishing a second
+tested gameplay baseline.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,

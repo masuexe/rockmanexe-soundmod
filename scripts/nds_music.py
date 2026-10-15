@@ -426,7 +426,8 @@ def note_bytes(key, velocity, duration):
     return result + (bytes([duration - base]) if duration != base else b'')
 
 
-def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_gain_db=0.0):
+def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_gain_db=0.0,
+                 native_effect_headroom=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     song_gain = 10 ** (song_gain_db / 20)
@@ -439,6 +440,11 @@ def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_g
 
     data, info = archive.sequence(index)
     tracks = trace_sequence(data)
+    priorities = sorted({a['value'] for t in tracks for a in t['actions']
+                         if a['name'] == 'control' and a['opcode'] == 0xC6})
+    priority_map = {value: i for i, value in enumerate(priorities)}
+    if native_effect_headroom and len(priorities) > 32:
+        raise ValueError('Too many music priorities for native-effect headroom')
     if len(tracks) > track_capacity:
         raise ValueError('NDS sequence exceeds target track capacity')
     tempos = [(t['track'], a) for t in tracks for a in t['actions'] if a['opcode'] == 0xE1]
@@ -514,12 +520,12 @@ def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_g
                     volume = volume_parameter(info['volume'], state['volume'], state['expression'])
                     code.extend([0xBE, volume])
                 elif op == 0xC6:
-                    code.extend([0xBA, action['value']])
+                    code.extend([0xBA, priority_map[action['value']] if native_effect_headroom else action['value']])
                 elif op == 0xE1:
                     tempo = action['value']
                     corrected = round(tempo * DS_CLOCK_HZ * 75 / (240 * GBA_FPS)) if tempo_correction else tempo
-                    if not 1 <= corrected <= 127:
-                        raise ValueError('Tempo outside conservative MPlay encoding range')
+                    if not 1 <= corrected <= 255:
+                        raise ValueError('Tempo outside MPlay encoding range')
                     code.extend([0xBB, corrected])
                     tempo_reports.append({'nds_tempo': tempo, 'gba_parameter': corrected,
                                           'nds_ticks_per_second': DS_CLOCK_HZ * tempo / 240,
@@ -532,7 +538,7 @@ def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_g
             target = offset + action_offsets[track['loop_action']]
             output[offset + len(code):offset + len(code) + 5] = b'\xB2' + struct.pack('<I', ROM_BASE + target)
         track_offsets.append(offset)
-    header_offset = allocate(struct.pack('<BBBBI', len(tracks), 0, 0, 128, ROM_BASE + bank_offset)
+    header_offset = allocate(struct.pack('<BBBBI', len(tracks), 0, 20 if native_effect_headroom else 0, 128, ROM_BASE + bank_offset)
                              + struct.pack('<' + 'I' * len(tracks), *(ROM_BASE + o for o in track_offsets)))
     struct.pack_into('<IHH', output, index * 8, ROM_BASE + header_offset, 0, 0)
     blob = bytes(output)
@@ -548,7 +554,8 @@ def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_g
         # include one extra source cycle before that complete state repeats.
         expected = source_notes[:]
         if source_track['termination'] == 'loop':
-            body = [n for n in source_notes if n[0] >= source_track['loop_start_ticks']]
+            body = [(a['ticks'], a['instrument'], a['key'], round(127 * level(a['velocity'])), a['duration'])
+                    for a in source_track['actions'][source_track['loop_action']:] if a['name'] == 'note']
             while len(expected) < len(target_notes):
                 shift = source_track['loop_ticks'] * (1 + (len(expected) - len(source_notes)) // max(1, len(body)))
                 expected.extend((n[0] + shift, *n[1:]) for n in body)
@@ -567,4 +574,6 @@ def convert_song(archive, index, track_capacity=8, tempo_correction=True, song_g
                               'Original-rate signed 8-bit PCM; target mixer rate remains native.',
                               'Inactive modulation controls omitted; active effects rejected.',
                               'No DS hardware or subjective fidelity claim.']}
+    if native_effect_headroom:
+        report.update(priority_mapping={str(k): v for k, v in priority_map.items()}, song_priority=20)
     return blob, dependency, report
