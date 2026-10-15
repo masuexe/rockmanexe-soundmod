@@ -81,6 +81,26 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
     else:
         raise ValueError('Unknown NDS experiment song')
+    return pack_converted_experiment(source, base, key, raw_sdat, index, name,
+                                     blob, dependency, conversion, events, pcm_channels)
+
+
+def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, dependency,
+                              conversion, events=('1',), pcm_channels=10):
+    """Pack an already-converted research song through the shared exporter.
+
+    Kept separate so a read-only batch audit can check candidate resources
+    without registering untested songs in the research CLI or manager.
+    """
+    source_fingerprint = fingerprint(source)
+    if SOURCES.get(source_fingerprint['sha256']) != key:
+        raise ValueError('Converted experiment source is not a verified original')
+    source_archive = SOURCE_ARCHIVES[key[:4]]
+    if fingerprint(raw_sdat)['sha256'] != source_archive['sha256']:
+        raise ValueError('Converted experiment SDAT fingerprint mismatch')
+    target = validate_target(base, base)
+    if target['key'] not in ('exe6', 'exe6f'):
+        raise ValueError('NDS experiment currently targets original Japanese EXE6 only')
     catalog, reports = catalog_originals(base, base, {})
     source_key = 'nds-' + key
     song_key = source_key + ':' + str(index)

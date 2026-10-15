@@ -46,6 +46,12 @@ accepting the approximation in the tested configuration. Automated full-loop
 state validation and exact per-voice modulation remain separate limitations.
 Other active effect types remain outside this mode.
 
+The [batch audit](nds-compatibility-audit.md) now scans all three pinned
+archives directly. Twenty of 122 nonempty/nonsilent SSEQ candidates pass
+conversion, shared export and BPS reconstruction; the report distinguishes
+standard/LFO routes, exact matches to existing manual evidence and all
+blockers. This adds no new runtime/listening acceptance or manager support.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,
