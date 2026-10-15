@@ -50,8 +50,17 @@ def main():
     marker = 'int Track::NoteOn(int key, int vel, int len)\n{'
     if text.count(marker) != 1:
         raise ValueError('Unknown upstream NoteOn; trace hook not installed')
-    declaration = '\nextern void researchNote(const Track&, int, int, int);\n'
-    track.write_text(text.replace(marker, declaration + marker + '\n\tresearchNote(*this, key, vel, len);'))
+    declaration = '\nextern void researchNote(const Track&, int, int, int);\nextern void researchControl(const Track&, int, int);\n'
+    text = text.replace(marker, declaration + marker + '\n\tresearchNote(*this, key, vel, len);')
+    for statement, opcode, value in [
+        ('this->pan = this->overriding.val(pData, read8) - 64;', 0xC0, 'this->pan + 64'),
+        ('this->pitchBend = this->overriding.val(pData, read8);', 0xC4, 'this->pitchBend'),
+        ('this->expr = this->overriding.val(pData, read8);', 0xD5, 'this->expr'),
+    ]:
+        if text.count(statement) != 1:
+            raise ValueError('Unknown upstream control statement; trace hook not installed')
+        text = text.replace(statement, statement + f'\n\t\t\t\t\tresearchControl(*this, {opcode}, {value});')
+    track.write_text(text)
     binary = args.out / 'nds-reference'
     command = ['g++', '-std=c++11', '-O2', '-I', str(copied),
                str(Path(__file__).resolve().parents[1] / 'native/nds_reference.cpp'),
@@ -60,7 +69,7 @@ def main():
     report = {'core': str(args.core.resolve()), 'upstream_files_sha256': hashes,
               'renderer': 'kode54/SSEQPlayer', 'compiler_command': command,
               'modifications': ['Use standard codecvt on modern GCC',
-                                'Observe sequence ticks and NoteOn arguments; no synthesis changes'],
+                                'Observe sequence ticks, NoteOn and pan/bend/expression controls; no synthesis changes'],
               'limitations': ['Software DS reference, not hardware or DS emulator output']}
     (args.out / 'build.json').write_text(json.dumps(report, indent=2) + '\n')
     print(binary)

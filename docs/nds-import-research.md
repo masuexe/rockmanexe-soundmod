@@ -6,6 +6,11 @@ The Gregar experiment passes sustained execution through two loops; Falzar
 also passes the start/effect/queue/stop probes. This is a separate research CLI,
 and NDS import/preview is not yet available in the manager.
 
+The second [BGM_BATTLE experiment](nds-battle-research.md) now maps eleven
+source tracks into eight target tracks without dropping note events. It has
+independent source comparisons and controlled scene/stop checks; full GBA
+loop playback and battle gameplay remain unverified.
+
 ## Existing foundation
 
 Both Japanese EXE6 targets already have verified native audio layouts,
@@ -300,9 +305,9 @@ remain further work:
    Test gameplay timing and communication behavior before making claims about
    battle use. Title playback alone is insufficient.
 
-After this succeeds, research `BGM_BATTLE`/`BGM_VS`: determine whether track
-merging preserves independent controls and polyphony, or whether expanding
-the native player is practical. Raising the PCM channel setting alone does
+`BGM_BATTLE` now has a checked eight-track mapping in the separate experiment
+linked above; `BGM_VS` remains unconverted. Sequence merging and simultaneous
+voice allocation require separate validation. Raising the PCM channel setting alone does
 not expand sequence-track storage and does not prove acceptable CPU usage.
 Expose NDS source selection and previews in the manager after conversion and
 target playback have passed; its current agbplay preview is a GBA player.

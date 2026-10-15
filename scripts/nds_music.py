@@ -259,7 +259,7 @@ def read_event(data, offset):
     return event
 
 
-def trace_sequence(data, max_events=100000):
+def trace_sequence(data, max_events=100000, analysis_only=False):
     """Execute each track until a timed state repeats or it ends; unroll calls."""
     pending, done = [(0, 0)], {}
     while pending:
@@ -271,6 +271,10 @@ def trace_sequence(data, max_events=100000):
                  'priority': 64, 'note_wait': 1, 'tempo': 120, 'mod_depth': 0,
                  'mod_speed': 16, 'mod_type': 0, 'mod_range': 1, 'mod_delay': 0,
                  'bend': 0, 'bend_range': 2, 'transpose': 0, 'porta': 0}
+        if analysis_only:
+            state.update(porta_key=60, porta_time=0, sweep_pitch=0, tie=0,
+                         attack=None, decay=None, sustain=None, release=None,
+                         master_volume=127)
         stack, actions, seen, notes = [], [], {}, set()
         ticks = 0
         for _ in range(max_events):
@@ -290,11 +294,15 @@ def trace_sequence(data, max_events=100000):
             pc = event['next']
             op, name = event['opcode'], event['name']
             if name == 'note':
-                if state['mod_depth'] or state['bend'] or state['transpose'] or state['porta']:
+                if not analysis_only and (state['mod_depth'] or state['bend'] or state['transpose'] or state['porta']):
                     raise ValueError('Active pitch/modulation effects require additional conversion')
-                if not 1 <= event['duration'] <= 223:
+                if not analysis_only and not 1 <= event['duration'] <= 223:
                     raise ValueError('Unsupported zero or >223 tick SSEQ note length')
                 action['instrument'] = state['instrument']
+                if analysis_only:
+                    action['pitch_key'] = event['key'] + state['transpose']
+                    action['porta_from_key'] = state['porta_key']
+                    state['porta_key'] = action['pitch_key']
                 notes.add((state['instrument'], event['key']))
                 if state['note_wait']:
                     ticks += event['duration']
@@ -337,14 +345,25 @@ def trace_sequence(data, max_events=100000):
                           0xCA: 'mod_depth', 0xCB: 'mod_speed', 0xCC: 'mod_type',
                           0xCD: 'mod_range', 0xCE: 'porta', 0xD5: 'expression',
                           0xE0: 'mod_delay', 0xE1: 'tempo'}
+                if analysis_only:
+                    fields.update({0xC2: 'master_volume', 0xC8: 'tie', 0xC9: 'porta_key',
+                                   0xCF: 'porta_time', 0xD0: 'attack', 0xD1: 'decay',
+                                   0xD2: 'sustain', 0xD3: 'release', 0xE3: 'sweep_pitch'})
                 if op in fields:
                     field = fields[op]
                     if field in ('pan', 'volume', 'expression'):
                         level(value)
                     if field in ('note_wait', 'porta') and value not in (0, 1):
                         raise ValueError('Invalid SSEQ boolean control')
-                    if field in ('mod_depth', 'bend', 'transpose', 'porta') and value:
+                    if not analysis_only and field in ('mod_depth', 'bend', 'transpose', 'porta') and value:
                         raise ValueError('Active pitch/modulation effects require additional conversion')
+                    if field in ('bend', 'transpose') and value >= 128:
+                        value -= 256
+                    elif field == 'sweep_pitch' and value >= 32768:
+                        value -= 65536
+                    if field == 'porta_key':
+                        value += state['transpose']
+                        state['porta'] = 1
                     state[field] = value
                 elif op == 0xD4:
                     if len(stack) >= 3:

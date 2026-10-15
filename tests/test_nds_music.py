@@ -9,6 +9,7 @@ from analyze_song import analyze, trace_track
 from build_nds_experiment import build_experiment
 from nds_music import (NoteDefinition, SoundArchive, convert_song, decode_adpcm,
                        nds_sdat, note_bytes, read_event, trace_sequence, wait_bytes)
+from nds_track_merge import BATTLE_GROUPS, assess_groups, expand_actions, pitch_commands
 from scan_audio import apply_bps
 
 
@@ -106,12 +107,80 @@ class SampleConversionTests(unittest.TestCase):
         self.assertTrue(report['note_timing_check'])
 
 
+class TrackMergingTests(unittest.TestCase):
+    def test_loop_between_simultaneous_events_does_not_repeat_prefix_note(self):
+        track = {'termination': 'loop', 'loop_action': 1, 'loop_ticks': 12,
+                 'actions': [{'ticks': 0, 'name': 'note', 'key': 60},
+                             {'ticks': 0, 'name': 'note', 'key': 64}]}
+        self.assertEqual([(a['ticks'], a['key']) for a in expand_actions(track, 25)],
+                         [(0, 60), (0, 64), (12, 64), (24, 64)])
+
+    def test_bend_and_tune_encode_every_source_battle_bend_exactly(self):
+        for source_range in (2, 12):
+            for bend in range(-128, 128):
+                units = (bend * source_range) >> 1
+                raw = pitch_commands(units)
+                self.assertEqual((raw[0], raw[2], raw[4]), (0xC1, 0xC0, 0xC8))
+                self.assertTrue(all(0 <= x <= 127 for x in (raw[3], raw[5])))
+                self.assertEqual((raw[3] - 64) * raw[1] + raw[5] - 64, units)
+
+    @staticmethod
+    def track(index, expression=127, bend=0, pan_change=False):
+        state = {'volume': 100, 'expression': expression, 'bend': bend,
+                 'bend_range': 2, 'pan': 64}
+        actions = [{'ticks': 0, 'name': 'control', 'state_after': state},
+                   {'ticks': 0, 'name': 'note', 'duration': 10}]
+        if pan_change:
+            actions.append({'ticks': 5, 'name': 'control',
+                            'state_after': {**state, 'pan': 80}})
+        return {'track': index, 'termination': 'loop', 'loop_action': 0,
+                'loop_ticks': 12, 'loop_start_ticks': 0, 'actions': actions}
+
+    def test_incompatible_live_controls_and_held_pan_are_rejected(self):
+        for changes, message in [({'expression': 100}, 'expression'),
+                                 ({'bend': 12}, 'pitch'),
+                                 ({'pan_change': True}, 'held note')]:
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, message):
+                assess_groups([self.track(0), self.track(1, **changes)], [(0, 1)])
+        self.assertEqual(assess_groups([self.track(0), self.track(1)], [(0, 1)])[:2], (0, 12))
+
+    def test_each_source_track_must_be_included_exactly_once(self):
+        for groups in [((0,),), ((0, 1), (1,))]:
+            with self.assertRaisesRegex(ValueError, 'exactly once'):
+                assess_groups([self.track(0), self.track(1)], groups)
+
+
 NDS = Path('/home/harp/projects/nds/roms/ssr3b.nds')
 BASE = ROOT.parent / 'roms/exe6.gba'
 
 
 @unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
 class LocalNdsExperimentTests(unittest.TestCase):
+    def test_battle_merges_all_notes_and_keeps_long_echoes_independent(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(source, base, song='battle')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual((conversion['source_track_count'], conversion['track_count']), (11, 8))
+        self.assertEqual(conversion['track_groups'], [list(g) for g in BATTLE_GROUPS])
+        self.assertEqual(len(dependency['samples']), 28)
+        self.assertTrue(conversion['note_timing_check'])
+        self.assertEqual(conversion['merged_loop_ticks'], 5760)
+        aliases = conversion['long_note_aliases']
+        self.assertEqual({a['source_track'] for a in aliases}, {2, 15})
+        self.assertEqual(len({a['gba_key'] for a in aliases}), 2)
+        for alias in aliases:
+            voice = next(a['gba_voice'] for a in conversion['note_mapping']
+                         if a['source_track'] == alias['source_track'] and a['long_note'])
+            bank = dependency['header']['tone_bank']['file_offset']
+            child = struct.unpack_from('<I', blob, bank + voice * 12 + 4)[0] - 0x08000000
+            self.assertEqual(blob[child + alias['gba_key'] * 12 + 1], alias['source_key'])
+        target_table = manifest['target_table_file_offset']
+        self.assertEqual(output[target_table:target_table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_room_execution_and_bps_preserve_native_target(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, catalog, sdat = build_experiment(source, base, song_gain_db=0)

@@ -13,9 +13,21 @@
 // Instrumentation hooks installed only in the disposable reference build.
 unsigned researchSequenceClock = 0;
 static std::ofstream noteLog;
+static std::ofstream controlLog;
 void researchNote(const Track& track, int key, int velocity, int duration) {
     noteLog << researchSequenceClock - 1 << ',' << static_cast<unsigned>(track.num)
             << ',' << track.patch << ',' << key << ',' << velocity << ',' << duration << '\n';
+}
+
+void researchControl(const Track& track, int opcode, int value) {
+    unsigned held = 0, releasing = 0;
+    for (const auto& channel : track.ply->channels) {
+        if (channel.trackId != track.trackId || channel.state == CS_NONE) continue;
+        if (channel.state == CS_RELEASE) ++releasing;
+        else ++held;
+    }
+    controlLog << researchSequenceClock - 1 << ',' << static_cast<unsigned>(track.num)
+               << ',' << opcode << ',' << value << ',' << held << ',' << releasing << '\n';
 }
 
 static void write16(std::ostream& out, int value) {
@@ -35,11 +47,14 @@ int main(int argc, char** argv) {
         file.data = &bytes;
         SDAT sdat(file, std::stoul(argv[2]));
         const unsigned seconds = std::stoul(argv[3]);
-        if (!seconds || seconds > 120) throw std::runtime_error("duration must be 1..120");
+        if (!seconds || seconds > 180) throw std::runtime_error("duration must be 1..180");
         const std::string directory(argv[4]); // caller creates a fresh directory
         noteLog.open(directory + "/notes.csv");
         if (!noteLog) throw std::runtime_error("cannot create reference note log");
         noteLog << "tick,track,instrument,key,velocity,duration\n";
+        controlLog.open(directory + "/controls.csv");
+        if (!controlLog) throw std::runtime_error("cannot create reference control log");
+        controlLog << "tick,track,opcode,value,held_voices,release_voices\n";
         Player player;
         player.sampleRate = 44100;
         player.interpolation = INTERPOLATION_NONE;

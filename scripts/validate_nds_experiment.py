@@ -49,7 +49,10 @@ def check_reference(experiment, reference):
         if track['termination'] != 'loop' or last < track['end_ticks'] + track['loop_ticks']:
             raise AssertionError('Reference must cover two complete loops')
         expected = basis[:]
-        body = [n for n in basis if n[0] >= track['loop_start_ticks']]
+        # A repeat can start between simultaneous events at the same tick.
+        # Use the recorded action index, not only the tick boundary.
+        body = [(a['ticks'], a['instrument'], a['key'], a['velocity'], a['duration'])
+                for a in track['actions'][track['loop_action']:] if a['name'] == 'note']
         for turn in range(1, last // track['loop_ticks'] + 1):
             expected.extend((tick + turn * track['loop_ticks'], instrument, key, velocity, duration)
                             for tick, instrument, key, velocity, duration in body)
@@ -57,10 +60,34 @@ def check_reference(experiment, reference):
         if actual != expected:
             raise AssertionError(f'Independent DS note execution differs on track {track["track"]}')
         counts[str(track['track'])] = len(actual)
+    control_matches = 0
+    if (reference / 'controls.csv').is_file():
+        with (reference / 'controls.csv').open() as stream:
+            controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
+        for track in conversion['tracks']:
+            for opcode in (0xC0, 0xC4, 0xD5):
+                actual = [(a['tick'], a['value']) for a in controls
+                          if a['track'] == track['track'] and a['opcode'] == opcode]
+                if not actual:
+                    continue
+                last = actual[-1][0]
+                def value(action):
+                    raw = action['value']
+                    return raw - 256 if opcode == 0xC4 and raw >= 128 else raw
+                basis = [(a['ticks'], value(a)) for a in track['actions'] if a['opcode'] == opcode]
+                body = [(a['ticks'], value(a)) for a in track['actions'][track['loop_action']:] if a['opcode'] == opcode]
+                expected = basis[:]
+                for turn in range(1, 1 + last // track['loop_ticks']):
+                    expected.extend((tick + turn * track['loop_ticks'], v) for tick, v in body)
+                expected = [a for a in expected if a[0] <= last]
+                if actual != expected:
+                    raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
+                control_matches += len(actual)
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
-            'decoded_sample_comparisons': sample_checks, 'complete': True}
+            'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
+            'complete': True}
 
 
 def probe_runtime(data, manifest, directory, mgba):
@@ -153,6 +180,35 @@ def probe_runtime(data, manifest, directory, mgba):
             toolkit, stack = registers[10], registers[13]
             debugger.command('delete 6')
             debugger.command('break/t 0x0800940A')
+            # Exercise the real scene branch with a synthetic battle descriptor.
+            # This tests dispatch/rematch/restoration, not a live linked battle.
+            scene_rule = next((r for r in manifest['hook']['rules'] if r['trigger_id'] == 65534), None)
+            if scene_rule:
+                descriptor_pointer = debugger.read(4, 0x020348BC)
+                scratch = debugger.read(4, 0x02001000)
+                debugger.command('w/4 0x020348BC 0x02001000')
+                debugger.command('w/1 0x02001002 21')
+                scene_header = struct.unpack_from('<I', data, table + scene_rule['ids'][0] * 8)[0]
+                for _ in range(2):
+                    debugger.command('w/r r5 0x02034880')
+                    call(0x080093F4, 8)
+                    call(0x080007BE)
+                    if debugger.read(4, player) != scene_header or debugger.read(1, state + 15) != 254:
+                        raise AssertionError('Communication scene/rematch dispatch differs')
+                report.update(scene_dispatch=True, scene_rematch=True,
+                              scene_descriptor='synthetic music ID 21, communication flag 8')
+                call(0x080005D4, 21)
+                call(0x080007BE)
+                native_header = struct.unpack_from('<I', data, table + 21 * 8)[0]
+                if debugger.read(4, player) != native_header or debugger.read(1, state + 15) != 21:
+                    raise AssertionError('Ordinary music request did not restore native song 21')
+                report['native_music_restored'] = True
+                # Stop must be checked against the imported song again.
+                debugger.command('w/r r5 0x02034880')
+                call(0x080093F4, 8)
+                call(0x080007BE)
+                debugger.command(f'w/4 0x020348BC {descriptor_pointer:#x}')
+                debugger.command(f'w/4 0x02001000 {scratch:#x}')
             call(0x08000784)
             call(0x080007BE)
             if not debugger.read(4, player + 4) & 0x80000000 or debugger.read(1, state + 15) != 255:

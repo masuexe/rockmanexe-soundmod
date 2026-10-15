@@ -16,6 +16,8 @@ from scan_audio import fingerprint
 
 
 def make_comparison(experiment, reference, destination):
+    manifest = json.loads((experiment / 'build.json').read_text())
+    sequence_name = manifest['nds_conversion']['sequence_name']
     preview = experiment / 'preview/preview.wav'
     with wave.open(str(preview), 'rb') as stream:
         params = stream.getparams()
@@ -39,7 +41,7 @@ def make_comparison(experiment, reference, destination):
         levels = normalize_wav(path, normalized)
         runs.append({'key': key, 'label': label, 'path': str(path.resolve()),
                      'wav_fingerprint': fingerprint(path.read_bytes()), **levels})
-    metadata = {'schema_version': 1, 'song': 'Star Force 3 · BGM_ROOM',
+    metadata = {'schema_version': 1, 'song': 'Star Force 3 · ' + sequence_name,
                 'duration_seconds': params.nframes / params.framerate, 'runs': runs,
                 'reference': json.loads((reference / 'reference.json').read_text()),
                 'target': json.loads((experiment / 'preview/preview.json').read_text()),
@@ -50,11 +52,11 @@ def make_comparison(experiment, reference, destination):
     (destination / 'comparison.json').write_text(json.dumps(metadata, indent=2) + '\n')
     content = ['<!doctype html><html lang="zh-CN"><meta charset="utf-8">',
                '<meta name="viewport" content="width=device-width, initial-scale=1">',
-               '<title>流星 3 → EXE6：BGM_ROOM 试听</title>',
+               f'<title>流星 3 → EXE6：{html.escape(sequence_name)} 试听</title>',
                '<style>body{font:17px/1.65 system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#101720;color:#e6edf3}section{padding:20px;margin:20px 0;background:#1b2532;border-radius:12px}audio{width:100%}p{color:#b8c7d8}button{font:inherit;padding:6px 14px;cursor:pointer}</style>',
-               '<h1>流星 3 → EXE6：BGM_ROOM</h1>',
+               f'<h1>流星 3 → EXE6：{html.escape(sequence_name)}</h1>',
                f'<p>第一阶段单曲实验。两段各 {metadata["duration_seconds"]:g} 秒，已统一整体响度。DS 一侧是软件参考合成，EXE6 一侧是导出 ROM 的真实模拟器录音。</p>',
-               '<p>已验证音符时间、采样解码和循环。GBA 的发声预算、8 位采样和包络近似仍会影响听感；此页面用于试听，不代表原音完全还原。</p>']
+               '<p>此页面用于比较听感，不证明整曲循环或游戏场景验证通过。GBA 的发声预算、8 位采样和包络近似仍会影响听感，具体检查结果见实验报告。</p>']
     for run in runs:
         key = run['key']
         encoded = base64.b64encode((destination / (key + '-normalized.wav')).read_bytes()).decode()
