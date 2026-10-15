@@ -8,8 +8,10 @@ and NDS import/preview is not yet available in the manager.
 
 The second [BGM_BATTLE experiment](nds-battle-research.md) now maps eleven
 source tracks into eight target tracks without dropping note events. It has
-independent source comparisons and controlled scene/stop checks; full GBA
-loop playback and battle gameplay remain unverified.
+independent source comparisons and controlled scene/stop checks. User testing
+passes three-minute communication playback with chips/Buster effects and the
+virus-battle start/victory/map/next-encounter sequence. Automated full-loop
+state comparison remains incomplete; see its report for the separate evidence.
 
 ## Existing foundation
 

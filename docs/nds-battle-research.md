@@ -3,8 +3,14 @@
 Research date: 2026-10-15. The second NDS experiment converts Star Force 3
 SSEQ 35, `BGM_BATTLE`, into the Japanese EXE6 Gregar music player. All eleven
 source tracks contain notes. Eight target tracks retain all executed note
-events without expanding the native track storage. This is a research build;
-complete GBA loop playback and actual battle gameplay remain unverified.
+events without expanding the native track storage. The user reports successful
+three-minute communication-scene listening and music continuing normally while
+using chips and the Mega Buster. The user also confirms all three virus-build
+checks: normal virus-battle playback, victory/return-to-map music transitions,
+and imported music restarting on the next encounter. This is the accepted
+single-song gameplay baseline. Communication rematches remain a separate
+unreported gameplay check. Automated frame-by-frame full-loop validation is
+still incomplete; the user listening result is separate evidence.
 
 The pinned source/target identities, ADPCM conversion, envelope approximations
 and existing room experiment are described in [NDS import research](nds-import-research.md).
@@ -101,6 +107,23 @@ source NDS and original Gregar ROM retain their pinned SHA-256 hashes.
 
 ## Limits and next validation
 
+User acceptance reported in this session:
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Converted battle music listening | Passed | User heard no problem |
+| Communication-scene continuous playback | Passed | User listened for approximately three minutes |
+| Chips and Mega Buster alongside music | Passed | User reports effects did not interrupt music |
+| Normal virus-battle music | Passed | User confirms virus-build test 1 |
+| Victory and return-to-map music | Passed | User confirms virus-build test 2 |
+| Next virus battle restarts imported music | Passed | User confirms virus-build test 3 |
+| Communication rematch | Pending | Controlled restart probe passes; no user gameplay result reported |
+
+Acceptance records are saved in each tested build's `manual-testing.json`.
+These passes apply to the tested communication and virus configurations. No recording,
+exact runtime trace, exhaustive effect coverage or hardware performance
+measurement was supplied, so those are not implied by the listening result.
+
 Natural frame-by-frame validation in `sustained/validation.json` matches all
 eight track states through frame 2,602, clock 5,341. At frame 2,603 the title
 sequence ends the music before the model's loop. The report is correctly
@@ -115,12 +138,58 @@ sequence notes does not guarantee all sound simultaneously. Priorities,
 release-tail stealing, 8-bit PCM and approximate envelopes can affect balance.
 Neither voice-budget expansion nor hardware performance has been established.
 
-Next, enter an actual battle and record at least two complete periods, then
-check results-screen/overworld transitions, rematches, fades and representative
-effects. This needs a gameplay capture or a separately documented battle-state
-harness; extending title capture alone cannot supply that evidence. After
-listening and lifecycle validation, compare voice budgets and CPU cost before
-adding broader NDS song selection to the manager.
+Virus-battle lifecycle acceptance is complete for the reported test sequence.
+Communication rematches and additional fade paths can extend this coverage.
+Further exact loop-state or CPU claims need a gameplay
+capture or separately documented battle-state harness. Extending title capture
+alone cannot supply that evidence. After lifecycle validation, expand song
+coverage before adding broader NDS selection to the manager.
+
+## Virus-battle test build
+
+`out/nds-research/battle-exe6-virus-v1/` adds numbered event 21 to the same
+title/communication configuration. The original Gregar first battle descriptor
+at file offset `0xB4B18` has music byte 2 equal to 21. The controlled probe
+uses this actual ROM descriptor with communication flags cleared to verify
+that the ordinary battle branch reaches the imported song. The user then
+confirmed all three virus-battle gameplay checks below. Other numbered music events retain their normal pools;
+special battles requesting a different music ID are outside this replacement.
+
+Use this test sequence on the virus build:
+
+1. Enter a normal virus battle and confirm the Star Force 3 song plays.
+2. Win the battle. Listen for the normal results music or stopping behavior;
+   check for residual battle notes.
+3. Return to the map and confirm its normal music resumes.
+4. Enter a second virus battle and confirm the imported song starts again.
+5. If testing communication too, rematch and confirm normal music restart.
+
+The original `battle-exe6-v1` remains the accepted communication baseline.
+The virus build uses the same converted MPlay resource bytes, samples, gain
+and mixer configuration; its additional change is the event-21 selection rule.
+Apply its BPS to the original Japanese Gregar ROM or run its GBA directly.
+Existing saves need the new ROM's matching basename in most emulators; copy
+your save under that name while keeping the original save intact.
+
+The virus ROM is 8,786,792 bytes (CRC32 `03FBA9EF`, SHA-256
+`ac5979f3110b689a1ab2eb3e8c4fe4eda8545d64933d525a20793565068d9b8b`).
+BPS reconstruction passes. Its `lifecycle/runtime.json` passes three controlled
+cycles, including ordinary battle dispatch from the original ROM descriptor.
+Native requests 2/3 resume with observed PCM voices; each rematch resets the
+music clock from approximately 245 to zero and advances to 60 after 30 frames.
+The focused 19-test NDS regression suite passes, including the three explicit
+event rules and native-data preservation. `validation-summary.json` records
+these results separately from the user-reported gameplay acceptance.
+The communication baseline also passes the corrected three-cycle probe in
+`battle-exe6-v1/lifecycle-v2/`, restoring native requests 2/21/2.
+
+The optional `validate_nds_experiment.py --lifecycle` probe exercises three
+controlled stop/native-music/communication-restart cycles with normal emulator
+frames between requests. It checks clock advancement/reset, active voice
+cleanup, native music playback, indicator state, stack and Toolkit. It does
+not execute a results screen or map transition. Native voice activity is
+observed across frames rather than requiring sound at one possibly silent
+instant; the first lifecycle attempt exposed that overly strict probe check.
 
 ## Reproduce
 
@@ -142,3 +211,7 @@ For the optional independent reference, build the renderer as documented in
 the room research, then render source slot 35 for 135 seconds and pass its
 directory to `validate_nds_experiment.py --reference`. The comparison page
 command now reads the song name from the build manifest.
+
+To reproduce the virus variant, add `--event 21` to the build command and use
+a new output directory. Then run `validate_nds_experiment.py` with
+`--lifecycle --out <new-validation-directory>`.

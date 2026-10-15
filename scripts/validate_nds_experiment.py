@@ -10,6 +10,7 @@ import csv
 import json
 import os
 from pathlib import Path
+import re
 import struct
 
 from nds_music import SoundArchive
@@ -90,7 +91,7 @@ def check_reference(experiment, reference):
             'complete': True}
 
 
-def probe_runtime(data, manifest, directory, mgba):
+def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
     layout = manifest_layout(manifest)
     if manifest['target_profile'] not in ('exe6', 'exe6f') or not manifest.get('nds_conversion'):
         raise ValueError('Requires the Japanese EXE6 NDS experiment manifest')
@@ -186,6 +187,21 @@ def probe_runtime(data, manifest, directory, mgba):
             if scene_rule:
                 descriptor_pointer = debugger.read(4, 0x020348BC)
                 scratch = debugger.read(4, 0x02001000)
+                ordinary_rule = next((r for r in manifest['hook']['rules'] if r['trigger_id'] == 21), None)
+                if ordinary_rule:
+                    descriptor_offset = 0xB4B18 if manifest['target_profile'] == 'exe6' else 0xB32B8
+                    if data[descriptor_offset + 2] != 21:
+                        raise AssertionError('Original first battle descriptor no longer requests music 21')
+                    debugger.command(f'w/4 0x020348BC {ROM_BASE + descriptor_offset:#x}')
+                    debugger.command('w/r r5 0x02034880')
+                    call(0x080093F4, 0)
+                    call(0x080007BE)
+                    expected = struct.unpack_from('<I', data, table + ordinary_rule['ids'][0] * 8)[0]
+                    if debugger.read(4, player) != expected or debugger.read(1, state + 15) != 21:
+                        raise AssertionError('Ordinary battle descriptor did not select numbered music pool')
+                    report['ordinary_battle_dispatch'] = {'complete': True, 'flags': 0,
+                                                         'original_descriptor_offset': descriptor_offset,
+                                                         'music_id': 21, 'controlled_helper_call': True}
                 debugger.command('w/4 0x020348BC 0x02001000')
                 debugger.command('w/1 0x02001002 21')
                 scene_header = struct.unpack_from('<I', data, table + scene_rule['ids'][0] * 8)[0]
@@ -197,12 +213,14 @@ def probe_runtime(data, manifest, directory, mgba):
                         raise AssertionError('Communication scene/rematch dispatch differs')
                 report.update(scene_dispatch=True, scene_rematch=True,
                               scene_descriptor='synthetic music ID 21, communication flag 8')
-                call(0x080005D4, 21)
+                restore_id = 2 if any(r['trigger_id'] == 21 for r in manifest['hook']['rules']) else 21
+                call(0x080005D4, restore_id)
                 call(0x080007BE)
-                native_header = struct.unpack_from('<I', data, table + 21 * 8)[0]
-                if debugger.read(4, player) != native_header or debugger.read(1, state + 15) != 21:
-                    raise AssertionError('Ordinary music request did not restore native song 21')
+                native_header = struct.unpack_from('<I', data, table + restore_id * 8)[0]
+                if debugger.read(4, player) != native_header or debugger.read(1, state + 15) != restore_id:
+                    raise AssertionError('Ordinary music request did not restore native song')
                 report['native_music_restored'] = True
+                report['native_restore_id'] = restore_id
                 # Stop must be checked against the imported song again.
                 debugger.command('w/r r5 0x02034880')
                 call(0x080093F4, 8)
@@ -214,7 +232,100 @@ def probe_runtime(data, manifest, directory, mgba):
             if not debugger.read(4, player + 4) & 0x80000000 or debugger.read(1, state + 15) != 255:
                 raise AssertionError('Native queued stop did not stop imported music/reset indicator')
             report.update(queued_stop=True, music_indicator_reset=True, complete=True)
+            if lifecycle:
+                if not scene_rule or scene_header != header:
+                    raise ValueError('Lifecycle probe requires the same imported song on title and communication')
+                # The current return sentinel is breakpoint 7. Further IDs are
+                # read from mGBA rather than assuming its allocation policy.
+                return_breakpoint = 7
+
+                def breakpoint(address):
+                    response = debugger.command(f'break/t {address:#x}')
+                    match = re.search(r'Added breakpoint #(\d+)', response)
+                    if not match:
+                        raise RuntimeError('Cannot identify debugger breakpoint: ' + response)
+                    return int(match[1])
+
+                def advance(frames, observe_voices=False):
+                    nonlocal registers, return_breakpoint
+                    debugger.command(f'delete {return_breakpoint}')
+                    for register in range(15):
+                        debugger.command(f'w/r r{register} {registers[register]:#x}')
+                    debugger.command('w/r pc 0x080007BE')
+                    observed = 0
+                    for _ in range(frames):
+                        debugger.command('frame')
+                        if observe_voices:
+                            observed = max(observed, voices())
+                    entry_breakpoint = breakpoint(0x080007BE)
+                    registers = debugger.hit(0x080007BE)
+                    if registers[10] != toolkit or registers[13] != stack:
+                        raise AssertionError('Queue context changed during lifecycle probe')
+                    debugger.command(f'delete {entry_breakpoint}')
+                    return_breakpoint = breakpoint(0x0800940A)
+                    return observed
+
+                def start_scene():
+                    saved_pointer = debugger.read(4, 0x020348BC)
+                    saved_scratch = debugger.read(4, 0x02001000)
+                    try:
+                        debugger.command('w/4 0x020348BC 0x02001000')
+                        debugger.command('w/1 0x02001002 21')
+                        debugger.command('w/r r5 0x02034880')
+                        call(0x080093F4, 8)
+                        call(0x080007BE)
+                    finally:
+                        debugger.command(f'w/4 0x020348BC {saved_pointer:#x}')
+                        debugger.command(f'w/4 0x02001000 {saved_scratch:#x}')
+                    if (debugger.read(4, player) != header or debugger.read(4, player + 12) != 0
+                            or debugger.read(1, state + 15) != 254):
+                        raise AssertionError('Communication start did not reset imported song clock')
+
+                transitions = []
+                report['lifecycle'] = {'complete': False, 'controlled_helper_calls': True,
+                                       'actual_results_screen_tested': False,
+                                       'actual_overworld_transition_tested': False,
+                                       'cycles': transitions}
+                middle_id = 3 if any(r['trigger_id'] == 21 for r in manifest['hook']['rules']) else 21
+                for cycle, native_id in enumerate((2, middle_id, 2), 1):
+                    start_scene()
+                    advance(120)
+                    before = debugger.read(4, player + 12)
+                    if before <= 0 or not voices():
+                        raise AssertionError('Imported song failed to advance before stop')
+                    call(0x08000784)
+                    call(0x080007BE)
+                    if (not debugger.read(4, player + 4) & 0x80000000
+                            or debugger.read(1, state + 15) != 255 or voices()):
+                        raise AssertionError('Queued stop left live imported voices or music indicator')
+                    advance(2)
+                    if voices():
+                        raise AssertionError('Imported voices returned after stop')
+                    call(0x080005D4, native_id)
+                    call(0x080007BE)
+                    expected = struct.unpack_from('<I', data, table + native_id * 8)[0]
+                    native_voices = advance(60, observe_voices=True)
+                    if (debugger.read(4, player) != expected or debugger.read(4, player + 12) <= 0
+                            or debugger.read(1, state + 15) != native_id or not native_voices):
+                        raise AssertionError('Native numbered music failed after imported stop')
+                    start_scene()
+                    advance(120)
+                    rematch_clock = debugger.read(4, player + 12)
+                    start_scene()  # Repeated scene marker must still restart.
+                    advance(30)
+                    after = debugger.read(4, player + 12)
+                    if not 0 < after < rematch_clock or not voices():
+                        raise AssertionError('Rematch did not restart and resume imported music')
+                    transitions.append({'cycle': cycle, 'clock_before_stop': before,
+                                        'stop_clears_imported_voices': True,
+                                        'native_request_id': native_id, 'native_playback_resumes': True,
+                                        'native_max_observed_pcm_voices': native_voices,
+                                        'clock_before_rematch': rematch_clock,
+                                        'clock_after_rematch_30_frames': after,
+                                        'rematch_resets_clock': True})
+                report['lifecycle']['complete'] = True
         except BaseException as error:
+            report['complete'] = False
             report['error'] = repr(error)
             raise
         finally:
@@ -229,13 +340,15 @@ def main():
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--mgba', default='/usr/games/mgba')
+    parser.add_argument('--lifecycle', action='store_true',
+                        help='Also probe three controlled stop/native-restore/rematch cycles with normal frames between requests')
     args = parser.parse_args()
     manifest = json.loads((args.experiment / 'build.json').read_text())
     data = (args.experiment / 'unified.gba').read_bytes()
     if not valid_manifest_target(manifest) or fingerprint(data) != manifest['output_fingerprint']:
         parser.error('ROM does not match verified target manifest')
     reference = check_reference(args.experiment, args.reference) if args.reference else None
-    report = probe_runtime(data, manifest, args.out, args.mgba)
+    report = probe_runtime(data, manifest, args.out, args.mgba, args.lifecycle)
     if reference:
         (args.out / 'reference-validation.json').write_text(json.dumps(reference, indent=2) + '\n')
     print(f"Native effects, music continuation and queued stop passed; reference notes: {reference['sequence_note_matches'] if reference else 'not checked'}")

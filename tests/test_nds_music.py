@@ -158,7 +158,10 @@ BASE = ROOT.parent / 'roms/exe6.gba'
 class LocalNdsExperimentTests(unittest.TestCase):
     def test_battle_merges_all_notes_and_keeps_long_echoes_independent(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
-        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(source, base, song='battle')
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            source, base, events=('1', '21', 'scene:communication'), song='battle')
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
         self.assertEqual(apply_bps(base, patch)[0], output)
         self.assertEqual((conversion['source_track_count'], conversion['track_count']), (11, 8))
         self.assertEqual(conversion['track_groups'], [list(g) for g in BATTLE_GROUPS])

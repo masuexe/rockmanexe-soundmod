@@ -73,7 +73,7 @@ Tests cover BPS decoding/export, overlapping copies, checksums, invalid referenc
 
 The first [NDS music conversion experiment](docs/nds-import-research.md) imports Star Force 3 `BGM_ROOM` into Japanese EXE6 through a separate checked CLI. Six tracks and 15 original samples pass independent DS execution/decoding comparisons and sustained natural GBA playback through two loops. The experiment includes measured song-volume compensation after title-screen listening feedback. NDS import and preview are not yet supported by the manager; voice allocation and envelope fidelity remain research work.
 
-The second [BGM_BATTLE experiment](docs/nds-battle-research.md) maps all eleven source tracks into eight EXE6 tracks and checks the source notes, controls, decoded samples and controlled scene lifecycle. Full GBA loop playback and actual battle gameplay remain unverified.
+The second [BGM_BATTLE experiment](docs/nds-battle-research.md) maps all eleven source tracks into eight EXE6 tracks and checks the source notes, controls, decoded samples and controlled scene lifecycle. The user reports successful three-minute communication playback alongside chips and Buster effects, plus virus-battle playback, victory/map music restoration and restarting on the next encounter. This establishes the tested single-song gameplay baseline; communication rematches remain an unreported gameplay check.
 
 See [audio baseline research](docs/audio-baseline.md) for the initial findings, evidence, and limitations. The inventories can be consumed by `rockmanexe-reverse` without maintaining a second parser. Research distinguishes original behavior from patch additions.
 
