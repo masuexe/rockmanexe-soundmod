@@ -1,13 +1,15 @@
 # Star Force 1/2/3 compatibility audit
 
 The updated batch audit covers every SSEQ slot in the three pinned Japanese
-Star Force archives. Twenty-eight candidates pass conversion, independent MPlay
+Star Force archives. Thirty-two candidates pass conversion, independent MPlay
 reparsing, shared EXE6 packing and BPS reconstruction. Twenty-four use standard
-paths and four use the explicit native pitch-LFO approximation. These are
+paths, four use pitch-LFO approximation alone, one uses envelope approximation
+alone and three combine envelope and pitch-LFO approximation. These exclusive
+categories distinguish the additional experimental policies. These are
 automated resource/export results; this run performs no new gameplay or
 listening tests and does not enable NDS songs in the manager.
 
-Report directory: `out/nds-research/compatibility-audit-v3/`:
+Report directory: `out/nds-research/compatibility-audit-v4/` (schema 2):
 
 - `index.html`: standalone searchable/filterable report, with every route,
   source feature, error and manual-evidence association available per row.
@@ -40,7 +42,15 @@ in this order, within the target's eight-track capacity:
 3. For executed nonzero modulation depth, the explicit pitch-LFO approximation:
    singleton tracks, fixed tempo, active pitch-only modulation with zero DS
    delay and representable nonzero rate/range.
-4. The existing verified Star Force 3 BATTLE mapping is the only over-capacity
+4. If inspected definitions use non-instant attack, or executed controls use
+   D0/D1/D2/D3 overrides, try the singleton envelope approximation. Overrides
+   accept 0..127; note-on ADSR snapshots select independent voice contexts.
+   Attack-only fitting rejects RMS amplitude error above 0.12 or maximum
+   error above 0.30. Onset alignment can differ by one GBA frame; decay,
+   sustain and release retain their existing approximation.
+5. If that envelope candidate also executes nonzero pitch depth, try the
+   combined envelope/pitch-LFO route, retaining all the LFO preconditions.
+6. The existing verified Star Force 3 BATTLE mapping is the only over-capacity
    exception. Other songs do not receive guessed merges or dropped tracks.
 
 Successful conversion resources pass through the same exporter as the
@@ -48,12 +58,14 @@ single-song experiments: dependency relocation, native-data preservation,
 output bounds and BPS reconstruction. The pack step was extracted into
 `pack_converted_experiment`; all six previously accepted artifacts rebuild
 byte-identically after that refactor. The batch writes reports only, retaining
-ROM/BPS fingerprints rather than creating twenty-eight new ROM files.
+ROM/BPS fingerprints rather than creating thirty-two new ROM files.
+All 28 previously packed v3 variants retain their exact ROM fingerprints.
+The v2/v3 snapshots are preserved separately.
 
 Configuration: original Japanese EXE6 Gregar, eight music tracks, ten PCM
 voices at native 10,512 Hz, +3.5 dB imported gain, title/ordinary ID 21/
 communication scene pools. A headroom failure can retry the same route at
-neutral gain with an explicit record; none of the twenty-eight successes needed
+neutral gain with an explicit record; none of the thirty-two successes needed
 that retry in this run. Gain and voice allocation are not calibrated by the
 audit. Standard conversion still includes PCM8/envelope/tempo approximations.
 
@@ -64,12 +76,12 @@ counted separately, not asserted to be distinct musical compositions.
 
 ## Coverage
 
-| Game | SSEQ slots | Nonempty, nonsilent candidates | Standard packing passes | LFO approximation passes | Blocked candidates |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Star Force 1 | 38 | 35 | 14 | 4 | 17 |
-| Star Force 2 | 43 | 40 | 5 | 0 | 35 |
-| Star Force 3 | 51 | 47 | 5 | 0 | 42 |
-| Total | 132 | 122 | 24 | 4 | 94 |
+| Game | SSEQ slots | Nonempty, nonsilent candidates | Standard | LFO only | Envelope only | Envelope + LFO | Blocked |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Star Force 1 | 38 | 35 | 14 | 4 | 0 | 0 | 17 |
+| Star Force 2 | 43 | 40 | 5 | 0 | 0 | 2 | 33 |
+| Star Force 3 | 51 | 47 | 5 | 0 | 1 | 1 | 40 |
+| Total | 132 | 122 | 24 | 4 | 1 | 3 | 90 |
 
 Five slots are empty; five other sequences execute no notes (three dummy
 sequences and Star Force 2 KODAI/HERO). Of the remaining 122 candidates,
@@ -90,13 +102,31 @@ The LFO-approximation list is Star Force 1 `8 YUMENOSHIMA`, `15 GOWADENNO`,
 original symbols. Every new candidate still needs song-specific listening,
 long playback, effects coexistence and lifecycle checks before acceptance.
 
-Five packed variants are byte-identical to artifacts with structured
-user-reported manual acceptance: Star Force 1 KINCHO/BATTLE-LFO, Star Force 2
-WIN and Star Force 3 KANDO/BATTLE. This matching does not create new manual
-evidence. The earlier accepted Star Force 3 ROOM build uses title-only rules
-and its original priority policy, so the uniformly configured audit variant
-is not marked as that previously accepted artifact. Its historical title
-listening result remains in the ROOM research.
+The envelope-only pass is Star Force 3 `10 BGM_HOKORA`. The combined passes
+are Star Force 2 `14 BGM_FRIEND` and `15 BGM_NESSIE`, and Star Force 3
+`29 BGM_FRIEND`. HOKORA and Star Force 3 FRIEND match the accepted
+[envelope experiments](nds-envelope-research.md). The two Star Force 2
+candidates are new automated packing results, without new independent DS
+reference, runtime or listening evidence from this scan. NESSIE uses DS attack
+90/100/127, fitted to GBA attack 66/74/255 within the same error policy.
+
+Eight packed variants are byte-identical to artifacts with structured
+user-reported manual acceptance: Star Force 1 LAST/KINCHO/BATTLE-LFO,
+Star Force 2 WIN and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
+does not create new manual evidence. The earlier accepted Star Force 3 ROOM
+build uses title-only rules and its original priority policy, so the uniformly
+configured audit variant is not marked as that previously accepted artifact.
+Its historical title listening result remains in the ROOM research.
+
+JSON rows and attempts record separate envelope/LFO flags. Envelope rows retain
+attack fitting errors and method limitations; LFO rows retain their configs.
+CSV exposes both flags and attack fits, and HTML offers separate status filters
+for all four success categories. `summary.md` counts the categories exclusively;
+combined rows must not be added twice when discussing envelope/LFO coverage.
+The three additional audit regressions cover envelope/combined selection,
+manual matching and CSV/summary classification, unnecessary route exclusion
+and failed fitting remaining blocked. The over-capacity fixture also includes
+envelope features to verify they do not authorize guessed merges.
 
 ## Blockers and next priorities
 
@@ -105,12 +135,12 @@ The primary result categories are exclusive:
 | Result | Count | Meaning |
 | --- | ---: | --- |
 | Capacity blocked | 58 | More than eight source tracks and no registered mapping |
-| Conversion blocked | 35 | Current control, envelope, timing or compiler preconditions reject every attempted route |
+| Conversion blocked | 31 | Current control, envelope, timing or compiler preconditions reject every attempted route |
 | Converter model blocked | 0 | All eight earlier boundary assertions are resolved |
 | Execution analysis blocked | 1 | Bounded source execution cannot complete |
 
 Source features can overlap these categories. Among blocked candidates,
-27 use non-instant instrument attacks, 30 execute envelope overrides, 50
+25 use non-instant instrument attacks, 28 execute envelope overrides, 48
 contain gates above 223 ticks, and 28 have modulated note states with a
 nonzero delay. A long gate alone is not a general blocker: existing TIE/EOT
 conversion already handles some songs. These counts describe investigation
@@ -154,9 +184,10 @@ report metadata only; generated MPlay and ROM bytes are unchanged. All six
 previously accepted ROMs rebuild byte-identically; fingerprints are recorded
 in `compatibility-audit-v3/accepted-rebuilds.json`. The v2 report is retained.
 
-The eight new boundary regressions cover same-tick decoder closure, a TIE
+The eight earlier boundary regressions cover same-tick decoder closure, a TIE
 ending after the loop jump, a simultaneous one-off intro note, and the invalid
-note/gate/EOT/alias/period cases above. All 155 Python regression tests pass.
+note/gate/EOT/alias/period cases above. The v3 run passed all 155 tests at that stage; the current
+v4 run passes all 167 Python regression tests.
 The generated report's JavaScript passes the Node syntax check.
 
 Each of the eight recovered songs also has a 180-second independent software
@@ -167,8 +198,10 @@ record the renderer command and source/resource fingerprints; the root file
 collects the results and renderer fingerprint. This is source execution and
 resource evidence, not new GBA runtime or listening acceptance.
 
-The next feature work can address non-instant attacks/envelope overrides or
-delayed pitch LFO. HOKORA also remains a bounded source-parser investigation.
+The next song-specific validation can target Star Force 2 NESSIE, which adds
+a slower attack (90) alongside the combined LFO path. Broader feature work
+includes delayed pitch LFO and remaining envelope constraints. Star Force 1
+HOKORA remains a bounded source-parser investigation.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

@@ -75,7 +75,8 @@ class CompatibilityAuditTests(unittest.TestCase):
 
     def test_unknown_overcapacity_song_does_not_receive_guessed_mapping(self):
         archive = SimpleNamespace(sequence=lambda index: (b'', {}))
-        feature = {'executed_note_events_in_trace': 1, 'track_count': 9, 'nonzero_mod_depth_executed': False}
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 9, 'nonzero_mod_depth_executed': False,
+                   'noninstant_attack_definitions': 1, 'envelope_override_controls': ['0xD3']}
         with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': i} for i in range(9)]), \
              patch('audit_nds_compatibility.features', return_value=feature), \
              patch('audit_nds_compatibility.convert_merged_song') as converter:
@@ -142,6 +143,66 @@ class CompatibilityAuditTests(unittest.TestCase):
             self.assertNotIn(name, page)
             with (path / 'report.csv').open() as stream:
                 self.assertEqual(next(csv.DictReader(stream))['name'], name)
+
+    def test_envelope_and_combined_routes_have_distinct_labels_and_manual_matches(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        fit = {'attack_fits': [{'ds_attack': 100, 'gba_attack': 74, 'rms_amplitude_error': 0.102}]}
+        for active_pitch in (False, True):
+            with self.subTest(active_pitch=active_pitch):
+                feature = {'executed_note_events_in_trace': 1, 'track_count': 1,
+                           'nonzero_mod_depth_executed': active_pitch, 'noninstant_attack_definitions': 1}
+                def convert(*args, **kwargs):
+                    if not kwargs['envelope_support'] or kwargs['native_pitch_lfo'] != active_pitch:
+                        raise ValueError('unsupported effect')
+                    return b'blob', {'samples': []}, {'track_count': 1, 'envelope_approximation': fit}
+                with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+                     patch('audit_nds_compatibility.features', return_value=feature), \
+                     patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported envelope')), \
+                     patch('audit_nds_compatibility.convert_merged_song', side_effect=convert), \
+                     patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+                    result = scan(archive, manual_records=[{'family': 'ssr1', 'sequence_index': 1,
+                                                            'output_sha256': 'expected'}])
+                expected = 'packed_envelope_lfo_approximation' if active_pitch else 'packed_envelope_approximation'
+                self.assertEqual(result['status'], expected)
+                self.assertEqual(result['approximations'], {'native_pitch_lfo': active_pitch, 'envelope': True})
+                self.assertEqual(result['envelope_approximation'], fit)
+                self.assertTrue(result['manual_matches_packed_variant'])
+                self.assertFalse(result['runtime_tested_by_audit'])
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory)
+                    write_reports(path, {'rows': [result], 'summary': summarize([result])})
+                    csv_row = next(csv.DictReader((path / 'report.csv').read_text().splitlines()))
+                    self.assertEqual(csv_row['envelope_approximation'], 'True')
+                    self.assertEqual(csv_row['native_pitch_lfo_approximation'], str(active_pitch))
+                    self.assertEqual(json.loads(csv_row['attack_fits']), fit['attack_fits'])
+                    self.assertIn('| 0 | 0 | ' + ('0 | 1 | 0 |' if active_pitch else '1 | 0 | 0 |'),
+                                  (path / 'summary.md').read_text())
+
+    def test_unneeded_envelope_route_is_not_attempted(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1, 'nonzero_mod_depth_executed': False}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported')), \
+             patch('audit_nds_compatibility.convert_merged_song', side_effect=ValueError('unsupported')) as convert:
+            result = scan(archive)
+        self.assertEqual([a['route'] for a in result['attempts']], ['direct', 'singleton_bend_long'])
+        self.assertFalse(convert.call_args.kwargs['envelope_support'])
+
+    def test_failed_attack_fit_remains_blocked(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1, 'nonzero_mod_depth_executed': False,
+                   'noninstant_attack_definitions': 1}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', side_effect=ValueError('noninstant attack')), \
+             patch('audit_nds_compatibility.convert_merged_song', side_effect=ValueError('attack fitting error limits')), \
+             patch('audit_nds_compatibility.pack_converted_experiment') as packer:
+            result = scan(archive)
+        self.assertEqual(result['status'], 'conversion_blocked')
+        self.assertEqual(summarize([result])['packed'], 0)
+        packer.assert_not_called()
 
 
 if __name__ == '__main__':

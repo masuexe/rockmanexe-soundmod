@@ -2,9 +2,13 @@
 
 Two opt-in Star Force 3 experiments now cover envelope overrides and gradual
 attack. Both pass independent DS reference checks, actual native PCM envelope
-checks and controlled effects/lifecycle probes. On 2026-10-16 the user reported no issues with the requested listening/gameplay
-sequence for both builds, accepting their approximations in these configurations. The manager and the default batch-audit policy are
-unchanged; the earlier 28-pass audit is still its original snapshot.
+checks and controlled effects/lifecycle probes. On 2026-10-16 the user reported
+no issues with the requested listening/gameplay sequence for both builds,
+accepting their approximations in these configurations. The manager is
+unchanged. The [v4 batch audit](nds-compatibility-audit.md) now includes these
+bounded envelope routes, with four separate success categories. Its 32
+packing passes include two new Star Force 2 candidates; the earlier 28-pass
+v3 report is preserved as a historical snapshot.
 
 ## Semantics and bounded conversion
 
