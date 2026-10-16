@@ -39,7 +39,7 @@ def compare_reference_window(directory, reference):
                 latest[tick] = row['timer_frame'], [row]
             elif row['timer_frame'] == latest[tick][0]:
                 latest[tick][1].append(row)
-    errors = {i: [] for i in (1, 2, 3)}
+    errors = {i: [] for i in actual['active_modulation_tracks']}
     for snapshot in actual['snapshots']:
         for row in latest.get(snapshot['clock'], (None, []))[1]:
             i = row['track']
@@ -47,7 +47,7 @@ def compare_reference_window(directory, reference):
                 target = snapshot['tracks'][i]['value'] * 4
                 errors[i].append((target - row['value']) * 100 / 64)
     if any(not values for values in errors.values()):
-        raise ValueError('Reference does not cover all three modulated tracks')
+        raise ValueError('Reference does not cover all active modulated tracks')
     return {'scope': 'sequence-clock alignment to latest observed DS timer frame, allocated DS voices vs shared target track',
             'sample_aligned': False, 'equal_voice_allocation': False,
             'tracks': {str(i): {'comparisons': len(values),
@@ -114,6 +114,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     env.pop('LD_PRELOAD', None)
     models = [LfoModel(t['events']) for t in dependency['tracks']]
     observed = {i: set() for i in range(len(models))}
+    modeled = {i: set() for i in range(len(models))}
     report = {'complete': False, 'scope': 'requested natural-title window only',
               'rom_fingerprint': fingerprint(data),
               'register_or_ram_injection': False, 'full_loop_validation': False,
@@ -155,11 +156,14 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                                               'actual_lfo': actual, 'expected_lfo': expected})
                     if actual['depth']:
                         observed[i].add(actual['value'])
+                    if expected['depth']:
+                        modeled[i].add(expected['value'])
                     rows.append(actual)
                 report['snapshots'].append({'frame': frame, 'clock': clock, 'tracks': rows})
             active = {i for i, values in observed.items() if len(values) > 2}
-            if active != {1, 2, 3}:
-                raise AssertionError('Expected three actively modulated source tracks')
+            expected_active = {i for i, values in modeled.items() if len(values) > 2}
+            if not expected_active or active != expected_active:
+                raise AssertionError('Active modulation tracks differ from the bounded MPlay model')
             report.update(complete=True, frames_checked=frames, final_clock=clock,
                           active_modulation_tracks=sorted(active),
                           observed_values={str(i): sorted(values) for i, values in observed.items()})
@@ -184,7 +188,8 @@ def main():
     if args.reference:
         comparison = compare_reference_window(args.out, args.reference)
         (args.out / 'modulation-comparison.json').write_text(json.dumps(comparison, indent=2) + '\n')
-    print(f"Checked {result['frames_checked']} natural frames: note states and three native pitch LFOs match the MPlay model")
+    print(f"Checked {result['frames_checked']} natural frames: note states and "
+          f"{len(result['active_modulation_tracks'])} native pitch LFOs match the MPlay model")
 
 
 if __name__ == '__main__':

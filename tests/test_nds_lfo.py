@@ -1,12 +1,14 @@
 from pathlib import Path
+import json
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
 from nds_lfo import ds_sine, ds_pitch_units, gba_lfo_value, map_pitch_lfo, note_lfo_commands
-from validate_nds_lfo import LfoModel
+from validate_nds_lfo import LfoModel, compare_reference_window
 
 
 def state(**changes):
@@ -15,6 +17,24 @@ def state(**changes):
 
 
 class PitchLfoTests(unittest.TestCase):
+    def test_reference_comparison_uses_the_actual_active_tracks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracks = [{'value': 1}, {'value': 0}, {'value': 0}, {'value': 0}, {'value': -2}]
+            report = {'complete': True, 'active_modulation_tracks': [0, 4],
+                      'snapshots': [{'clock': 10, 'tracks': tracks}]}
+            (root / 'validation.json').write_text(json.dumps(report))
+            reference = root / 'reference'
+            reference.mkdir()
+            header = 'timer_frame,tick,track,type,value\n'
+            (reference / 'modulation.csv').write_text(header + '20,10,0,0,4\n20,10,4,0,-8\n')
+            result = compare_reference_window(root, reference)
+            self.assertEqual(set(result['tracks']), {'0', '4'})
+            self.assertTrue(all(t['rms_pitch_difference_cents'] == 0 for t in result['tracks'].values()))
+            (reference / 'modulation.csv').write_text(header + '20,10,0,0,4\n')
+            with self.assertRaisesRegex(ValueError, 'all active'):
+                compare_reference_window(root, reference)
+
     def test_ds_sine_quadrants_and_signed_pitch_rounding(self):
         self.assertEqual([ds_sine(i) for i in (0, 32, 64, 96)], [0, 127, 0, -127])
         self.assertEqual([ds_pitch_units(i, 20) for i in (0, 1024, 2048, 8192, 24576)],

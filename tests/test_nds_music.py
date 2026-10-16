@@ -436,6 +436,29 @@ SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
 
 @unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
 class LocalStarForce2Tests(unittest.TestCase):
+    def test_nessie_combines_slower_attack_and_lfo_and_preserves_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-nessie-envelope')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 15)
+        self.assertTrue(manifest['nds_conversion']['envelope_approximation'])
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_approximation'])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 29)
+        self.assertEqual({a['ds_attack']: a['gba_attack']
+                          for a in conversion['envelope_approximation']['attack_fits']},
+                         {90: 66, 100: 74, 127: 255})
+        self.assertTrue(conversion['native_pitch_lfo']['configs'])
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_win_archive_conversion_and_original_data_preservation(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, catalog, _ = build_experiment(

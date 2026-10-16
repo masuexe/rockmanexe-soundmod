@@ -106,8 +106,11 @@ The envelope-only pass is Star Force 3 `10 BGM_HOKORA`. The combined passes
 are Star Force 2 `14 BGM_FRIEND` and `15 BGM_NESSIE`, and Star Force 3
 `29 BGM_FRIEND`. HOKORA and Star Force 3 FRIEND match the accepted
 [envelope experiments](nds-envelope-research.md). The two Star Force 2
-candidates are new automated packing results, without new independent DS
-reference, runtime or listening evidence from this scan. NESSIE uses DS attack
+candidates were new automated packing results at scan time, without new
+independent DS reference, runtime or listening evidence from that scan.
+The subsequent [NESSIE experiment](nds-nessie-research.md) adds independent
+reference/native-window checks and user-reported listening/gameplay acceptance;
+the v4 report retains its original evidence snapshot. NESSIE uses DS attack
 90/100/127, fitted to GBA attack 66/74/255 within the same error policy.
 
 Eight packed variants are byte-identical to artifacts with structured

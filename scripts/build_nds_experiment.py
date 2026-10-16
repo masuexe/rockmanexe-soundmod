@@ -35,7 +35,8 @@ SOURCE_ARCHIVES = {
 }
 SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1',
-                 'sf2-win': 'ssr2', 'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
+                 'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2',
+                 'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
@@ -91,6 +92,12 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
             native_pitch_lfo=song == 'sf3-friend-envelope', envelope_support=True)
+    elif song == 'sf2-nessie-envelope':
+        index, name = 15, 'BGM_NESSIE'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, envelope_support=True)
     else:
         raise ValueError('Unknown NDS experiment song')
     return pack_converted_experiment(source, base, key, raw_sdat, index, name,
