@@ -177,13 +177,40 @@ def assess_groups(tracks, groups):
 
 
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
-                        native_pitch_lfo=False, envelope_support=False):
+                        native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
+    if native_pitch_lfo_delay and not native_pitch_lfo:
+        raise ValueError('Delay approximation requires native pitch LFO mode')
+    if native_pitch_lfo_delay:
+        fields = ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')
+        for track in tracks:
+            notes = [a for a in track['actions'] if a['name'] == 'note']
+            active = [i for i, a in enumerate(track['actions'])
+                      if a.get('state_after', {}).get('mod_delay') and a['state_after']['mod_depth']]
+            if not active:
+                continue
+            activation = active[0]
+            baseline = tuple(track['actions'][activation]['state_after'][k] for k in fields)
+            if not notes or track['actions'][activation]['ticks'] != notes[0]['ticks']:
+                raise ValueError('Delayed LFO requires activation at the first note timestamp')
+            for i, a in enumerate(track['actions']):
+                if a['name'] != 'note':
+                    continue
+                current = tuple(a['state_after'][k] for k in fields)
+                # Some originals enable depth just after their first note at
+                # the same tick. No DS timer update has elapsed in between.
+                initial_off = i < activation and a['ticks'] == notes[0]['ticks'] and current[2] == 0
+                if current != baseline and not (initial_off and current[:2] + current[3:] == baseline[:2] + baseline[3:]):
+                    raise ValueError('Delayed LFO requires fixed per-track modulation after initial activation')
+            if any(a['opcode'] in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0)
+                   and tuple(a['state_after'][k] for k in fields) != baseline
+                   for a in track['actions'][activation + 1:]):
+                raise ValueError('Live delayed-LFO parameter changes are outside this experiment')
     if envelope_support and any(len(group) != 1 for group in groups):
         raise ValueError('Envelope experiment requires singleton target tracks')
     # Audit mode records effects broadly; this compiler accepts only the
@@ -224,10 +251,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             for a in t['actions']:
                 if a['name'] == 'note' or (a['name'] == 'control' and a['opcode'] == 0xCA and a['value']):
                     state = a['state_after']
-                    map_pitch_lfo(state, lfo_tempo)
+                    map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay)
                     if state['mod_depth']:
                         key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
-                        lfo_configs[key] = compare_config(state, lfo_tempo)
+                        lfo_configs[key] = compare_config(state, lfo_tempo, native_pitch_lfo_delay)
     end_tick = loop_start + period
     bank, archives = archive.bank(info['bank_id'])
     source_map = {n: i for i, group in enumerate(groups) for n in group}
@@ -376,7 +403,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             elif op in (0xC4, 0xC5):
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
             elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
-                value = map_pitch_lfo(state, lfo_tempo)
+                value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay)
                 command = bytes([0xC4, value['mod'], 0xC2, value['lfos']])
             if command:
                 order = 1 + action['event_order'] if native_pitch_lfo else 1
@@ -384,7 +411,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         for note in (a for a in source_notes if a['target_track'] == group_index):
             command = bytes([0xBA, note['gba_priority'], 0xBD, note['gba_voice']])
             if native_pitch_lfo:
-                command += note_lfo_commands(note['state_after'], lfo_tempo)
+                command += note_lfo_commands(note['state_after'], lfo_tempo, native_pitch_lfo_delay)
             if note['duration'] <= 223:
                 command += note_bytes(note['gba_key'], note['gba_velocity'], note['duration'])
             else:
@@ -465,4 +492,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             'limitations': ['Attack-only fitting at zero-aligned model updates; onset phase may differ by one GBA frame.',
                             'GBA linear amplitude attack approximates DS exponential attenuation attack.',
                             'Decay, sustain and release retain the existing GBA quantization and frame-rate approximation.']}
+    if native_pitch_lfo_delay:
+        report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; shared phase reset per note with quantized fixed-delay LFODL'
+        report['native_pitch_lfo']['delay_approximation'] = {
+            'policy': 'Fixed per-track delayed modulation, with optional activation after the first note at the same tick; no live parameter changes',
+            'method': 'Round DS timer delay to sequence ticks, plus the existing one-tick zero-phase onset',
+            'limitations': ['Delay and phase belong to the target track, not independent source voices.',
+                            'New notes reset the shared delay/phase for overlapping voices and release tails.',
+                            'LFODL is limited to 255 ticks; overflowing delays are rejected.']}
     return blob, dependency, report

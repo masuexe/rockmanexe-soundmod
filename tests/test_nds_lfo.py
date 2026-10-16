@@ -7,7 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-from nds_lfo import ds_sine, ds_pitch_units, gba_lfo_value, map_pitch_lfo, note_lfo_commands
+from nds_lfo import ds_sine, ds_pitch_units, gba_lfo_value, map_pitch_lfo, note_lfo_commands, map_pitch_delay
 from validate_nds_lfo import LfoModel, compare_reference_window
 
 
@@ -17,6 +17,36 @@ def state(**changes):
 
 
 class PitchLfoTests(unittest.TestCase):
+    def test_fixed_delay_mapping_retains_zero_delay_commands(self):
+        self.assertEqual(note_lfo_commands(state(), 148), note_lfo_commands(state(), 148, True))
+        delayed = state(mod_delay=10, mod_speed=25, mod_depth=15)
+        with self.assertRaises(ValueError):
+            map_pitch_lfo(delayed, 116)
+        self.assertEqual(map_pitch_lfo(delayed, 116, True), {'lfos': 26, 'mod': 2})
+        mapping = map_pitch_delay(delayed, 116)
+        self.assertEqual(mapping['lfodl'], 6)
+        self.assertEqual(mapping['phase_delay_ticks'], 5)
+        self.assertAlmostEqual(mapping['source_delay_ms'], 52.095, delta=0.01)
+        self.assertIn(bytes([0xC3, 6]), note_lfo_commands(delayed, 116, True))
+
+    def test_delayed_count_holds_phase_then_restarts_on_next_note(self):
+        commands = [('LFOS', 0), ('MODT', 0), ('LFODL', 6), ('MOD', 2), ('LFOS', 26)]
+        events = [{'ticks': t, 'name': name, 'value': value} for t in (0, 8) for name, value in commands]
+        events += [{'ticks': t, 'name': 'NOTE'} for t in (0, 8)]
+        events.sort(key=lambda e: e['ticks'])
+        model = LfoModel(events)
+        self.assertEqual((model.advance(6)['count'], model.value, model.phase), (0, 0, 0))
+        self.assertEqual(model.advance(7)['phase'], 26)
+        self.assertEqual(model.advance(8)['value'], 1)
+        self.assertEqual((model.advance(9)['count'], model.value, model.phase), (5, 0, 0))
+
+    def test_invalid_and_overflowing_delays_are_rejected(self):
+        for value in (-1, 65536, True, 1.5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                map_pitch_delay(state(mod_delay=value), 116)
+        with self.assertRaisesRegex(ValueError, 'LFODL capacity'):
+            map_pitch_lfo(state(mod_delay=65535), 116, True)
+
     def test_reference_comparison_uses_the_actual_active_tracks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

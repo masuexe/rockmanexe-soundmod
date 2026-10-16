@@ -38,14 +38,34 @@ def gba_lfo_value(phase, depth):
     return (point * depth) >> 6
 
 
-def map_pitch_lfo(state, gba_tempo):
+def map_pitch_delay(state, gba_tempo):
+    delay = state['mod_delay']
+    if type(delay) is not int or not 0 <= delay <= 65535:
+        raise ValueError('Invalid DS LFO delay')
+    if not 1 <= gba_tempo <= 255:
+        raise ValueError('Invalid MPlay tempo')
+    tick_rate = GBA_FPS * gba_tempo / 75
+    shift = round(delay * tick_rate / DS_CLOCK_HZ)
+    # Retain the one-tick zero-phase onset used by the zero-delay mode.
+    if shift + 1 > 255:
+        raise ValueError('DS LFO delay exceeds native LFODL capacity')
+    return {'lfodl': shift + 1, 'phase_delay_ticks': shift,
+            'source_delay_ms': delay * 1000 / DS_CLOCK_HZ,
+            'target_phase_delay_ms': shift * 1000 / tick_rate,
+            'phase_delay_error_ms': (shift / tick_rate - delay / DS_CLOCK_HZ) * 1000,
+            'native_counter_wait_ms': (shift + 1) * 1000 / tick_rate}
+
+
+def map_pitch_lfo(state, gba_tempo, allow_delay=False):
     depth, speed, span = (state[k] for k in ('mod_depth', 'mod_speed', 'mod_range'))
     if not all(type(v) is int and 0 <= v <= 127 for v in (depth, speed, span)):
         raise ValueError('Invalid DS LFO parameter')
     if not depth:
         return {'lfos': 0, 'mod': 0}
-    if state['mod_type'] != 0 or state['mod_delay'] != 0 or not speed or not span:
+    if state['mod_type'] != 0 or (state['mod_delay'] != 0 and not allow_delay) or not speed or not span:
         raise ValueError('Native LFO experiment supports active pitch modulation with zero DS delay and nonzero speed/range only')
+    if allow_delay:
+        map_pitch_delay(state, gba_tempo)
     if not 1 <= gba_tempo <= 255:
         raise ValueError('Invalid MPlay tempo')
     tick_rate = GBA_FPS * gba_tempo / 75
@@ -56,26 +76,33 @@ def map_pitch_lfo(state, gba_tempo):
     return {'lfos': lfos, 'mod': mod}
 
 
-def note_lfo_commands(state, gba_tempo):
-    value = map_pitch_lfo(state, gba_tempo)
+def note_lfo_commands(state, gba_tempo, allow_delay=False):
+    value = map_pitch_lfo(state, gba_tempo, allow_delay)
+    delay = map_pitch_delay(state, gba_tempo)['lfodl'] if allow_delay else 1
     # LFOS=0 resets phase/value; a one-tick LFODL keeps onset at zero.
-    return bytes([0xC2, 0, 0xC5, 0, 0xC3, 1, 0xC4, value['mod'], 0xC2, value['lfos']])
+    return bytes([0xC2, 0, 0xC5, 0, 0xC3, delay, 0xC4, value['mod'], 0xC2, value['lfos']])
 
 
-def compare_config(state, gba_tempo):
-    value = map_pitch_lfo(state, gba_tempo)
+def compare_config(state, gba_tempo, allow_delay=False):
+    value = map_pitch_lfo(state, gba_tempo, allow_delay)
+    delay = map_pitch_delay(state, gba_tempo) if allow_delay else None
     tick_rate = GBA_FPS * gba_tempo / 75
     errors = []
     for millisecond in range(1000):
         t = millisecond / 1000
-        source = ds_pitch_units((int(t * DS_CLOCK_HZ) * state['mod_speed'] * 64) % 32768,
+        source_steps = max(0, int(t * DS_CLOCK_HZ) - (state['mod_delay'] if allow_delay else 0))
+        target_steps = max(0, int(t * tick_rate) - (delay['phase_delay_ticks'] if delay else 0))
+        source = ds_pitch_units((source_steps * state['mod_speed'] * 64) % 32768,
                                 state['mod_depth'], state['mod_range'])
-        target = 4 * gba_lfo_value((int(t * tick_rate) * value['lfos']) % 256, value['mod'])
+        target = 4 * gba_lfo_value((target_steps * value['lfos']) % 256, value['mod'])
         errors.append((target - source) * 100 / 64)
-    return {**{k: state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')},
+    result = {**{k: state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')},
             **value, 'gba_tempo': gba_tempo,
             'source_frequency_hz': DS_CLOCK_HZ * state['mod_speed'] / 512,
             'target_frequency_hz': tick_rate * value['lfos'] / 256,
             'single_voice_one_second_rms_pitch_error_cents': math.sqrt(sum(e * e for e in errors) / len(errors)),
             'single_voice_one_second_max_pitch_error_cents': max(map(abs, errors)),
             'comparison_scope': 'isolated fresh note, 1 ms sampling, no overlapping-note resets or audio-frame quantization'}
+    if delay:
+        result['delay_mapping'] = delay
+    return result

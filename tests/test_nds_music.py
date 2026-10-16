@@ -318,6 +318,26 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_fmplanet_delay_is_explicit_and_preserves_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-fmplanet-delay')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 2)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_delay_approximation'])
+        self.assertEqual(conversion['track_count'], 7)
+        self.assertEqual(len(dependency['samples']), 16)
+        config = conversion['native_pitch_lfo']['configs'][0]
+        self.assertEqual(config['mod_delay'], 10)
+        self.assertEqual(config['delay_mapping']['lfodl'], 6)
+        self.assertEqual(conversion['merged_loop_ticks'], 2304)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_last_preserves_boundary_tied_gate_and_native_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(

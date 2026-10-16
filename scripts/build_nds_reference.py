@@ -62,7 +62,14 @@ def main():
         raise ValueError('Unknown upstream envelope update; hook not installed')
     text = text.replace(marker, '\tint beforeState = this->state, beforeAmpl = this->ampl;\n' + marker)
     text = text.replace(after, '\tresearchEnvelope(*this, beforeState, beforeAmpl);\n\n' + after)
+    text = text.replace(after, '\tint beforeDelayCount = this->modDelayCnt;\n'
+                        '\tunsigned beforeDelayPhase = this->modCounter;\n' + after)
+    marker = '\tif (bTmrNeedUpdate)\n'
+    if text.count(marker) != 1:
+        raise ValueError('Unknown upstream post-modulation boundary; delay hook not installed')
+    text = text.replace(marker, '\tresearchModulationDelay(*this, beforeDelayCount, beforeDelayPhase, bModulation);\n\n' + marker)
     channel.write_text('class Channel;\nextern void researchModulation(const Channel&, int);\n'
+                       'extern void researchModulationDelay(const Channel&, int, unsigned, bool);\n'
                        'extern void researchEnvelope(const Channel&, int, int);\n' + text)
     track = copied / 'Track.cpp'
     text = track.read_text()
@@ -76,6 +83,7 @@ def main():
         ('this->pan = this->overriding.val(pData, read8) - 64;', 0xC0, 'this->pan + 64'),
         ('this->pitchBend = this->overriding.val(pData, read8);', 0xC4, 'this->pitchBend'),
         ('this->expr = this->overriding.val(pData, read8);', 0xD5, 'this->expr'),
+        ('this->modDelay = this->overriding.val(pData, read16);', 0xE0, 'this->modDelay'),
         *((f'this->{field} = this->overriding.val(pData, read8);', 0xD0 + i, f'this->{field}')
           for i, field in enumerate(('a', 'd', 's', 'r'))),
     ]:
@@ -99,7 +107,7 @@ def main():
               'research_renderer_sha256': hashlib.sha256((Path(__file__).resolve().parents[1] / 'native/nds_reference.cpp').read_bytes()).hexdigest(),
               'renderer': 'kode54/SSEQPlayer', 'compiler_command': command,
               'modifications': ['Use standard codecvt on modern GCC',
-                                'Observe sequence/timer clocks, NoteOn ADSR, controls, per-voice envelopes and modulation; no synthesis changes'],
+                                'Observe sequence/timer clocks, NoteOn ADSR, controls, per-voice envelopes, modulation and delay counters; no synthesis changes'],
               'limitations': ['Software DS reference, not hardware or DS emulator output']}
     (args.out / 'build.json').write_text(json.dumps(report, indent=2) + '\n')
     print(binary)

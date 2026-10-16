@@ -18,6 +18,17 @@ static std::ofstream controlLog;
 static std::ofstream modulationLog;
 static std::ofstream envelopeLog;
 static std::ofstream envelopeNoteLog;
+static std::ofstream modulationDelayLog;
+void researchModulationDelay(const Channel& channel, int beforeCount, unsigned beforePhase, bool active) {
+    if (channel.trackId < 0 || !channel.modDepth) return;
+    modulationDelayLog << researchTimerClock - 1 << ',' << researchSequenceClock << ','
+                       << static_cast<unsigned>(channel.ply->tracks[channel.trackId].num) << ','
+                       << (&channel - &channel.ply->channels[0]) << ',' << static_cast<unsigned>(channel.key) << ','
+                       << static_cast<unsigned>(channel.modDepth) << ',' << static_cast<unsigned>(channel.modSpeed) << ','
+                       << static_cast<unsigned>(channel.modType) << ',' << static_cast<unsigned>(channel.modRange) << ','
+                       << channel.modDelay << ',' << beforeCount << ',' << channel.modDelayCnt << ','
+                       << beforePhase << ',' << channel.modCounter << ',' << active << '\n';
+}
 void researchEnvelopeNote(const Track& track, int key, int velocity, int duration,
                           int attack, int decay, int sustain, int release) {
     envelopeNoteLog << researchSequenceClock - 1 << ',' << static_cast<unsigned>(track.num)
@@ -93,6 +104,9 @@ int main(int argc, char** argv) {
         if (!envelopeLog || !envelopeNoteLog) throw std::runtime_error("cannot create envelope logs");
         envelopeLog << "timer_frame,tick,track,channel,key,before_state,state,before_ampl,ampl,attack_coefficient,decay_rate,sustain,release_rate\n";
         envelopeNoteLog << "tick,track,instrument,key,velocity,duration,attack,decay,sustain,release\n";
+        modulationDelayLog.open(directory + "/modulation-delay.csv");
+        if (!modulationDelayLog) throw std::runtime_error("cannot create modulation-delay log");
+        modulationDelayLog << "timer_frame,tick,track,channel,key,depth,speed,type,range,delay,counter_before,counter_after,phase_before,phase_after,active\n";
         Player player;
         player.sampleRate = 44100;
         player.interpolation = INTERPOLATION_NONE;

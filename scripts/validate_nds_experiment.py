@@ -82,6 +82,39 @@ def check_envelope_reference(conversion, archive, reference):
             'noninstant_attack_updates': attacks, 'complete': True}
 
 
+def check_delay_reference(conversion, reference):
+    configs = {tuple(c[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
+               for c in conversion['native_pitch_lfo']['configs']}
+    updates = waiting = active = first_active = 0
+    delays = set()
+    previous = {}
+    with (reference / 'modulation-delay.csv').open() as stream:
+        for raw in csv.DictReader(stream):
+            r = {k: int(v) for k, v in raw.items()}
+            if r['delay'] and (r['type'], r['speed'], r['depth'], r['range'], r['delay']) not in configs:
+                raise AssertionError('Independent delayed modulation configuration differs')
+            enabled = r['counter_before'] >= r['delay']
+            count = r['counter_before'] if enabled else r['counter_before'] + 1
+            phase = (r['phase_before'] + r['speed'] * 64) % 32768 if enabled else r['phase_before']
+            if (count, phase, int(enabled)) != (r['counter_after'], r['phase_after'], r['active']):
+                raise AssertionError('Independent DS delay counter/phase transition differs')
+            updates += 1
+            if r['delay']:
+                delays.add(r['delay'])
+                waiting += not enabled
+                active += enabled
+                before = previous.get((r['track'], r['channel']))
+                first_active += bool(enabled and r['phase_before'] == 0 and before
+                                     and not before['active'] and before['counter_after'] == r['delay']
+                                     and before['timer_frame'] + 1 == r['timer_frame'])
+            previous[r['track'], r['channel']] = r
+    if not waiting or not active or not first_active:
+        raise AssertionError('Reference does not cover delayed holds and activation')
+    return {'complete': True, 'voice_timer_updates': updates, 'waiting_updates': waiting,
+            'active_after_delay_updates': active, 'zero_phase_activation_observations': first_active,
+            'source_delays_observed': sorted(delays)}
+
+
 def check_reference(experiment, reference):
     conversion = json.loads((experiment / 'conversion.json').read_text())
     archive = SoundArchive((experiment / 'source.sdat').read_bytes())
@@ -127,7 +160,7 @@ def check_reference(experiment, reference):
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
-            for opcode in (0xC0, 0xC4, 0xD5):
+            for opcode in (0xC0, 0xC4, 0xD5, 0xE0):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
@@ -162,12 +195,14 @@ def check_reference(experiment, reference):
         raise AssertionError('No active DS modulation observed')
     envelope = (check_envelope_reference(conversion, archive, reference)
                 if conversion.get('envelope_approximation') else None)
+    delay = (check_delay_reference(conversion, reference)
+             if conversion.get('native_pitch_lfo', {}).get('delay_approximation') else None)
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
-            'envelope_reference': envelope, 'complete': True}
+            'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 
 def probe_runtime(data, manifest, directory, mgba, lifecycle=False):

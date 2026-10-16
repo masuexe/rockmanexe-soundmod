@@ -115,6 +115,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     models = [LfoModel(t['events']) for t in dependency['tracks']]
     observed = {i: set() for i in range(len(models))}
     modeled = {i: set() for i in range(len(models))}
+    delayed_holds = {}
     report = {'complete': False, 'scope': 'requested natural-title window only',
               'rom_fingerprint': fingerprint(data),
               'register_or_ram_injection': False, 'full_loop_validation': False,
@@ -154,6 +155,10 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                     if actual != expected:
                         raise AssertionError({'frame': frame, 'clock': clock, 'track': i,
                                               'actual_lfo': actual, 'expected_lfo': expected})
+                    if manifest['nds_conversion'].get('native_pitch_lfo_delay_approximation') and actual['depth'] and actual['count']:
+                        if actual['phase'] or actual['value']:
+                            raise AssertionError('Delayed native onset did not hold zero phase/pitch')
+                        delayed_holds[i] = delayed_holds.get(i, 0) + 1
                     if actual['depth']:
                         observed[i].add(actual['value'])
                     if expected['depth']:
@@ -164,8 +169,11 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
             expected_active = {i for i, values in modeled.items() if len(values) > 2}
             if not expected_active or active != expected_active:
                 raise AssertionError('Active modulation tracks differ from the bounded MPlay model')
+            if manifest['nds_conversion'].get('native_pitch_lfo_delay_approximation') and not delayed_holds:
+                raise AssertionError('Requested window did not observe delayed native onsets')
             report.update(complete=True, frames_checked=frames, final_clock=clock,
                           active_modulation_tracks=sorted(active),
+                          delayed_zero_phase_hold_observations=delayed_holds,
                           observed_values={str(i): sorted(values) for i, values in observed.items()})
         except BaseException as error:
             report['error'] = repr(error)
