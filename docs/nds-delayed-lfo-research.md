@@ -50,10 +50,11 @@ delay and modulation settings must be fixed after initial activation, which
 must occur at the first note timestamp. Initial depth activation immediately
 after that note at the same tick is allowed. Later activation, changes to
 held-note delay/depth/speed/range/type, invalid values and overflowing delays
-remain rejected. Zero-delay tracks retain the earlier behavior. The default
-converter and batch audit still reject active nonzero delays; this mode is an
-explicit single-song experiment with user-reported acceptance; it does not
-establish compatibility for other delayed-LFO songs.
+remain rejected. Zero-delay tracks retain the earlier behavior. The underlying
+converter requires an explicit delay flag. The [v5 batch audit](nds-compatibility-audit.md)
+now tries this bounded policy for eligible candidates, labeling delayed-LFO
+and envelope/delayed-LFO successes separately. FMPLANET has user-reported
+acceptance; this does not establish listening acceptance for other songs.
 
 Native track sharing remains an approximation: a new note resets older
 overlapping voices and release tails, whereas DS voices retain independent

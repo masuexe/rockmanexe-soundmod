@@ -5,10 +5,10 @@ attack. Both pass independent DS reference checks, actual native PCM envelope
 checks and controlled effects/lifecycle probes. On 2026-10-16 the user reported
 no issues with the requested listening/gameplay sequence for both builds,
 accepting their approximations in these configurations. The manager is
-unchanged. The [v4 batch audit](nds-compatibility-audit.md) now includes these
-bounded envelope routes, with four separate success categories. Its 32
-packing passes include two new Star Force 2 candidates; the earlier 28-pass
-v3 report is preserved as a historical snapshot.
+unchanged. The [batch audit](nds-compatibility-audit.md) includes these bounded
+envelope routes and now also distinguishes fixed delayed-LFO routes. The
+earlier 28-pass v3 and 32-pass v4 reports remain historical snapshots; each
+new candidate still needs its own reference/runtime/listening validation.
 
 ## Semantics and bounded conversion
 

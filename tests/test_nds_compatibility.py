@@ -12,7 +12,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from analyze_song import Reader
-from audit_nds_compatibility import sequence_slots, scan_sequence, summarize, write_reports
+from audit_nds_compatibility import features, sequence_slots, scan_sequence, summarize, write_reports
+from nds_music import trace_sequence
 from nds_track_merge import BATTLE_GROUPS
 
 
@@ -48,6 +49,70 @@ def scan(archive, **changes):
 
 
 class CompatibilityAuditTests(unittest.TestCase):
+    def test_delay_feature_includes_activation_after_last_note_at_same_tick(self):
+        class NoBank:
+            def bank(self, index):
+                raise ValueError('No resource inspection in this fixture')
+        raw = b'\xC7\x00\xCB\x19\xE0\x0A\x00\x3C\x64\x0C\xCA\x0F\x80\x0C\xFF'
+        result = features(NoBank(), {'bank_id': 0}, trace_sequence(raw, analysis_only=True))
+        self.assertEqual(result['modulation_configs_at_note_on'], [])
+        self.assertTrue(result['active_delayed_modulation_executed'])
+
+    def test_delay_routes_flags_statuses_and_report_categories(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        mapping = {'lfodl': 6, 'phase_delay_ticks': 5}
+        for needs_envelope in (False, True):
+            with self.subTest(envelope=needs_envelope):
+                feature = {'executed_note_events_in_trace': 1, 'track_count': 1,
+                           'nonzero_mod_depth_executed': True, 'active_delayed_modulation_executed': True,
+                           'noninstant_attack_definitions': int(needs_envelope)}
+                def convert(*args, **kwargs):
+                    if not kwargs['native_pitch_lfo_delay'] or kwargs['envelope_support'] != needs_envelope:
+                        raise ValueError('unsupported feature')
+                    self.assertTrue(kwargs['native_pitch_lfo'])
+                    return b'blob', {'samples': []}, {'track_count': 1, 'envelope_approximation': {'attack_fits': []},
+                            'native_pitch_lfo': {'configs': [{'delay_mapping': mapping}], 'delay_approximation': {}}}
+                with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+                     patch('audit_nds_compatibility.features', return_value=feature), \
+                     patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported pitch')), \
+                     patch('audit_nds_compatibility.convert_merged_song', side_effect=convert), \
+                     patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+                    result = scan(archive, manual_records=[{'family': 'ssr1', 'sequence_index': 1,
+                                                            'output_sha256': 'expected'}])
+                self.assertEqual(result['status'], 'packed_envelope_delayed_lfo_approximation'
+                                 if needs_envelope else 'packed_delayed_lfo_approximation')
+                self.assertEqual(result['approximations'], {'native_pitch_lfo': True,
+                                                            'envelope': needs_envelope, 'fixed_delay': True})
+                self.assertTrue(result['manual_matches_packed_variant'])
+                self.assertFalse(result['runtime_tested_by_audit'])
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory)
+                    write_reports(path, {'rows': [result], 'summary': summarize([result])})
+                    record = next(csv.DictReader((path / 'report.csv').read_text().splitlines()))
+                    self.assertEqual(record['fixed_delay_approximation'], 'True')
+                    self.assertEqual(json.loads(record['delay_mappings']), [mapping])
+                    line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
+                    numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
+                    categories = numbers[2:8]
+                    self.assertEqual(sum(categories), 1)
+                    self.assertEqual(categories[5 if needs_envelope else 4], 1)
+                    self.assertEqual(numbers[-1], 0)
+
+    def test_unsupported_live_delay_change_does_not_become_a_pass(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1,
+                   'nonzero_mod_depth_executed': True, 'active_delayed_modulation_executed': True}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported')), \
+             patch('audit_nds_compatibility.convert_merged_song', side_effect=ValueError('Live delayed-LFO parameter changes')), \
+             patch('audit_nds_compatibility.pack_converted_experiment') as packer:
+            result = scan(archive)
+        self.assertEqual(result['status'], 'conversion_blocked')
+        self.assertEqual(result['attempts'][-1]['route'], 'fixed_delay_pitch_lfo_approximation')
+        packer.assert_not_called()
+
     def test_symbol_directory_alignment_and_empty_slots(self):
         expected = [{'index': 0, 'name': 'BGM_A', 'present': True},
                     {'index': 1, 'name': None, 'present': False}]
@@ -76,7 +141,8 @@ class CompatibilityAuditTests(unittest.TestCase):
     def test_unknown_overcapacity_song_does_not_receive_guessed_mapping(self):
         archive = SimpleNamespace(sequence=lambda index: (b'', {}))
         feature = {'executed_note_events_in_trace': 1, 'track_count': 9, 'nonzero_mod_depth_executed': False,
-                   'noninstant_attack_definitions': 1, 'envelope_override_controls': ['0xD3']}
+                   'noninstant_attack_definitions': 1, 'envelope_override_controls': ['0xD3'],
+                   'active_delayed_modulation_executed': True}
         with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': i} for i in range(9)]), \
              patch('audit_nds_compatibility.features', return_value=feature), \
              patch('audit_nds_compatibility.convert_merged_song') as converter:
@@ -165,7 +231,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                                                             'output_sha256': 'expected'}])
                 expected = 'packed_envelope_lfo_approximation' if active_pitch else 'packed_envelope_approximation'
                 self.assertEqual(result['status'], expected)
-                self.assertEqual(result['approximations'], {'native_pitch_lfo': active_pitch, 'envelope': True})
+                self.assertEqual(result['approximations'], {'native_pitch_lfo': active_pitch, 'envelope': True, 'fixed_delay': False})
                 self.assertEqual(result['envelope_approximation'], fit)
                 self.assertTrue(result['manual_matches_packed_variant'])
                 self.assertFalse(result['runtime_tested_by_audit'])

@@ -26,6 +26,8 @@ STATUS_LABELS = {
     'packed_standard': '常规路径打包通过', 'packed_lfo_approximation': '颤音近似打包通过',
     'packed_envelope_approximation': '包络近似打包通过',
     'packed_envelope_lfo_approximation': '包络＋颤音近似打包通过',
+    'packed_delayed_lfo_approximation': '固定延迟颤音近似打包通过',
+    'packed_envelope_delayed_lfo_approximation': '包络＋固定延迟颤音近似打包通过',
     'capacity_blocked': '超轨数，缺少映射', 'conversion_blocked': '转换受阻',
     'converter_model_blocked': '转换校验待研究', 'packing_blocked': '转换通过，打包受阻',
 }
@@ -103,6 +105,9 @@ def features(archive, info, tracks):
               'zero_gate_notes': sum(a['duration'] == 0 for a in notes),
               'executed_controls': sorted({f'0x{a["opcode"]:02X}' for a in controls}),
               'nonzero_mod_depth_executed': any(a['opcode'] == 0xCA and a['value'] for a in controls),
+              'active_delayed_modulation_executed': any(a.get('state_after', {}).get('mod_depth')
+                                                       and a['state_after'].get('mod_delay')
+                                                       for t in tracks for a in t['actions']),
               'modulated_note_on_states': sum(bool(a['state_after']['mod_depth']) for a in notes),
               'modulation_configs_at_note_on': [dict(zip(('type', 'speed', 'depth', 'range', 'delay'), values))
                                                 for values in configs],
@@ -159,6 +164,10 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         routes.append('singleton_envelope_approximation')
         if row['features']['nonzero_mod_depth_executed']:
             routes.append('envelope_pitch_lfo_approximation')
+    if len(tracks) <= capacity and row['features'].get('active_delayed_modulation_executed'):
+        routes.append('fixed_delay_pitch_lfo_approximation')
+        if envelope_needed:
+            routes.append('envelope_fixed_delay_pitch_lfo_approximation')
     if family == 'ssr3' and slot['index'] == 35:
         routes.append('known_sf3_battle_merge')
     if not routes:
@@ -166,9 +175,11 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         return row
     pack_errors = False
     for route in routes:
-        pitch_lfo = route in ('native_pitch_lfo_approximation', 'envelope_pitch_lfo_approximation')
-        envelope = route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation')
-        approximations = {'native_pitch_lfo': pitch_lfo, 'envelope': envelope}
+        delayed = route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation')
+        pitch_lfo = delayed or route in ('native_pitch_lfo_approximation', 'envelope_pitch_lfo_approximation')
+        envelope = route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation',
+                             'envelope_fixed_delay_pitch_lfo_approximation')
+        approximations = {'native_pitch_lfo': pitch_lfo, 'envelope': envelope, 'fixed_delay': delayed}
         gains = [gain_db]
         for applied_gain in gains:
             attempt = {'route': route, 'gain_db': applied_gain, 'approximations': approximations,
@@ -181,7 +192,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 else:
                     blob, dependency, conversion = convert_merged_song(
                         archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else groups,
-                        capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope)
+                        capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope,
+                        native_pitch_lfo_delay=delayed)
                 attempt['conversion_passed'] = True
             except (ValueError, AssertionError, IndexError, struct.error) as error:
                 attempt['error'] = error_record(error)
@@ -197,7 +209,9 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_envelope_lfo_approximation' if envelope and pitch_lfo else
+            status = ('packed_envelope_delayed_lfo_approximation' if envelope and delayed else
+                      'packed_delayed_lfo_approximation' if delayed else
+                      'packed_envelope_lfo_approximation' if envelope and pitch_lfo else
                       'packed_envelope_approximation' if envelope else
                       'packed_lfo_approximation' if pitch_lfo else 'packed_standard')
             row.update(status=status, approximations=approximations,
@@ -284,8 +298,8 @@ def write_reports(directory, report):
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     summary = ['# NDS → EXE6 兼容性扫描', '',
                '扫描仅覆盖 SSEQ。通过转换与 ROM 打包不等于人工试听通过；本轮没有执行新曲目的游戏运行测试。', '',
-               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音近似 | 其余受阻 |',
-               '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 其余受阻 |',
+               '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for family in ('ssr1', 'ssr2', 'ssr3'):
         values = report['summary']['by_family'][family]
         slots = sum(values.values())
@@ -293,16 +307,21 @@ def write_reports(directory, report):
         standard, lfo = values.get('packed_standard', 0), values.get('packed_lfo_approximation', 0)
         envelope = values.get('packed_envelope_approximation', 0)
         combined = values.get('packed_envelope_lfo_approximation', 0)
+        delayed = values.get('packed_delayed_lfo_approximation', 0)
+        envelope_delayed = values.get('packed_envelope_delayed_lfo_approximation', 0)
         summary.append(f'| {family} | {slots} | {candidates} | {standard} | {lfo} | {envelope} | {combined} | '
-                       f'{candidates - standard - lfo - envelope - combined} |')
+                       f'{delayed} | {envelope_delayed} | '
+                       f'{candidates - standard - lfo - envelope - combined - delayed - envelope_delayed} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
                     '常规路径仍使用既有 PCM8、包络和速度量化近似；颤音近似还有共享相位和波形差异。',
-                    '包络路径按音符开始时的 ADSR 快照生成乐器；渐入起音拟合有明确误差上限。组合路径同时包含两类近似。'])
+                    '包络路径按音符开始时的 ADSR 快照生成乐器；渐入起音拟合有明确误差上限。组合路径同时包含两类近似。',
+                    '固定延迟路径只接受首次音符时刻启用、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。'])
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
               'route', 'gain_db', 'appended_bytes', 'native_pitch_lfo_approximation',
-              'envelope_approximation', 'attack_fits', 'manual_matches_packed_variant', 'errors']
+              'envelope_approximation', 'fixed_delay_approximation', 'delay_mappings',
+              'attack_fits', 'manual_matches_packed_variant', 'errors']
     with (directory / 'report.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
@@ -314,13 +333,16 @@ def write_reports(directory, report):
                              'route': row.get('route'), 'gain_db': row.get('gain_db'), 'appended_bytes': row.get('appended_bytes'),
                              'native_pitch_lfo_approximation': row.get('approximations', {}).get('native_pitch_lfo', False),
                              'envelope_approximation': row.get('approximations', {}).get('envelope', False),
+                             'fixed_delay_approximation': row.get('approximations', {}).get('fixed_delay', False),
+                             'delay_mappings': json.dumps([c['delay_mapping'] for c in row.get('native_pitch_lfo', {}).get('configs', [])
+                                                          if 'delay_mapping' in c]),
                              'attack_fits': json.dumps(row.get('envelope_approximation', {}).get('attack_fits', [])),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False)})
     payload = json.dumps({'report': report, 'labels': STATUS_LABELS}, ensure_ascii=False).replace('<', '\\u003c')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
-<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音近似、包络近似及组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。包络路径含逐音符 ADSR 快照与渐入起音拟合；详情保留拟合误差。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
+<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟参数必须在首次音符时刻启用且此后固定。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
 <p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>现有人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
@@ -355,7 +377,12 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 2, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 3, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'fixed_delay_route_policy': {'singleton_tracks_only': True, 'fixed_tempo': True,
+                                           'activation': 'First note timestamp, including depth enabled after note at the same tick',
+                                           'live_parameter_changes': False, 'lfodl_max': 255,
+                                           'mapping': 'round(DS delay * GBA sequence tick rate / DS timer rate) + 1',
+                                           'shared_delay_and_phase': True},
               'envelope_route_policy': {'singleton_tracks_only': True, 'override_range': [0, 127],
                                         'attack_fit_rms_limit': 0.12, 'attack_fit_max_limit': 0.30,
                                         'onset_phase_uncertainty_gba_frames': 1},
