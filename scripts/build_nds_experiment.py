@@ -37,6 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
+                 'sf1-planetarium-delay': 'ssr1',
                  'sf1-boss-toggle': 'ssr1',
                  'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf2-kaicyou-toggle': 'ssr2',
@@ -90,10 +91,11 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db)
-    elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay', 'sf1-boss-toggle'):
+    elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay', 'sf1-boss-toggle', 'sf1-planetarium-delay'):
         index, name = {'sf1-fmplanet-delay': (2, 'BGM02FMPLANET'),
                        'sf1-hometown-depth': (3, 'BGM03HOMETOWN'),
                        'sf1-gowaiincho-delay': (7, 'BGM07GOWAIINCHO'),
+                       'sf1-planetarium-delay': (13, 'BGM13PLANETARIUM'),
                        'sf1-boss-toggle': (28, 'BGM28BOSS')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(

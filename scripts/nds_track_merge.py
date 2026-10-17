@@ -28,6 +28,10 @@ def validate_loop_notes(track, base, loop_start, period):
     if track['termination'] != 'repeated_state' or track['loop_ticks'] != period:
         raise AssertionError('Compiled loop period differs from source')
     horizon = loop_start + 2 * period
+    expected = base + [[a[0] + period, *a[1:]] for a in base if a[0] >= loop_start]
+    # Notes beginning in the last checked cycle may end after its jump.
+    # Decode far enough to observe their EOT without counting later note-ons.
+    gate_horizon = max([horizon] + [a[0] + a[4] for a in expected])
     events = track['events']
     body = events[track['loop_start_event']:]
     if not body or track['loop_start_ticks'] > loop_start + period:
@@ -36,7 +40,7 @@ def validate_loop_notes(track, base, loop_start, period):
     def unfolded():
         yield from events
         turn = 1
-        while body[0]['ticks'] + turn * period <= horizon:
+        while body[0]['ticks'] + turn * period <= gate_horizon:
             for event in body:
                 yield {**event, 'ticks': event['ticks'] + turn * period}
             turn += 1
@@ -44,11 +48,12 @@ def validate_loop_notes(track, base, loop_start, period):
     actual, live_ties = [], {}
     for event in unfolded():
         tick = event['ticks']
-        if tick > horizon:
+        if tick > gate_horizon:
             break
-        if event['name'] in ('NOTE', 'TIE') and tick < horizon:
+        if event['name'] in ('NOTE', 'TIE') and tick < gate_horizon:
             row = [tick, event['voice'], event['key'], event['velocity'], event.get('duration_ticks')]
-            actual.append(row)
+            if tick < horizon:
+                actual.append(row)
             if event['name'] == 'TIE':
                 if event['key'] in live_ties:
                     raise AssertionError('Converted long notes share a live alias')
@@ -58,12 +63,12 @@ def validate_loop_notes(track, base, loop_start, period):
                 raise AssertionError('EOT has no matching tied note')
             row = live_ties.pop(event['key'])
             row[4] = tick - row[0]
-    if live_ties:
+    if any(row[0] < horizon for row in live_ties.values()):
         raise AssertionError('Unclosed tied notes in compiled loop')
-    expected = base + [[a[0] + period, *a[1:]] for a in base if a[0] >= loop_start]
     if actual != expected:
         raise AssertionError('Merged note/gate/timing model differs')
     return {'checked_until_ticks': horizon, 'complete_loop_cycles': 2,
+            'gate_checked_until_ticks': gate_horizon,
             'note_events_compared': len(actual), 'boundary_eot_included': True}
 
 
@@ -312,7 +317,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Too many music priorities for native-effect headroom')
     # Long notes use TIE/EOT. Distinct aliases keep overlapping source/echo
     # notes with the same pitch independently stoppable after track merging.
-    aliases = {}
+    aliases, loop_carries = {}, []
     for i, group in enumerate(groups):
         notes = [a for a in source_notes if a['target_track'] == i]
         used = {a['key'] for a in notes}
@@ -326,8 +331,19 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                if (a['source_track'], a['key']) == context and a['duration'] > 223)
             if any(start < end for (_, end), (start, _) in zip(intervals, intervals[1:])):
                 raise ValueError('Overlapping long notes require more aliases')
-            if any(start < loop_start < end or start < end_tick < end for start, end in intervals):
-                raise ValueError('Long note crosses merged loop boundary')
+            entry = [(start - loop_start, end - loop_start) for start, end in intervals
+                     if start < loop_start < end]
+            exit = [(start - end_tick, end - end_tick) for start, end in intervals
+                    if start < end_tick < end]
+            if entry != exit:
+                raise ValueError('Long notes require matching carry across merged loop boundary')
+            # The warmup's EOT inside the body also closes the previous
+            # iteration's TIE after GOTO. Never split/retrigger the note.
+            for start, end in entry:
+                loop_carries.append({'target_track': i, 'source_track': context[0],
+                                     'source_key': context[1], 'gba_key': alias,
+                                     'note_start_relative_ticks': start,
+                                     'eot_relative_ticks': end})
     voice_contexts, mappings = {}, []
     for note in source_notes:
         group = note['target_track']
@@ -503,6 +519,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
               'priority_mapping': {str(k): v for k, v in priority_map.items()}, 'song_priority': 20,
               'generated_bytes': len(blob), 'note_timing_check': True,
               'note_timing_validation': note_validation,
+              'long_note_loop_carries': loop_carries,
               'long_note_aliases': [{'target_track': group, 'source_track': source,
                                      'source_key': key, 'gba_key': alias}
                                     for (group, source, key), alias in aliases.items()],

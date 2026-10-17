@@ -295,9 +295,13 @@ first sounds at 0 and activates at 3840; Star Force 2 KAICYOU track 2 first
 sounds at 48 and activates at 768. The
 [GOWAIINCHO experiment](nds-pre-note-lfo-research.md) now admits pre-note
 initialization in the compiler. V7 now uses that correction, without changing
-the archived v6 scan. PLANETARIUM remains blocked by `Long note crosses merged
-loop boundary` after passing the old activation check; enabling pre-note setup
-does not remove that gate/lifecycle constraint. LOSE/VS also retain further
+the archived v6 scan. In v7, PLANETARIUM remains blocked by `Long note crosses merged
+loop boundary` after passing the old activation check. The subsequent
+[PLANETARIUM experiment](nds-planetarium-research.md) permits matching carried
+TIE/EOT intervals, with independent full-gate decoding and a synthetic native
+channel probe; the user subsequently reported no issues with the requested
+original-song listening and gameplay checklist on 2026-10-17. This later
+evidence does not change the archived scan. LOSE/VS also retain further
 activation/parameter constraints requiring inspection.
 Only positive depth changes under the documented fixed-field policy were
 added by v6. Star Force 1

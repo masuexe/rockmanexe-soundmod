@@ -17,6 +17,17 @@ def loop_track(prefix, body):
 
 
 class LoopNoteValidationTests(unittest.TestCase):
+    def test_carried_tie_closes_beyond_last_checked_loop(self):
+        prefix = b'\xBD\x00' + wait_bytes(100) + b'\xCF\x7F\x40' + wait_bytes(100)
+        body = wait_bytes(200) + b'\xCE\x7F' + wait_bytes(200) + b'\xCF\x7F\x40' + wait_bytes(100)
+        base = [[100, 0, 127, 64, 300], [600, 0, 127, 64, 300]]
+        result = validate_loop_notes(loop_track(prefix, body), base, 200, 500)
+        self.assertEqual(result['checked_until_ticks'], 1200)
+        self.assertEqual(result['gate_checked_until_ticks'], 1400)
+        self.assertEqual(result['note_events_compared'], 3)
+        with self.assertRaisesRegex(AssertionError, 'note/gate/timing'):
+            validate_loop_notes(loop_track(prefix, body), [[100, 0, 127, 64, 299], base[1]], 200, 500)
+
     def test_decoder_closes_after_note_at_final_timestamp(self):
         track = loop_track(b'\xBD\x00', note_bytes(60, 90, 12) + wait_bytes(12))
         notes = [e for e in track['events'] if e['name'] == 'NOTE']

@@ -139,6 +139,26 @@ class SampleConversionTests(unittest.TestCase):
 
 
 class TrackMergingTests(unittest.TestCase):
+    def test_long_note_carries_across_jump_without_retrigger(self):
+        # 500-tick cycle, 300-tick gate beginning at 400. Native LFO's
+        # warmup gives a matching carried voice at both loop boundaries.
+        intro = b'\xC7\x00\xE1\x78\x00\x81\x02'
+        body = b'\x80\x83\x10\x3C\x64\x82\x2C\x80\x64'
+        raw = intro + body + b'\x94' + len(intro).to_bytes(3, 'little')
+        archive = SampleConversionTests.archive_for(raw)
+        _, dep, report = convert_merged_song(archive, 0, [(0,)], native_pitch_lfo=True)
+        carry = report['long_note_loop_carries'][0]
+        self.assertEqual((carry['note_start_relative_ticks'], carry['eot_relative_ticks']), (-100, 200))
+        events = dep['tracks'][0]['events']
+        self.assertFalse(any(e['name'] == 'TIE' and e['ticks'] == 500 for e in events))
+        self.assertTrue(any(e['name'] == 'EOT' and e['ticks'] == 700 for e in events))
+        with self.assertRaisesRegex(ValueError, 'matching carry'):
+            convert_merged_song(archive, 0, [(0,)])
+        # Increasing the gate beyond a complete period aliases two voices.
+        overlapping = raw.replace(b'\x82\x2C', b'\x84\x58')
+        with self.assertRaisesRegex(ValueError, 'Overlapping long notes'):
+            convert_merged_song(SampleConversionTests.archive_for(overlapping), 0, [(0,)], native_pitch_lfo=True)
+
     def test_loop_between_simultaneous_events_does_not_repeat_prefix_note(self):
         track = {'termination': 'loop', 'loop_action': 1, 'loop_ticks': 12,
                  'actions': [{'ticks': 0, 'name': 'note', 'key': 60},
@@ -318,6 +338,26 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_planetarium_carries_long_note_and_preserves_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-planetarium-delay')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 13)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_delay_approximation'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (8, 29))
+        self.assertEqual(conversion['long_note_loop_carries'], [
+            {'target_track': 7, 'source_track': 7, 'source_key': 53, 'gba_key': 126,
+             'note_start_relative_ticks': -192, 'eot_relative_ticks': 192}])
+        self.assertTrue(all(r['complete_loop_cycles'] == 2 for r in conversion['note_timing_validation']))
+        self.assertEqual(conversion['note_timing_validation'][7]['gate_checked_until_ticks'], 22176)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_boss_toggle_preserves_order_and_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
