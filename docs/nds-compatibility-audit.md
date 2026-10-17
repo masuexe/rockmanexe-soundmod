@@ -261,11 +261,18 @@ retained in the report. Star Force 1 HENKAN matches its accepted standalone
 ROM and BPS. SATELLITE now matches its later accepted artifact too, without
 changing its v9 bytes. The other three finite successes have packing evidence
 only; no new source reference, native playback or listening is performed by
-this scan. Star Force 2 HENKAN is the next recommended standalone test: it
+this scan. Star Force 2 HENKAN was the next recommended standalone test at
+scan time: it
 uses one sample and ends its pairs at ticks 468/480, differing from the accepted
 Star Force 1 variant's two samples and 534/554 ends. Star Force 2 WIN2 still
 fails finite conversion with `Unsupported merged-conversion effect 0xd3`;
 the new route does not silently drop its release override.
+The subsequent [Star Force 2 HENKAN experiment](nds-sf2-henkan-research.md)
+provides independent source checks, complete natural playback, sustained
+inactive/empty-channel observations and controlled restart/restoration tests.
+The user reported no issues with its requested completion, silence, effects,
+map restoration and repeated starts on 2026-10-17; the archived v10 evidence
+is unchanged.
 
 Twenty packed variants are byte-identical to artifacts with structured
 user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/URA/SATELLITE/HENKAN/LAST/KINCHO/BATTLE-LFO,
@@ -447,8 +454,10 @@ by the archived v9 scan. The user reported no issues with its requested cue
 completion, post-song silence, effects, map restoration and repeated encounter
 starts on 2026-10-17. V10 now tries this bounded finite route after prior
 routes, packing HENKAN in Star Force 1/2 and WIN2 in Star Force 1/3. Star Force
-2 HENKAN should receive standalone reference/runtime/listening checks next;
-v9's archived counts remain unchanged.
+2 HENKAN subsequently passed standalone source/runtime checks and user-reported
+listening/gameplay acceptance; v9's archived counts remain unchanged. The next
+recommended finite experiment is Star Force 1 WIN2, whose six tracks have
+different END times (156/168/192 ticks) and nine sample contexts.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

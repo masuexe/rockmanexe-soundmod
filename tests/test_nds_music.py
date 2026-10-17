@@ -672,6 +672,32 @@ SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
 
 @unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
 class LocalStarForce2Tests(unittest.TestCase):
+    def test_henkan_finite_keeps_shared_sample_and_staggered_ends(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-henkan-finite')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertTrue(manifest['nds_conversion']['finite_song'])
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 26)
+        self.assertEqual(conversion['song_gain_db'], 3.5)
+        self.assertEqual((conversion['track_count'], len(dependency['samples']), len(conversion['instruments'])), (4, 1, 1))
+        self.assertEqual([(n['tick'], n['duration'], n['gba_voice'], n['gba_key']) for n in conversion['note_mapping']],
+                         [(0, 468, 0, 127), (0, 468, 0, 127), (12, 468, 0, 127), (12, 468, 0, 127)])
+        for track, end in zip(dependency['tracks'], (468, 468, 480, 480)):
+            self.assertEqual((track['termination'], track['ticks_before_repeat']), ('fine', end))
+            self.assertEqual([e['name'] for e in track['events']][-2:], ['EOT', 'FINE'])
+        bank = dependency['header']['tone_bank']['file_offset']
+        child = struct.unpack_from('<I', blob, bank + 4)[0] - 0x08000000
+        self.assertEqual(blob[child + 127 * 12 + 1], 50)
+        self.assertEqual(manifest['output_fingerprint']['sha256'],
+                         '4a67c5e057d16d106fc505712d0519714bea423b4908b2c13fec5a7b1b982286')
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_dempajiken_combines_envelope_and_loop_carry(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
