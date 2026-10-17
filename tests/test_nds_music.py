@@ -570,6 +570,34 @@ SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
 
 @unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
 class LocalStarForce2Tests(unittest.TestCase):
+    def test_dempajiken_combines_envelope_and_loop_carry(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-dempajiken-envelope')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 11)
+        self.assertTrue(manifest['nds_conversion']['envelope_approximation'])
+        self.assertNotIn('native_pitch_lfo_approximation', manifest['nds_conversion'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (8, 19))
+        self.assertEqual(conversion['long_note_loop_carries'], [
+            {'target_track': 2, 'source_track': 2, 'source_key': 86, 'gba_key': 127,
+             'note_start_relative_ticks': -120, 'eot_relative_ticks': 119}])
+        self.assertEqual(conversion['note_timing_validation'][2]['gate_checked_until_ticks'], 6079)
+        self.assertEqual([(r['ds_attack'], r['gba_attack'])
+                          for r in conversion['envelope_approximation']['attack_fits']], [(100, 74), (127, 255)])
+        self.assertEqual(min(n['tick'] for n in conversion['note_mapping']
+                             if n['source_envelope']['attack'] == 100), 1536)
+        self.assertEqual(manifest['output_fingerprint']['sha256'],
+                         '0a727bac00d6a4b393a9d6f2b1c18a5eb3b23d585141d5121af38c59896d3982')
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_kaicyou_combines_envelope_and_both_initialization_orders(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

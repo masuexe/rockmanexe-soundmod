@@ -8,13 +8,27 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from nds_music import NoteDefinition, attack_curve, convert_envelope, fit_attack_parameter
 from nds_track_merge import convert_merged_song
-from validate_nds_envelope import envelope_step
+from validate_nds_envelope import envelope_step, note_started_between
+from analyze_song import trace_track
+from nds_music import note_bytes, wait_bytes, ROM_BASE
 import test_nds_music as fixtures
 
 note = fixtures.note
 
 
 class EnvelopeTests(unittest.TestCase):
+    def test_native_retrigger_detection_unfolds_only_loop_body(self):
+        prefix = b'\xBD\x00' + note_bytes(60, 90, 12) + wait_bytes(24)
+        body = note_bytes(64, 90, 12) + wait_bytes(96)
+        track = trace_track(prefix + body + b'\xB2' + struct.pack('<I', ROM_BASE + len(prefix)), 0)
+        for start in (24, 120, 216, 984):
+            self.assertTrue(note_started_between(track, 64, start, start + 1))
+            self.assertFalse(note_started_between(track, 64, start - 1, start))
+            self.assertFalse(note_started_between(track, 64, start + 1, start + 12))
+            self.assertFalse(note_started_between(track, 60, start, start + 1))
+        self.assertTrue(note_started_between(track, 60, 0, 1))
+        self.assertTrue(note_started_between(track, 64, 500, 1000))
+
     def test_native_step_crosses_attack_decay_and_release_boundaries(self):
         adsr = (74, 128, 80, 128)
         self.assertEqual(envelope_step(0x13, 222, adsr), (0x12, 255))

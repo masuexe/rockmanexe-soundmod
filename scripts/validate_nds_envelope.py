@@ -37,6 +37,23 @@ def envelope_step(flags, level, adsr):
     return flags, level
 
 
+def note_started_between(track, key, start, end):
+    """Find note-ons in [start, end), including unfolded command cycles."""
+    def matches(event):
+        return event['name'] in ('NOTE', 'TIE') and event['key'] == key
+
+    if any(matches(e) and start <= e['ticks'] < end for e in track['events']):
+        return True
+    if track['termination'] == 'repeated_state':
+        period = track['loop_ticks']
+        for event in track['events'][track['loop_start_event']:]:
+            if matches(event):
+                turn = max(1, (start - event['ticks'] + period - 1) // period)
+                if event['ticks'] + turn * period < end:
+                    return True
+    return False
+
+
 def probe(experiment, directory, frames=1800, mgba='/usr/games/mgba'):
     manifest = json.loads((experiment / 'build.json').read_text())
     data = (experiment / 'unified.gba').read_bytes()
@@ -104,9 +121,7 @@ def probe(experiment, directory, frames=1800, mgba='/usr/games/mgba'):
                     current[slot] = (identity, flags, level)
                     before = previous.get(slot)
                     # A slot can be stolen/retriggered between video snapshots.
-                    new_note = any(e['name'] in ('NOTE', 'TIE') and e['key'] == key
-                                   and previous_clock <= e['ticks'] < clock
-                                   for e in dependency['tracks'][track]['events'])
+                    new_note = note_started_between(dependency['tracks'][track], key, previous_clock, clock)
                     if (before and before[0] == identity and not new_note
                             and not before[1] & 0x84 and not flags & 0x84
                             and bool(before[1] & 0x40) == bool(flags & 0x40)

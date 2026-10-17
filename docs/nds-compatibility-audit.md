@@ -131,8 +131,10 @@ original symbols. Every new candidate still needs song-specific listening,
 long playback, effects coexistence and lifecycle checks before acceptance.
 
 The envelope-only passes are Star Force 3 `10 BGM_HOKORA` and the newly
-unblocked Star Force 2 `11 BGM_DEMPAJIKEN`. DEMPAJIKEN still needs independent
-source/runtime checks and listening acceptance. The combined passes
+unblocked Star Force 2 `11 BGM_DEMPAJIKEN`. Its subsequent
+[standalone experiment](nds-dempajiken-research.md) supplies independent
+source/runtime checks and user-reported listening/gameplay acceptance on
+2026-10-17; these later results do not change the v8 scan snapshot. The combined passes
 are Star Force 2 `14 BGM_FRIEND` and `15 BGM_NESSIE`, and Star Force 3
 `29 BGM_FRIEND`. HOKORA and Star Force 3 FRIEND match the accepted
 [envelope experiments](nds-envelope-research.md). The two Star Force 2
@@ -198,7 +200,11 @@ PLANETARIUM carries track 7 key 53 from 192 ticks before the jump to 192
 ticks afterward. DEMPAJIKEN carries track 2 key 86 from 120 ticks before
 the jump to 119 ticks afterward, using alias 127. Its fitted attack 100 maps
 to native attack 74; it needs no pitch-LFO mode. DEMPAJIKEN is the recommended
-next standalone reference/runtime/listening experiment.
+next standalone reference/runtime/listening experiment at scan time.
+The subsequent [DEMPAJIKEN experiment](nds-dempajiken-research.md) checks the
+source, natural first loop and actual carried channel through its EOT;
+the user reported no issues with the requested listening/gameplay checklist
+on 2026-10-17. The archived v8 manual-match count remains sixteen.
 Star Force 1 URA also passes the former boundary guard, but then fails with
 `Conflicting per-note alias/instrument definition`; it remains blocked.
 The audit introduces no new listening or runtime evidence.
@@ -349,9 +355,10 @@ gameplay checks on 2026-10-17. V7 now tries this flag and its envelope
 combination after existing routes. KAICYOU subsequently passed its standalone
 automated and user-reported listening/gameplay checks; the archived v6 and v7
 counts remain unchanged. V8 now includes PLANETARIUM and the newly unblocked
-Star Force 2 DEMPAJIKEN. The next song-specific validation should test
-DEMPAJIKEN's combined gradual attack and carried long note before investigating
-additional conversion policies.
+Star Force 2 DEMPAJIKEN. The latter subsequently passed standalone source/runtime
+validation and user-reported listening/gameplay checks. Star Force 1 URA
+remains a candidate for further research into its per-note alias/instrument
+definition conflict; it is not yet convertible.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once
