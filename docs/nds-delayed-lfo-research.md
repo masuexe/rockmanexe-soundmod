@@ -47,7 +47,7 @@ note-on reset policy.
 The new `native_pitch_lfo_delay` flag requires native pitch-LFO mode and its
 existing singleton/fixed-tempo/pitch-only requirements. On a delayed track,
 delay and modulation settings must be fixed after initial activation, which
-must occur at the first note timestamp. Initial depth activation immediately
+may occur before or at the first note timestamp. Initial depth activation immediately
 after that note at the same tick is allowed. Later activation, changes to
 held-note delay/depth/speed/range/type, invalid values and overflowing delays
 remain rejected. Zero-delay tracks retain the earlier behavior. The underlying
@@ -55,6 +55,10 @@ converter requires an explicit delay flag. The [v5 batch audit](nds-compatibilit
 now tries this bounded policy for eligible candidates, labeling delayed-LFO
 and envelope/delayed-LFO successes separately. FMPLANET has user-reported
 acceptance; this does not establish listening acceptance for other songs.
+The later [GOWAIINCHO experiment](nds-pre-note-lfo-research.md) corrects the
+original equality check to admit setup before a track's first note. It does
+not allow activation after that note's timestamp. The v5/v6 archived scans
+retain their original results and policy descriptions.
 
 The later [HOMETOWN experiment](nds-live-depth-research.md) adds a separate
 opt-in positive-depth update policy. It does not relax this fixed-delay mode

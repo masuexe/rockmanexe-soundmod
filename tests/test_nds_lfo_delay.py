@@ -19,6 +19,26 @@ def archive_for(body):
 
 
 class DelayedPitchLfoTests(unittest.TestCase):
+    def test_setup_in_rest_before_first_note_keeps_note_on_delay_reset(self):
+        body = b'\x80\x04\xCA\x14\x80\x10' + fixtures.note(length=36) + b'\x80\x24'
+        _, dep, report = convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                                           native_pitch_lfo_delay=True)
+        events = dep['tracks'][0]['events']
+        self.assertEqual(min(e['ticks'] for e in events if e['name'] == 'NOTE'), 20)
+        self.assertEqual(report['native_pitch_lfo']['delay_approximation']['initializations'],
+                         [{'source_track': 0, 'activation_tick': 4, 'first_note_tick': 20, 'depth': 20}])
+        model = LfoModel(events)
+        self.assertNotEqual(model.advance(20)['phase'], 0)
+        state = model.advance(21)
+        self.assertEqual((state['phase'], state['value'], state['count']), (0, 0, state['delay'] - 1))
+        self.assertTrue(report['note_timing_check'])
+
+    def test_pre_note_setup_does_not_allow_later_fixed_parameter_changes(self):
+        body = b'\x80\x04\xCA\x14\x80\x04\xE0\x14\x00\x80\x0C' + fixtures.note() + b'\x80\x0C'
+        with self.assertRaises(ValueError):
+            convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                                native_pitch_lfo_delay=True)
+
     def test_independent_live_depth_update_must_preserve_phase_and_counter(self):
         header = 'tick,track,channel,before_depth,depth,phase_before,phase_after,counter_before,counter_after\n'
         row = '12,0,0,10,20,1600,1600,10,10\n'

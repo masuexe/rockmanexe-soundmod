@@ -20,7 +20,7 @@ copies the parameters without resetting those counters.
 
 `native_pitch_lfo_live_depth=True` requires both existing native pitch-LFO
 and delay flags. It permits only positive depth changes; type, speed, range
-and delay must remain fixed after activation at the first note timestamp.
+and delay must remain fixed after activation before or at the first note timestamp.
 Later activation, disabling modulation and changing other active parameters
 remain rejected. All active states must fit the existing native mapping.
 Singleton source tracks and a fixed tempo remain required. The default
@@ -28,6 +28,8 @@ compiler policy and archived v5 audit routes are unchanged. The later
 [v6 audit](nds-compatibility-audit.md) tries this opt-in policy after the
 existing routes, separately labeling live-depth and envelope/live-depth
 successes. HOMETOWN is its only newly packed candidate and matches this ROM.
+The subsequent [GOWAIINCHO correction](nds-pre-note-lfo-research.md) also
+admits initialization before the first note; archived v6 results are unchanged.
 
 Depth controls emit MOD alone, in original execution order. They do not
 emit LFOS=0 or LFODL, so they preserve the shared target phase and delay

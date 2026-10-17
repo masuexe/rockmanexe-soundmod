@@ -189,7 +189,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Delay approximation requires native pitch LFO mode')
     if native_pitch_lfo_live_depth and not (native_pitch_lfo and native_pitch_lfo_delay):
         raise ValueError('Live depth approximation requires native pitch LFO delay mode')
-    depth_changes = []
+    depth_changes, initializations = [], []
     if native_pitch_lfo_delay:
         fields = ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')
         for track in tracks:
@@ -201,8 +201,11 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 continue
             activation = active[0]
             baseline = tuple(track['actions'][activation]['state_after'][k] for k in fields)
-            if not notes or track['actions'][activation]['ticks'] != notes[0]['ticks']:
-                raise ValueError('Delayed LFO requires activation at the first note timestamp')
+            if not notes or track['actions'][activation]['ticks'] > notes[0]['ticks']:
+                raise ValueError('Delayed LFO requires activation before or at the first note timestamp')
+            initializations.append({'source_track': track['track'],
+                                    'activation_tick': track['actions'][activation]['ticks'],
+                                    'first_note_tick': notes[0]['ticks'], 'depth': baseline[2]})
             for i, a in enumerate(track['actions']):
                 if a['name'] != 'note':
                     continue
@@ -513,8 +516,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     if native_pitch_lfo_delay:
         report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; shared phase reset per note with quantized fixed-delay LFODL'
         report['native_pitch_lfo']['delay_approximation'] = {
-            'policy': 'Fixed per-track delayed modulation, with optional activation after the first note at the same tick; no live parameter changes',
+            'policy': 'Fixed per-track delayed modulation initialized before or at the first note timestamp, including depth enabled after that note at the same tick; no live parameter changes',
             'method': 'Round DS timer delay to sequence ticks, plus the existing one-tick zero-phase onset',
+            'initializations': initializations,
             'limitations': ['Delay and phase belong to the target track, not independent source voices.',
                             'New notes reset the shared delay/phase for overlapping voices and release tails.',
                             'LFODL is limited to 255 ticks; overflowing delays are rejected.']}

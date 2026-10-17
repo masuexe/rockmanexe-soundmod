@@ -175,18 +175,21 @@ def check_reference(experiment, reference):
         counts[str(track['track'])] = len(actual)
     control_matches = depth_control_matches = 0
     live_depth = conversion.get('native_pitch_lfo', {}).get('live_depth_approximation')
-    if live_depth and not (reference / 'controls.csv').is_file():
-        raise AssertionError('Live depth conversion needs independent control observations')
+    pre_note = [r for r in conversion.get('native_pitch_lfo', {}).get('delay_approximation', {}).get('initializations', [])
+                if r['activation_tick'] < r['first_note_tick']]
+    check_depth = live_depth or pre_note
+    if check_depth and not (reference / 'controls.csv').is_file():
+        raise AssertionError('Depth conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
-            for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if live_depth else ()):
+            for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if check_depth else ()):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
                     if opcode == 0xCA and any(a['opcode'] == opcode for a in track['actions']):
-                        raise AssertionError('Independent DS live depth controls are missing')
+                        raise AssertionError('Independent DS depth controls are missing')
                     continue
                 last = actual[-1][0]
                 def value(action):
@@ -204,6 +207,16 @@ def check_reference(experiment, reference):
                     depth_control_matches += len(actual)
                 else:
                     control_matches += len(actual)
+        for setup in pre_note:
+            first = min(n['tick'] for n in notes if n['track'] == setup['source_track'])
+            source_track = next(t for t in conversion['tracks'] if t['track'] == setup['source_track'])
+            source_setup = next(a for a in source_track['actions'] if a['ticks'] == setup['activation_tick']
+                                and a['opcode'] in (0xCA, 0xE0) and a['state_after']['mod_depth']
+                                and (a['state_after']['mod_delay'] or live_depth))
+            if first != setup['first_note_tick'] or not any(
+                    r['track'] == setup['source_track'] and r['opcode'] == source_setup['opcode']
+                    and r['tick'] == setup['activation_tick'] and r['value'] == source_setup['value'] for r in controls):
+                raise AssertionError('Independent DS pre-note initialization differs')
     modulation_matches = 0
     modulation_file = reference / 'modulation.csv'
     if conversion.get('native_pitch_lfo') and not modulation_file.is_file():
@@ -228,7 +241,9 @@ def check_reference(experiment, reference):
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
-            'live_depth_control_matches': depth_control_matches,
+            'live_depth_control_matches': depth_control_matches if live_depth else 0,
+            'pre_note_initializations_checked': pre_note,
+            'initialization_depth_control_matches': depth_control_matches if pre_note else 0,
             'live_depth_reference': check_live_depth_reference(conversion, reference) if live_depth else None,
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 

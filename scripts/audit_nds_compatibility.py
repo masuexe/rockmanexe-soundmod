@@ -341,7 +341,7 @@ def write_reports(directory, report):
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
                     '常规路径仍使用既有 PCM8、包络和速度量化近似；颤音近似还有共享相位和波形差异。',
                     '包络路径按音符开始时的 ADSR 快照生成乐器；渐入起音拟合有明确误差上限。组合路径同时包含两类近似。',
-                    '固定延迟路径只接受首次音符时刻启用、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。',
+                    '固定延迟路径接受首次音符之前或同一时刻完成初始化、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。',
                     '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。分类互斥，组合路径不重复计数。'])
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
@@ -371,7 +371,7 @@ def write_reports(directory, report):
     payload = json.dumps({'report': report, 'labels': STATUS_LABELS}, ensure_ascii=False).replace('<', '\\u003c')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
-<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音、实时深度颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符时刻启用且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
+<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音、实时深度颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
 <p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>现有人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
@@ -408,7 +408,7 @@ def main():
     args.out.mkdir(parents=True)
     report = {'schema_version': 4, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'live_depth_route_policy': {'singleton_tracks_only': True, 'fixed_tempo': True,
-                                          'activation': 'First note timestamp, including depth enabled after note at the same tick',
+                                          'activation': 'Before or at first note timestamp, including depth enabled after note at the same tick',
                                           'positive_depth_changes_only': True,
                                           'fixed_fields': ['mod_type', 'mod_speed', 'mod_range', 'mod_delay'],
                                           'disabling_or_late_activation_supported': False,
@@ -416,7 +416,7 @@ def main():
                                           'new_notes_reset_shared_phase_and_delay': True,
                                           'requires_representable_nonzero_native_depth': True},
               'fixed_delay_route_policy': {'singleton_tracks_only': True, 'fixed_tempo': True,
-                                           'activation': 'First note timestamp, including depth enabled after note at the same tick',
+                                           'activation': 'Before or at first note timestamp, including depth enabled after note at the same tick',
                                            'live_parameter_changes': False, 'lfodl_max': 255,
                                            'mapping': 'round(DS delay * GBA sequence tick rate / DS timer rate) + 1',
                                            'shared_delay_and_phase': True},

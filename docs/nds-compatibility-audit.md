@@ -53,7 +53,7 @@ in this order, within the target's eight-track capacity:
 6. If source execution reaches active nonzero delay, try the fixed delayed-LFO
    approximation, then its envelope combination when envelope features are
    present. Detection includes activation after a note at the same tick,
-   rather than relying only on note-on state. The converter requires fixed
+   rather than relying only on note-on state. At v6 scan time, the converter required fixed
    per-track delayed modulation after activation at the first note timestamp;
    later activation or parameter changes remain rejected. Delays map to
    LFODL with the existing one-tick zero-phase onset and must fit 1..255.
@@ -254,19 +254,26 @@ resource evidence, not new GBA runtime or listening acceptance.
 The subsequent [Star Force 2 BATTLE experiment](nds-sf2-battle-research.md)
 validated the eight-track fixed-delay candidate; the user reported no issues
 on 2026-10-17. This later acceptance does not change the v5 scan snapshot.
-Remaining delay-route rejections
-include activation after the first note timestamp (Star Force 1 GOWAIINCHO,
-PLANETARIUM, BOSS and Star Force 2 KAICYOU), and changing delayed modulation
-settings and activation constraints (Star Force 1 LOSE, Star Force 2 LOSE/VS
-and Star Force 3 LOSE). Only positive depth changes under the documented
-fixed-field policy have been enabled by v6. Star Force 1
+The v6 activation-equality diagnostic conflated setup before the first note
+with activation afterward. Subsequent source inspection shows GOWAIINCHO
+track 2 sets depth at tick 24 before first sounding at 688, and PLANETARIUM
+track 2 sets it at 0 before first sounding at 24. In contrast, BOSS track 4
+first sounds at 0 and activates at 3840; Star Force 2 KAICYOU track 2 first
+sounds at 48 and activates at 768. The
+[GOWAIINCHO experiment](nds-pre-note-lfo-research.md) now admits pre-note
+initialization in the compiler and updates future scan policy text, without
+rerunning or changing the archived v6 scan. Actual later activation and other
+parameter changes remain separate research. LOSE/VS also retain additional
+activation/parameter constraints requiring further inspection.
+Only positive depth changes under the documented fixed-field policy were
+added by v6. Star Force 1
 HOKORA remains a bounded source-parser investigation.
 The later [HOMETOWN experiment](nds-live-depth-research.md) separately enables
 positive depth changes with fixed speed/range/type/delay. The user reported
 no issues with the standalone ROM's requested listening and gameplay checks
 on 2026-10-17. Its policy is now included in v6, while the v5 snapshot is
-unchanged. Activation after the first note is a useful next bounded research
-target; it remains rejected by this scan.
+unchanged. Actual activation after the first note is a useful next bounded
+research target, with BOSS or KAICYOU as confirmed examples.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

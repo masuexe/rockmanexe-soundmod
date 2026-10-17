@@ -318,6 +318,31 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_gowaiincho_initializes_before_first_note_and_preserves_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-gowaiincho-delay')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 7)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_delay_approximation'])
+        self.assertNotIn('envelope_approximation', manifest['nds_conversion'])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 24)
+        lfo = conversion['native_pitch_lfo']
+        self.assertEqual(lfo['delay_approximation']['initializations'],
+                         [{'source_track': 2, 'activation_tick': 24, 'first_note_tick': 688, 'depth': 20}])
+        self.assertEqual(lfo['configs'][0]['delay_mapping']['lfodl'], 5)
+        events = dependency['tracks'][2]['events']
+        self.assertEqual(min(e['ticks'] for e in events if e['name'] == 'NOTE'), 688)
+        self.assertTrue(any(e['name'] == 'MOD' and e['ticks'] == 24 and e['value'] == 2 for e in events))
+        self.assertTrue(any(e['name'] == 'LFODL' and e['ticks'] == 688 and e['value'] == 5 for e in events))
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_hometown_live_depth_preserves_same_tick_order_and_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
