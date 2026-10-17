@@ -230,9 +230,14 @@ Both record the same instrument-123/alias-127 conflict between source keys
 96 and 60, resolved by a second compatible bank (new voice 5 at tick 791).
 Neither requires the active pitch-LFO or fitted-envelope modes. SATELLITE
 has no long-note carry across its generated loop cut; URA retains five.
-SATELLITE is the next recommended standalone source/runtime/listening test.
+SATELLITE was the next recommended standalone source/runtime/listening test
+at scan time.
 The scan supplies packing evidence only; URA's manual match reuses its
 existing acceptance, and DEMPAJIKEN now matches its later accepted artifact.
+The subsequent [SATELLITE experiment](nds-satellite-research.md) supplies
+independent source, bounded natural playback and actual alias/stop checks.
+The user reported no issues with its requested listening/gameplay checklist
+on 2026-10-17; the archived v9 evidence is unchanged.
 
 Eighteen packed variants are byte-identical to artifacts with structured
 user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/URA/LAST/KINCHO/BATTLE-LFO,
@@ -393,7 +398,10 @@ definition conflict at v8 scan time. The later [URA experiment](nds-ura-research
 now converts it with separate compatible banks and has user-reported
 listening/gameplay acceptance on 2026-10-17. V9 now packs both URA and SATELLITE,
 with an exact accepted-ROM match for URA. SATELLITE's eight-track, 28-sample
-variant should receive independent source/runtime and listening checks next.
+variant subsequently passed standalone source/runtime checks and user-reported
+listening/gameplay acceptance. A next research candidate is Star Force 1
+HENKAN: its finite sequence still fails the singleton compiler's looping-track
+requirement and needs explicit long-gate/end-of-song support.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

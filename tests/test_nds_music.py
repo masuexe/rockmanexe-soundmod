@@ -361,6 +361,36 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_satellite_preserves_split_aliases_and_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-satellite')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 9)
+        self.assertNotIn('native_pitch_lfo_approximation', manifest['nds_conversion'])
+        self.assertNotIn('envelope_approximation', manifest['nds_conversion'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples']), len(conversion['instruments'])), (8, 28, 15))
+        self.assertEqual(conversion['long_note_loop_carries'], [])
+        self.assertEqual(conversion['voice_context_splits'], [
+            {'gba_voice': 5, 'existing_voices': [4], 'source_track': 3, 'tick': 791,
+             'source_instrument': 123, 'gba_key': 127, 'source_key': 60, 'conflicting_source_keys': [96]}])
+        bank = dependency['header']['tone_bank']['file_offset']
+        for voice, source_key in [(5, 60), (4, 96)]:
+            child = struct.unpack_from('<I', blob, bank + voice * 12 + 4)[0] - 0x08000000
+            self.assertEqual(blob[child + 127 * 12 + 1], source_key)
+        self.assertTrue(any(e['name'] == 'EOT' and e['key'] == 127 and e['ticks'] == 1420
+                            for e in dependency['tracks'][3]['events']))
+        self.assertEqual(manifest['output_fingerprint']['sha256'],
+                         '77ca068cb73ae060b0ce4abb0eede11657d999b149419b21ed224911cbdabd61')
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_ura_splits_shared_percussion_alias_and_preserves_native_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
