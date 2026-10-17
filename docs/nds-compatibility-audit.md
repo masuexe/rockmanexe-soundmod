@@ -235,6 +235,10 @@ PLANETARIUM, BOSS and Star Force 2 KAICYOU), and changing delayed modulation
 settings (Star Force 1 HOMETOWN/LOSE, Star Force 2 LOSE/VS and Star Force 3
 LOSE). These restrictions have not been relaxed by the scan. Star Force 1
 HOKORA remains a bounded source-parser investigation.
+The later [HOMETOWN experiment](nds-live-depth-research.md) separately enables
+positive depth changes with fixed speed/range/type/delay; it leaves the v5
+scan policy unchanged. The user reported no issues with the standalone ROM's
+requested listening and gameplay checks on 2026-10-17.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

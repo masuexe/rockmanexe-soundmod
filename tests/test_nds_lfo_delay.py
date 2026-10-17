@@ -8,7 +8,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import test_nds_music as fixtures
 from nds_track_merge import convert_merged_song
-from validate_nds_experiment import check_delay_reference
+from validate_nds_experiment import check_delay_reference, check_live_depth_reference
+from validate_nds_lfo import LfoModel
 
 
 def archive_for(body):
@@ -18,6 +19,64 @@ def archive_for(body):
 
 
 class DelayedPitchLfoTests(unittest.TestCase):
+    def test_independent_live_depth_update_must_preserve_phase_and_counter(self):
+        header = 'tick,track,channel,before_depth,depth,phase_before,phase_after,counter_before,counter_after\n'
+        row = '12,0,0,10,20,1600,1600,10,10\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            file = root / 'modulation-changes.csv'
+            file.write_text(header + row)
+            result = check_live_depth_reference({}, root)
+            self.assertEqual(result['positive_voice_depth_changes'], 1)
+            for corrupted in ('12,0,0,10,20,1600,0,10,10\n',
+                              '12,0,0,10,20,1600,1600,10,0\n'):
+                file.write_text(header + corrupted)
+                with self.assertRaisesRegex(AssertionError, 'phase/counter'):
+                    check_live_depth_reference({}, root)
+
+    def test_live_depth_preserves_held_note_phase_and_delay_count(self):
+        for change_tick in (2, 12):
+            with self.subTest(change_tick=change_tick):
+                body = (b'\xCA\x0A' + fixtures.note(length=96) + bytes([0x80, change_tick])
+                        + b'\xCA\x14\x80' + bytes([96 - change_tick]) + b'\xCA\x0A')
+                archive = archive_for(body)
+                with self.assertRaises(ValueError):
+                    convert_merged_song(archive, 0, [(0,)], native_pitch_lfo=True,
+                                        native_pitch_lfo_delay=True)
+                _, dep, report = convert_merged_song(archive, 0, [(0,)], native_pitch_lfo=True,
+                    native_pitch_lfo_delay=True, native_pitch_lfo_live_depth=True)
+                events = dep['tracks'][0]['events']
+                at_change = [e for e in events if e['ticks'] == change_tick and e['name'] != 'WAIT']
+                self.assertEqual([(e['name'], e.get('value')) for e in at_change], [('MOD', 2)])
+                model = LfoModel(events)
+                before = model.advance(change_tick)
+                after = model.advance(change_tick + 1)
+                self.assertEqual(after['depth'], 2)
+                self.assertEqual(after['count'], max(0, before['count'] - 1))
+                self.assertEqual(after['phase'], before['phase'] if before['count'] else
+                                 (before['phase'] + before['speed']) % 256)
+                self.assertTrue(report['note_timing_check'])
+                self.assertEqual(report['native_pitch_lfo']['live_depth_approximation']['source_depth_changes'][0],
+                                 {'source_track': 0, 'ticks': change_tick, 'before': 10, 'after': 20})
+
+    def test_live_depth_keeps_unsupported_changes_rejected(self):
+        for control in (b'\xCA\x00', b'\xCB\x14', b'\xCC\x01', b'\xCD\x02', b'\xE0\x14\x00'):
+            body = b'\xCA\x0A' + fixtures.note(length=96) + b'\x80\x0C' + control + b'\x80\x54'
+            with self.subTest(control=control), self.assertRaises(ValueError):
+                convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                    native_pitch_lfo_delay=True, native_pitch_lfo_live_depth=True)
+
+    def test_live_depth_does_not_allow_late_activation(self):
+        body = fixtures.note(length=96) + b'\x80\x0C\xCA\x0A\x80\x54'
+        with self.assertRaisesRegex(ValueError, 'first note timestamp'):
+            convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                native_pitch_lfo_delay=True, native_pitch_lfo_live_depth=True)
+
+    def test_live_depth_requires_explicit_delay_mode(self):
+        with self.assertRaisesRegex(ValueError, 'requires native pitch LFO delay'):
+            convert_merged_song(archive_for(fixtures.note() + b'\x80\x0C'), 0, [(0,)], native_pitch_lfo=True,
+                                native_pitch_lfo_live_depth=True)
+
     def test_activation_after_first_note_at_same_tick_is_preserved(self):
         body = fixtures.note(length=36) + b'\xCA\x0F\x80\x24' + fixtures.note(64, length=36) + b'\x80\x24'
         archive = archive_for(body)

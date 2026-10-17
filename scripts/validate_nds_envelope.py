@@ -120,11 +120,18 @@ def probe(experiment, directory, frames=1800, mgba='/usr/games/mgba'):
                                  'flags': flags, 'amplitude': level})
                 report['snapshots'].append({'frame': frame, 'clock': clock, 'channels': rows})
                 previous, previous_clock = current, clock
-            expects_slow = any(a['ds_attack'] != 127 for a in conversion['envelope_approximation']['attack_fits'])
+            # Some songs first use the fitted attack after the title window.
+            # Require it only when a corresponding source note was reached,
+            # and report the remaining coverage explicitly.
+            slow_notes = [n for n in conversion['note_mapping']
+                          if n['source_envelope']['attack'] != 127]
+            expects_slow = any(n['tick'] < clock for n in slow_notes)
             if not comparisons or not observed or (expects_slow and not slow):
                 raise AssertionError('Insufficient live envelope/attack observations')
             report.update(complete=True, final_clock=clock, mapped_channel_observations=observed,
                           exact_native_step_comparisons=comparisons, slow_attack_observations=slow,
+                          slow_attack_source_note_in_window=expects_slow,
+                          full_song_slow_attack_covered=not slow_notes or bool(slow),
                           release_observations=releases)
         except BaseException as error:
             report['error'] = repr(error)

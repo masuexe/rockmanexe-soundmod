@@ -71,6 +71,15 @@ def main():
     channel.write_text('class Channel;\nextern void researchModulation(const Channel&, int);\n'
                        'extern void researchModulationDelay(const Channel&, int, unsigned, bool);\n'
                        'extern void researchEnvelope(const Channel&, int, int);\n' + text)
+    text = channel.read_text()
+    marker = 'void Channel::UpdateMod(const Track &trk)\n{'
+    tail = '\tthis->modDelay = trk.modDelay;'
+    if text.count(marker) != 1 or text.count(tail) != 1:
+        raise ValueError('Unknown upstream live modulation update; hook not installed')
+    text = text.replace(marker, marker + '\n\tint oldDepth = this->modDepth, oldDelayCount = this->modDelayCnt;\n'
+                        '\tunsigned oldPhase = this->modCounter;')
+    text = text.replace(tail, tail + '\n\tresearchModulationChange(*this, oldDepth, oldPhase, oldDelayCount);')
+    channel.write_text('class Channel;\nextern void researchModulationChange(const Channel&, int, unsigned, int);\n' + text)
     track = copied / 'Track.cpp'
     text = track.read_text()
     marker = 'int Track::NoteOn(int key, int vel, int len)\n{'
@@ -84,6 +93,7 @@ def main():
         ('this->pitchBend = this->overriding.val(pData, read8);', 0xC4, 'this->pitchBend'),
         ('this->expr = this->overriding.val(pData, read8);', 0xD5, 'this->expr'),
         ('this->modDelay = this->overriding.val(pData, read16);', 0xE0, 'this->modDelay'),
+        ('this->modDepth = this->overriding.val(pData, read8);', 0xCA, 'this->modDepth'),
         *((f'this->{field} = this->overriding.val(pData, read8);', 0xD0 + i, f'this->{field}')
           for i, field in enumerate(('a', 'd', 's', 'r'))),
     ]:

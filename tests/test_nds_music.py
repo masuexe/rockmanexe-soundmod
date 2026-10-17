@@ -318,6 +318,30 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_hometown_live_depth_preserves_same_tick_order_and_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-hometown-depth')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 3)
+        for flag in ('native_pitch_lfo_live_depth_approximation', 'native_pitch_lfo_delay_approximation',
+                     'envelope_approximation'):
+            self.assertTrue(manifest['nds_conversion'][flag])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 19)
+        events = [e for e in dependency['tracks'][2]['events'] if e['ticks'] == 3072 and e['name'] != 'WAIT']
+        note_index = next(i for i, e in enumerate(events) if e['name'] == 'NOTE')
+        self.assertEqual([(e['name'], e.get('value')) for e in events[note_index + 1:]], [('MOD', 2)])
+        changes = conversion['native_pitch_lfo']['live_depth_approximation']['source_depth_changes']
+        self.assertEqual([(c['ticks'], c['before'], c['after']) for c in changes],
+                         [(3072, 10, 20), (6912, 20, 10)])
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_fmplanet_delay_is_explicit_and_preserves_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

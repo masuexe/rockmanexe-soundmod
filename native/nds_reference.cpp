@@ -19,6 +19,16 @@ static std::ofstream modulationLog;
 static std::ofstream envelopeLog;
 static std::ofstream envelopeNoteLog;
 static std::ofstream modulationDelayLog;
+static std::ofstream modulationChangeLog;
+void researchModulationChange(const Channel& channel, int oldDepth, unsigned oldPhase, int oldDelayCount) {
+    if (channel.trackId < 0 || oldDepth == channel.modDepth) return;
+    modulationChangeLog << researchSequenceClock - 1 << ','
+                        << static_cast<unsigned>(channel.ply->tracks[channel.trackId].num) << ','
+                        << (&channel - &channel.ply->channels[0]) << ','
+                        << oldDepth << ',' << static_cast<unsigned>(channel.modDepth) << ','
+                        << oldPhase << ',' << channel.modCounter << ','
+                        << oldDelayCount << ',' << channel.modDelayCnt << '\n';
+}
 void researchModulationDelay(const Channel& channel, int beforeCount, unsigned beforePhase, bool active) {
     if (channel.trackId < 0 || !channel.modDepth) return;
     modulationDelayLog << researchTimerClock - 1 << ',' << researchSequenceClock << ','
@@ -88,7 +98,7 @@ int main(int argc, char** argv) {
         file.data = &bytes;
         SDAT sdat(file, std::stoul(argv[2]));
         const unsigned seconds = std::stoul(argv[3]);
-        if (!seconds || seconds > 180) throw std::runtime_error("duration must be 1..180");
+        if (!seconds || seconds > 300) throw std::runtime_error("duration must be 1..300");
         const std::string directory(argv[4]); // caller creates a fresh directory
         noteLog.open(directory + "/notes.csv");
         if (!noteLog) throw std::runtime_error("cannot create reference note log");
@@ -107,6 +117,9 @@ int main(int argc, char** argv) {
         modulationDelayLog.open(directory + "/modulation-delay.csv");
         if (!modulationDelayLog) throw std::runtime_error("cannot create modulation-delay log");
         modulationDelayLog << "timer_frame,tick,track,channel,key,depth,speed,type,range,delay,counter_before,counter_after,phase_before,phase_after,active\n";
+        modulationChangeLog.open(directory + "/modulation-changes.csv");
+        if (!modulationChangeLog) throw std::runtime_error("cannot create live modulation change log");
+        modulationChangeLog << "tick,track,channel,before_depth,depth,phase_before,phase_after,counter_before,counter_after\n";
         Player player;
         player.sampleRate = 44100;
         player.interpolation = INTERPOLATION_NONE;

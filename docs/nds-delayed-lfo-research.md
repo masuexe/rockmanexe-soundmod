@@ -56,6 +56,10 @@ now tries this bounded policy for eligible candidates, labeling delayed-LFO
 and envelope/delayed-LFO successes separately. FMPLANET has user-reported
 acceptance; this does not establish listening acceptance for other songs.
 
+The later [HOMETOWN experiment](nds-live-depth-research.md) adds a separate
+opt-in positive-depth update policy. It does not relax this fixed-delay mode
+or the v5 batch scan's settings.
+
 Native track sharing remains an approximation: a new note resets older
 overlapping voices and release tails, whereas DS voices retain independent
 timers. Triangle shape, pitch quantization, sequence/audio-frame timing,

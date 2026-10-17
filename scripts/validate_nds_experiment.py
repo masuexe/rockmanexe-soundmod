@@ -115,6 +115,24 @@ def check_delay_reference(conversion, reference):
             'source_delays_observed': sorted(delays)}
 
 
+def check_live_depth_reference(conversion, reference):
+    """Independent UpdateMod observations must retain voice phase and counter."""
+    transitions = carried = 0
+    with (reference / 'modulation-changes.csv').open() as stream:
+        for raw in csv.DictReader(stream):
+            r = {k: int(v) for k, v in raw.items()}
+            if (r['phase_before'], r['counter_before']) != (r['phase_after'], r['counter_after']):
+                raise AssertionError('Independent DS live depth update resets phase/counter')
+            if r['before_depth'] > 0 and r['depth'] > 0:
+                transitions += 1
+                carried += bool(r['phase_before'] or r['counter_before'])
+    if not transitions or not carried:
+        raise AssertionError('Reference does not cover positive live depth changes with carried state')
+    return {'complete': True, 'positive_voice_depth_changes': transitions,
+            'changes_with_nonzero_phase_or_counter': carried,
+            'phase_and_delay_count_preserved': True}
+
+
 def check_reference(experiment, reference):
     conversion = json.loads((experiment / 'conversion.json').read_text())
     archive = SoundArchive((experiment / 'source.sdat').read_bytes())
@@ -155,15 +173,20 @@ def check_reference(experiment, reference):
         if actual != expected:
             raise AssertionError(f'Independent DS note execution differs on track {track["track"]}')
         counts[str(track['track'])] = len(actual)
-    control_matches = 0
+    control_matches = depth_control_matches = 0
+    live_depth = conversion.get('native_pitch_lfo', {}).get('live_depth_approximation')
+    if live_depth and not (reference / 'controls.csv').is_file():
+        raise AssertionError('Live depth conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
-            for opcode in (0xC0, 0xC4, 0xD5, 0xE0):
+            for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if live_depth else ()):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
+                    if opcode == 0xCA and any(a['opcode'] == opcode for a in track['actions']):
+                        raise AssertionError('Independent DS live depth controls are missing')
                     continue
                 last = actual[-1][0]
                 def value(action):
@@ -177,7 +200,10 @@ def check_reference(experiment, reference):
                 expected = [a for a in expected if a[0] <= last]
                 if actual != expected:
                     raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
-                control_matches += len(actual)
+                if opcode == 0xCA:
+                    depth_control_matches += len(actual)
+                else:
+                    control_matches += len(actual)
     modulation_matches = 0
     modulation_file = reference / 'modulation.csv'
     if conversion.get('native_pitch_lfo') and not modulation_file.is_file():
@@ -202,6 +228,8 @@ def check_reference(experiment, reference):
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
+            'live_depth_control_matches': depth_control_matches,
+            'live_depth_reference': check_live_depth_reference(conversion, reference) if live_depth else None,
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 

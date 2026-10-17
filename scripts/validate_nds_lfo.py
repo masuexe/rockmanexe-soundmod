@@ -114,6 +114,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     env.pop('LD_PRELOAD', None)
     models = [LfoModel(t['events']) for t in dependency['tracks']]
     observed = {i: set() for i in range(len(models))}
+    observed_depths = {i: set() for i in range(len(models))}
     modeled = {i: set() for i in range(len(models))}
     delayed_holds = {}
     report = {'complete': False, 'scope': 'requested natural-title window only',
@@ -161,6 +162,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                         delayed_holds[i] = delayed_holds.get(i, 0) + 1
                     if actual['depth']:
                         observed[i].add(actual['value'])
+                        observed_depths[i].add(actual['depth'])
                     if expected['depth']:
                         modeled[i].add(expected['value'])
                     rows.append(actual)
@@ -171,9 +173,13 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                 raise AssertionError('Active modulation tracks differ from the bounded MPlay model')
             if manifest['nds_conversion'].get('native_pitch_lfo_delay_approximation') and not delayed_holds:
                 raise AssertionError('Requested window did not observe delayed native onsets')
+            if manifest['nds_conversion'].get('native_pitch_lfo_live_depth_approximation') and not any(
+                    len(values) > 1 for values in observed_depths.values()):
+                raise AssertionError('Requested window did not observe a live positive depth change')
             report.update(complete=True, frames_checked=frames, final_clock=clock,
                           active_modulation_tracks=sorted(active),
                           delayed_zero_phase_hold_observations=delayed_holds,
+                          observed_positive_depths={str(i): sorted(v) for i, v in observed_depths.items() if v},
                           observed_values={str(i): sorted(values) for i, values in observed.items()})
         except BaseException as error:
             report['error'] = repr(error)

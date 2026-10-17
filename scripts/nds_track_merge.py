@@ -177,7 +177,8 @@ def assess_groups(tracks, groups):
 
 
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
-                        native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False):
+                        native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
+                        native_pitch_lfo_live_depth=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -186,12 +187,16 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     tracks = trace_sequence(data, analysis_only=True)
     if native_pitch_lfo_delay and not native_pitch_lfo:
         raise ValueError('Delay approximation requires native pitch LFO mode')
+    if native_pitch_lfo_live_depth and not (native_pitch_lfo and native_pitch_lfo_delay):
+        raise ValueError('Live depth approximation requires native pitch LFO delay mode')
+    depth_changes = []
     if native_pitch_lfo_delay:
         fields = ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')
         for track in tracks:
             notes = [a for a in track['actions'] if a['name'] == 'note']
             active = [i for i, a in enumerate(track['actions'])
-                      if a.get('state_after', {}).get('mod_delay') and a['state_after']['mod_depth']]
+                      if a.get('state_after', {}).get('mod_depth') and
+                      (a['state_after']['mod_delay'] or native_pitch_lfo_live_depth)]
             if not active:
                 continue
             activation = active[0]
@@ -205,12 +210,24 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 # Some originals enable depth just after their first note at
                 # the same tick. No DS timer update has elapsed in between.
                 initial_off = i < activation and a['ticks'] == notes[0]['ticks'] and current[2] == 0
-                if current != baseline and not (initial_off and current[:2] + current[3:] == baseline[:2] + baseline[3:]):
+                live_depth = (native_pitch_lfo_live_depth and current[2] > 0 and
+                              current[:2] + current[3:] == baseline[:2] + baseline[3:])
+                if current != baseline and not live_depth and not (initial_off and current[:2] + current[3:] == baseline[:2] + baseline[3:]):
                     raise ValueError('Delayed LFO requires fixed per-track modulation after initial activation')
-            if any(a['opcode'] in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0)
-                   and tuple(a['state_after'][k] for k in fields) != baseline
-                   for a in track['actions'][activation + 1:]):
-                raise ValueError('Live delayed-LFO parameter changes are outside this experiment')
+            previous_depth = baseline[2]
+            for a in track['actions'][activation + 1:]:
+                if a['opcode'] not in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
+                    continue
+                current = tuple(a['state_after'][k] for k in fields)
+                if current == baseline and not native_pitch_lfo_live_depth:
+                    continue
+                if not (native_pitch_lfo_live_depth and current[2] > 0 and
+                        current[:2] + current[3:] == baseline[:2] + baseline[3:]):
+                    raise ValueError('Live delayed-LFO parameter changes are outside this experiment')
+                if current[2] != previous_depth:
+                    depth_changes.append({'source_track': track['track'], 'ticks': a['ticks'],
+                                          'before': previous_depth, 'after': current[2]})
+                previous_depth = current[2]
     if envelope_support and any(len(group) != 1 for group in groups):
         raise ValueError('Envelope experiment requires singleton target tracks')
     # Audit mode records effects broadly; this compiler accepts only the
@@ -404,7 +421,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
             elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
                 value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay)
-                command = bytes([0xC4, value['mod'], 0xC2, value['lfos']])
+                command = (bytes([0xC4, value['mod']]) if native_pitch_lfo_live_depth and op == 0xCA
+                           else bytes([0xC4, value['mod'], 0xC2, value['lfos']]))
             if command:
                 order = 1 + action['event_order'] if native_pitch_lfo else 1
                 events.append((action['ticks'], order, primary, command, None))
@@ -500,4 +518,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             'limitations': ['Delay and phase belong to the target track, not independent source voices.',
                             'New notes reset the shared delay/phase for overlapping voices and release tails.',
                             'LFODL is limited to 255 ticks; overflowing delays are rejected.']}
+    if native_pitch_lfo_live_depth:
+        report['native_pitch_lfo']['live_depth_approximation'] = {
+            'policy': 'Positive depth changes only after initial activation; fixed pitch type, speed, range and delay',
+            'method': 'Ordered MOD updates without resetting shared phase or delay count; note-on resets remain',
+            'source_depth_changes': depth_changes,
+            'limitations': ['Positive source depths must map to nonzero native MOD values.',
+                            'Disabling modulation, later activation and other live parameter changes remain rejected.',
+                            'Depth updates use shared target phase for overlapping voices and release tails.']}
+        report['native_pitch_lfo']['delay_approximation']['policy'] = report['native_pitch_lfo']['live_depth_approximation']['policy']
+        report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; quantized fixed delay with live positive depth updates'
     return blob, dependency, report
