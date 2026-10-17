@@ -530,6 +530,34 @@ SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
 
 @unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
 class LocalStarForce2Tests(unittest.TestCase):
+    def test_kaicyou_combines_envelope_and_both_initialization_orders(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-kaicyou-toggle')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 16)
+        for flag in ('native_pitch_lfo_approximation', 'native_pitch_lfo_delay_approximation',
+                     'native_pitch_lfo_live_toggle_approximation', 'envelope_approximation'):
+            self.assertTrue(manifest['nds_conversion'][flag])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 24)
+        self.assertEqual(conversion['native_pitch_lfo']['delay_approximation']['initializations'],
+                         [{'source_track': 2, 'activation_tick': 768, 'first_note_tick': 48, 'depth': 10},
+                          {'source_track': 4, 'activation_tick': 768, 'first_note_tick': 1056, 'depth': 10}])
+        fits = conversion['envelope_approximation']['attack_fits']
+        self.assertEqual([(r['ds_attack'], r['gba_attack']) for r in fits], [(100, 74), (127, 255)])
+        events = [e for e in dependency['tracks'][2]['events'] if e['ticks'] == 768 and e['name'] != 'WAIT']
+        note_index = next(i for i, e in enumerate(events) if e['name'] == 'NOTE')
+        self.assertTrue(any(e['name'] == 'MOD' and e['value'] == 1 for e in events[note_index + 1:]))
+        self.assertEqual(manifest['output_fingerprint']['sha256'],
+                         '739726a97c9005ff4905258348c656836802fefc2847b0cdc6ff88b400c86aa5')
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_battle_delay_maps_faster_tempo_without_expanding_tracks(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

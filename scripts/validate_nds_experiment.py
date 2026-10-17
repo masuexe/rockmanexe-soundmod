@@ -133,7 +133,7 @@ def check_live_depth_reference(conversion, reference):
             'phase_and_delay_count_preserved': True}
 
 
-def check_toggle_reference(reference, require_carried_disable=False):
+def check_toggle_reference(reference, require_carried_disable=False, require_disable=True):
     """DS parameter updates preserve counters across both toggle directions."""
     with (reference / 'controls.csv').open() as stream:
         controls = [{k: int(v) for k, v in r.items()} for r in csv.DictReader(stream)
@@ -157,11 +157,12 @@ def check_toggle_reference(reference, require_carried_disable=False):
             off = r['before_depth'] > 0 and r['depth'] == 0
             disabled += off
             carried_disable += bool(off and (r['phase_before'] or r['counter_before']))
-    if not on_controls or not off_controls or not enabled or (require_carried_disable and not carried_disable):
+    if not on_controls or (require_disable and not off_controls) or not enabled or (require_carried_disable and not carried_disable):
         raise AssertionError('Reference does not cover required toggle controls/voice updates')
     return {'complete': True, 'voice_enable_updates': enabled, 'voice_disable_updates': disabled,
             'disable_updates_with_carried_state': carried_disable, 'parameter_updates_preserve_counters': True,
             'enable_controls': on_controls, 'disable_controls': off_controls,
+            'disable_controls_required': require_disable,
             'carried_disable_covered': bool(carried_disable),
             'scope': 'UpdateMod observations at depth-control timestamps; disabling with no allocated voices is allowed; frozen inactive timer updates are not logged'}
 
@@ -246,7 +247,7 @@ def check_reference(experiment, reference):
             source_track = next(t for t in conversion['tracks'] if t['track'] == setup['source_track'])
             source_setup = next(a for a in source_track['actions'] if a['ticks'] == setup['activation_tick']
                                 and a['opcode'] in (0xCA, 0xE0) and a['state_after']['mod_depth']
-                                and (a['state_after']['mod_delay'] or live_depth))
+                                and (a['state_after']['mod_delay'] or live_depth or live_toggle))
             if first != setup['first_note_tick'] or not any(
                     r['track'] == setup['source_track'] and r['opcode'] == source_setup['opcode']
                     and r['tick'] == setup['activation_tick'] and r['value'] == source_setup['value'] for r in controls):
@@ -277,7 +278,8 @@ def check_reference(experiment, reference):
             'source_pitch_modulation_matches': modulation_matches,
             'live_depth_control_matches': depth_control_matches if live_depth else 0,
             'live_toggle_control_matches': depth_control_matches if live_toggle else 0,
-            'live_toggle_reference': check_toggle_reference(reference) if live_toggle else None,
+            'live_toggle_reference': check_toggle_reference(reference, require_disable=any(
+                r['before'] > 0 and r['after'] == 0 for r in live_toggle['source_depth_toggles'])) if live_toggle else None,
             'pre_note_initializations_checked': pre_note,
             'initialization_depth_control_matches': depth_control_matches if pre_note else 0,
             'live_depth_reference': check_live_depth_reference(conversion, reference) if live_depth else None,

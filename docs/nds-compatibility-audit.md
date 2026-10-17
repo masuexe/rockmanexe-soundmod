@@ -173,6 +173,10 @@ GOWAIINCHO and BOSS match their accepted standalone experiments exactly.
 KAICYOU needs independent source, runtime, sustained listening and lifecycle
 validation; automatic packing does not establish those checks. No new
 runtime or listening test was performed by the scan.
+The subsequent [KAICYOU experiment](nds-kaicyou-research.md) supplies a
+standalone ROM and song-specific automated checks, followed by user-reported
+listening and gameplay acceptance on 2026-10-17. Its later evidence does not
+change this scan's snapshot.
 
 Fourteen packed variants are byte-identical to artifacts with structured
 user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/LAST/KINCHO/BATTLE-LFO,
@@ -307,8 +311,9 @@ The subsequent [BOSS experiment](nds-live-toggle-research.md) adds a separate
 binary on/off compiler flag, independently checks native held-note toggles
 and provides a song-specific ROM accepted by user-reported listening and
 gameplay checks on 2026-10-17. V7 now tries this flag and its envelope
-combination after existing routes. KAICYOU is the next song-specific validation
-candidate; the archived v6 counts remain unchanged.
+combination after existing routes. KAICYOU subsequently passed its standalone
+automated and user-reported listening/gameplay checks; the archived v6 and v7
+counts remain unchanged.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

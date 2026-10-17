@@ -19,6 +19,21 @@ def archive_for(body):
 
 
 class DelayedPitchLfoTests(unittest.TestCase):
+    def test_enable_only_reference_does_not_claim_disable_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'controls.csv').write_text('tick,track,opcode,value\n12,0,202,10\n')
+            (root / 'modulation-changes.csv').write_text(
+                'tick,track,channel,before_depth,depth,phase_before,phase_after,counter_before,counter_after\n'
+                '12,0,0,0,10,0,0,0,0\n')
+            report = check_toggle_reference(root, require_disable=False)
+            self.assertTrue(report['complete'])
+            self.assertFalse(report['disable_controls_required'])
+            self.assertEqual(report['disable_controls'], 0)
+            self.assertFalse(report['carried_disable_covered'])
+            with self.assertRaisesRegex(AssertionError, 'required toggle'):
+                check_toggle_reference(root)
+
     def test_toggle_preserves_initial_wait_and_models_disable_phase_approximation(self):
         body = (fixtures.note(length=96) + b'\x80\x0C\xCA\x14\x80\x18\xCA\x00'
                 + b'\x80\x0C\xCA\x14\x80\x30\xCA\x00')
