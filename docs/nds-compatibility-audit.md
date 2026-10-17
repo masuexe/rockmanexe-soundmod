@@ -226,8 +226,10 @@ record the renderer command and source/resource fingerprints; the root file
 collects the results and renderer fingerprint. This is source execution and
 resource evidence, not new GBA runtime or listening acceptance.
 
-The next song-specific validation can target Star Force 2 BATTLE, a newly
-packed eight-track fixed-delay candidate. Remaining delay-route rejections
+The subsequent [Star Force 2 BATTLE experiment](nds-sf2-battle-research.md)
+validated the eight-track fixed-delay candidate; the user reported no issues
+on 2026-10-17. This later acceptance does not change the v5 scan snapshot.
+Remaining delay-route rejections
 include activation after the first note timestamp (Star Force 1 GOWAIINCHO,
 PLANETARIUM, BOSS and Star Force 2 KAICYOU), and changing delayed modulation
 settings (Star Force 1 HOMETOWN/LOSE, Star Force 2 LOSE/VS and Star Force 3

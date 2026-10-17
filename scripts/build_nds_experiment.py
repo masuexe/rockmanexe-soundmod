@@ -36,7 +36,7 @@ SOURCE_ARCHIVES = {
 SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1',
-                 'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2',
+                 'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
 
@@ -89,6 +89,12 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db)
     elif song == 'sf1-fmplanet-delay':
         index, name = 2, 'BGM02FMPLANET'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_delay=True)
+    elif song == 'sf2-battle-delay':
+        index, name = 27, 'BGM_BATTLE'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,

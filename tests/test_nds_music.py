@@ -456,6 +456,29 @@ SF2 = Path('/home/harp/projects/nds/roms/ssr2d.nds')
 
 @unittest.skipUnless(SF2.exists() and BASE.exists(), 'local Star Force 2/EXE6 inputs unavailable')
 class LocalStarForce2Tests(unittest.TestCase):
+    def test_battle_delay_maps_faster_tempo_without_expanding_tracks(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-battle-delay')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 27)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_delay_approximation'])
+        self.assertNotIn('envelope_approximation', manifest['nds_conversion'])
+        self.assertEqual(conversion['track_count'], 8)
+        self.assertEqual(len(dependency['samples']), 24)
+        config = conversion['native_pitch_lfo']['configs'][0]
+        self.assertEqual(config['gba_tempo'], 151)
+        self.assertEqual(config['mod_delay'], 10)
+        self.assertEqual(config['delay_mapping']['lfodl'], 7)
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_nessie_combines_slower_attack_and_lfo_and_preserves_native_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
