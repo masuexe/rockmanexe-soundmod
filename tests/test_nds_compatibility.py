@@ -49,6 +49,73 @@ def scan(archive, **changes):
 
 
 class CompatibilityAuditTests(unittest.TestCase):
+    def test_finite_fallback_gain_retry_reports_and_manual_match(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1, 'nonzero_mod_depth_executed': False}
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        finite = {'track_end_ticks': {'0': 300}, 'explicit_long_note_eot': True}
+        def convert(*args, **kwargs):
+            if not kwargs.get('finite_support'):
+                raise ValueError('requires looping tracks')
+            if args[4]:
+                raise ValueError('Song gain exceeds MPlay VOL headroom')
+            self.assertFalse(kwargs['native_pitch_lfo'])
+            self.assertFalse(kwargs['envelope_support'])
+            return b'blob', {'samples': []}, {'track_count': 1, 'finite_song': finite}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0, 'termination': 'end'}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', side_effect=ValueError('long gate')), \
+             patch('audit_nds_compatibility.convert_merged_song', side_effect=convert), \
+             patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+            result = scan(archive, manual_records=[{'family': 'ssr1', 'sequence_index': 1, 'output_sha256': 'expected'}])
+        self.assertEqual(result['status'], 'packed_finite_standard')
+        self.assertEqual(result['gain_db'], 0)
+        self.assertTrue(result['gain_adjustment_required'])
+        self.assertTrue(result['manual_matches_packed_variant'])
+        self.assertFalse(result['runtime_tested_by_audit'])
+        self.assertEqual([a['gain_db'] for a in result['attempts'] if a['route'] == 'finite_singleton_long'], [3.5, 0])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            write_reports(path, {'rows': [result], 'summary': summarize([result])})
+            record = next(csv.DictReader((path / 'report.csv').read_text().splitlines()))
+            self.assertEqual(record['finite_song'], 'True')
+            self.assertEqual(json.loads(record['finite_track_end_ticks']), {'0': 300})
+            line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
+            numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
+            self.assertEqual(sum(numbers[2:-1]), 1)
+            self.assertEqual(numbers[-2:], [1, 0])
+
+    def test_direct_finite_success_keeps_existing_route(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1, 'nonzero_mod_depth_executed': False}
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0, 'termination': 'end'}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', return_value=(b'blob', {'samples': []}, {'track_count': 1})), \
+             patch('audit_nds_compatibility.convert_merged_song') as merged, \
+             patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+            result = scan(archive)
+        self.assertEqual(result['route'], 'direct')
+        self.assertEqual(result['status'], 'packed_standard')
+        merged.assert_not_called()
+
+    def test_finite_route_cannot_bypass_rejection_or_capacity(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        for count in (1, 9):
+            with self.subTest(tracks=count), \
+                 patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': i, 'termination': 'end'} for i in range(count)]), \
+                 patch('audit_nds_compatibility.features', return_value={'executed_note_events_in_trace': 1, 'track_count': count, 'nonzero_mod_depth_executed': False}), \
+                 patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported')), \
+                 patch('audit_nds_compatibility.convert_merged_song', side_effect=ValueError('unsupported')) as merged, \
+                 patch('audit_nds_compatibility.pack_converted_experiment') as pack:
+                result = scan(archive)
+                self.assertEqual(result['status'], 'conversion_blocked' if count == 1 else 'capacity_blocked')
+                pack.assert_not_called()
+                if count == 9:
+                    merged.assert_not_called()
+                else:
+                    self.assertTrue(any(a['route'] == 'finite_singleton_long' for a in result['attempts']))
+
     def test_toggle_features_include_controls_after_last_note(self):
         class NoBank:
             def bank(self, index):

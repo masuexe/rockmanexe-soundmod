@@ -1,16 +1,16 @@
 # Star Force 1/2/3 compatibility audit
 
 The updated batch audit covers every SSEQ slot in the three pinned Japanese
-Star Force archives. Fifty candidates pass conversion, independent MPlay
+Star Force archives. Fifty-four candidates pass conversion, independent MPlay
 reparsing, shared EXE6 packing and BPS reconstruction. The exclusive success
 categories are 26 standard, four LFO-only, two envelope-only, three envelope
 plus LFO, eight fixed delayed-LFO, four envelope plus fixed delayed-LFO, one
 envelope plus live-depth LFO, one live-toggle LFO and one envelope plus live-toggle
-LFO. The live-depth-only category has no successes.
+LFO, plus four finite-standard successes. The live-depth-only category has no successes.
 These are automated resource/export results; this run performs no new gameplay
 or listening tests and does not enable NDS songs in the manager.
 
-Report directory: `out/nds-research/compatibility-audit-v9/` (schema 7):
+Report directory: `out/nds-research/compatibility-audit-v10/` (schema 8):
 
 - `index.html`: standalone searchable/filterable report, with every route,
   source feature, error and manual-evidence association available per row.
@@ -76,15 +76,22 @@ in this order, within the target's eight-track capacity:
    earlier routes, preserving previously successful variants.
 9. The existing verified Star Force 3 BATTLE mapping is the only over-capacity
    exception. Other songs do not receive guessed merges or dropped tracks.
+10. For entirely finite sources within capacity, try the explicit singleton
+    finite long-gate mode after every existing route. It requires fixed tempo,
+    nonempty tracks and every note gate ending before or at its source END.
+    Each long gate emits EOT before its track's individual FINE, including
+    same-tick ends. Active pitch-LFO and fitted-envelope modes, mixed
+    finite/looped tracks and post-END gates remain unsupported. Earlier direct
+    finite successes such as GAMEOVER keep their standard category and bytes.
 
 Successful conversion resources pass through the same exporter as the
 single-song experiments: dependency relocation, native-data preservation,
 output bounds and BPS reconstruction. The pack step was extracted into
 `pack_converted_experiment`; all six previously accepted artifacts rebuild
 byte-identically after that refactor. The batch writes reports only, retaining
-ROM/BPS fingerprints rather than creating fifty new ROM files.
-All 48 previously packed v8 variants retain their exact ROM and BPS fingerprints,
-route, status and gain. The v2/v3/v4/v5/v6/v7/v8 snapshots are preserved separately.
+ROM/BPS fingerprints rather than creating fifty-four new ROM files.
+All 50 previously packed v9 variants retain their exact ROM and BPS fingerprints,
+route, status and gain. The v2/v3/v4/v5/v6/v7/v8/v9 snapshots are preserved separately.
 V8 includes matching long-note carries across loop jumps; the entry/exit
 intervals must agree and aliases cannot overlap. The independent decoder
 continues beyond the note-on window to close every included gate. This does
@@ -97,8 +104,9 @@ EOT behavior are preserved, and the 128-voice bank bound remains enforced.
 Configuration: original Japanese EXE6 Gregar, eight music tracks, ten PCM
 voices at native 10,512 Hz, +3.5 dB imported gain, title/ordinary ID 21/
 communication scene pools. A headroom failure can retry the same route at
-neutral gain with an explicit record; none of the fifty successes needed
-that retry in this run. Gain and voice allocation are not calibrated by the
+neutral gain with an explicit record. Star Force 1 HENKAN is the only success
+requiring this retry: +3.5 dB fails VOL headroom, then 0 dB matches its accepted
+standalone artifact. The other 53 successes use +3.5 dB. Gain and voice allocation are not calibrated by the
 audit. Standard conversion still includes PCM8/envelope/tempo approximations.
 
 Only SSEQ is scanned. The archives also contain three SSAR slots (one per
@@ -108,12 +116,12 @@ counted separately, not asserted to be distinct musical compositions.
 
 ## Coverage
 
-| Game | SSEQ slots | Candidates | Standard | LFO | Envelope | Envelope + LFO | Delayed LFO | Envelope + delayed LFO | Live-depth LFO | Envelope + live-depth LFO | Live-toggle LFO | Envelope + live-toggle LFO | Blocked |
+| Game | SSEQ slots | Candidates | Standard | LFO | Envelope | Envelope + LFO | Delayed LFO | Envelope + delayed LFO | Live-depth LFO | Envelope + live-depth LFO | Live-toggle LFO | Envelope + live-toggle LFO | Finite standard | Blocked |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Star Force 1 | 38 | 35 | 16 | 4 | 0 | 0 | 6 | 0 | 0 | 1 | 1 | 0 | 7 |
-| Star Force 2 | 43 | 40 | 5 | 0 | 1 | 2 | 2 | 3 | 0 | 0 | 0 | 1 | 26 |
-| Star Force 3 | 51 | 47 | 5 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 39 |
-| Total | 132 | 122 | 26 | 4 | 2 | 3 | 8 | 4 | 0 | 1 | 1 | 1 | 72 |
+| Star Force 1 | 38 | 35 | 16 | 4 | 0 | 0 | 6 | 0 | 0 | 1 | 1 | 0 | 2 | 5 |
+| Star Force 2 | 43 | 40 | 5 | 0 | 1 | 2 | 2 | 3 | 0 | 0 | 0 | 1 | 1 | 25 |
+| Star Force 3 | 51 | 47 | 5 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 38 |
+| Total | 132 | 122 | 26 | 4 | 2 | 3 | 8 | 4 | 0 | 1 | 1 | 1 | 4 | 68 |
 
 Five slots are empty; five other sequences execute no notes (three dummy
 sequences and Star Force 2 KODAI/HERO). Of the remaining 122 candidates,
@@ -239,8 +247,28 @@ independent source, bounded natural playback and actual alias/stop checks.
 The user reported no issues with its requested listening/gameplay checklist
 on 2026-10-17; the archived v9 evidence is unchanged.
 
-Eighteen packed variants are byte-identical to artifacts with structured
-user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/URA/LAST/KINCHO/BATTLE-LFO,
+The four newly packed v10 candidates are:
+
+| Game / ID | Song | Tracks / samples | Gain | Existing manual match |
+| --- | --- | --- | --- | --- |
+| Star Force 1 / 26 | HENKAN | 4 / 2 | 0 dB, headroom retry | Yes |
+| Star Force 1 / 31 | WIN2 | 6 / 9 | +3.5 dB | No |
+| Star Force 2 / 26 | HENKAN | 4 / 1 | +3.5 dB | No |
+| Star Force 3 / 39 | WIN2 | 8 / 13 | +3.5 dB | No |
+
+All four use the finite singleton route, with individual source END times
+retained in the report. Star Force 1 HENKAN matches its accepted standalone
+ROM and BPS. SATELLITE now matches its later accepted artifact too, without
+changing its v9 bytes. The other three finite successes have packing evidence
+only; no new source reference, native playback or listening is performed by
+this scan. Star Force 2 HENKAN is the next recommended standalone test: it
+uses one sample and ends its pairs at ticks 468/480, differing from the accepted
+Star Force 1 variant's two samples and 534/554 ends. Star Force 2 WIN2 still
+fails finite conversion with `Unsupported merged-conversion effect 0xd3`;
+the new route does not silently drop its release override.
+
+Twenty packed variants are byte-identical to artifacts with structured
+user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/URA/SATELLITE/HENKAN/LAST/KINCHO/BATTLE-LFO,
 Star Force 2 NESSIE/DEMPAJIKEN/KAICYOU/WIN/BATTLE and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
 does not create new manual evidence. The earlier accepted Star Force 3 ROOM
 build uses title-only rules and its original priority policy, so the uniformly
@@ -253,7 +281,11 @@ configs, including delay rounding/counter timing where enabled. CSV exposes all
 five flags, attack fits, delay mappings, initializations, source depth changes,
 toggles, matching long-note carries and voice-context splits. JSON also retains
 complete gate-window validation, the carry policy and the compatible-bank
-allocation policy; HTML offers separate status filters for all ten success categories.
+allocation policy. Finite rows additionally retain the bounded finite policy,
+individual track ends and complete finite note/gate validation; CSV exposes
+`finite_song` and `finite_track_end_ticks`. These describe the new opt-in
+compiler mode; older direct finite songs keep their standard route. HTML
+offers separate status filters for all eleven success categories.
 `summary.md` counts the categories exclusively;
 combined rows must not be added twice when discussing envelope/LFO coverage.
 The earlier envelope audit regressions cover envelope/combined selection,
@@ -279,12 +311,12 @@ The primary result categories are exclusive:
 | Result | Count | Meaning |
 | --- | ---: | --- |
 | Capacity blocked | 58 | More than eight source tracks and no registered mapping |
-| Conversion blocked | 13 | Current control, envelope, timing or compiler preconditions reject every attempted route |
+| Conversion blocked | 9 | Current control, envelope, timing or compiler preconditions reject every attempted route |
 | Converter model blocked | 0 | All eight earlier boundary assertions are resolved |
 | Execution analysis blocked | 1 | Bounded source execution cannot complete |
 
 Source features can overlap these categories. Among blocked candidates,
-18 use non-instant instrument attacks, 28 execute envelope overrides, 39
+18 use non-instant instrument attacks, 28 execute envelope overrides, 37
 contain gates above 223 ticks, and 13 have modulated note states with a
 nonzero delay. A long gate alone is not a general blocker: existing TIE/EOT
 conversion already handles some songs. These counts describe investigation
@@ -348,6 +380,12 @@ JSON/CSV/HTML/summary agreement, JavaScript syntax, the two newly packed rows,
 existing manual-evidence matches and identical fingerprints/routes/status/gain
 for all 48 earlier packed variants. Original inputs and the archived v8 files
 remain unchanged.
+V10 passes all 219 tests. Its new regressions check finite fallback gain retry,
+classification/report/manual matching, precedence of earlier direct successes,
+and rejection/capacity boundaries. `compatibility-audit-v10/validation.json`
+records four new successes, the changed Star Force 2 WIN2 diagnostic,
+cross-format/JavaScript checks, and identical prior 50 fingerprints/routes/
+status/gain. Original inputs and the archived v9 files remain unchanged.
 
 Each of the eight recovered songs also has a 180-second independent software
 DS reference in `out/nds-research/loop-boundary-validation-v1/`. Source notes
@@ -405,10 +443,12 @@ requirement and needs explicit long-gate/end-of-song support.
 The subsequent [HENKAN experiment](nds-henkan-research.md) adds an explicit
 finite singleton mode, with individual EOT/FINE times, independent finite
 source checking and natural completion/idle validation. It is not enabled
-by this archived scan. The user reported no issues with its requested cue
+by the archived v9 scan. The user reported no issues with its requested cue
 completion, post-song silence, effects, map restoration and repeated encounter
-starts on 2026-10-17. A subsequent scan can add this bounded finite route
-without changing v9's archived counts.
+starts on 2026-10-17. V10 now tries this bounded finite route after prior
+routes, packing HENKAN in Star Force 1/2 and WIN2 in Star Force 1/3. Star Force
+2 HENKAN should receive standalone reference/runtime/listening checks next;
+v9's archived counts remain unchanged.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

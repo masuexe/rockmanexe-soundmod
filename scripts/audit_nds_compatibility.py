@@ -24,6 +24,7 @@ EVENTS = ('1', '21', 'scene:communication')
 STATUS_LABELS = {
     'empty_slot': '空槽', 'silent_sequence': '无执行音符', 'analysis_blocked': '执行分析受阻',
     'packed_standard': '常规路径打包通过', 'packed_lfo_approximation': '颤音近似打包通过',
+    'packed_finite_standard': '非循环常规路径打包通过',
     'packed_envelope_approximation': '包络近似打包通过',
     'packed_envelope_lfo_approximation': '包络＋颤音近似打包通过',
     'packed_delayed_lfo_approximation': '固定延迟颤音近似打包通过',
@@ -198,11 +199,14 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             routes.append('envelope_live_toggle_pitch_lfo_approximation')
     if family == 'ssr3' and slot['index'] == 35:
         routes.append('known_sf3_battle_merge')
+    if len(tracks) <= capacity and all(t.get('termination') == 'end' for t in tracks):
+        routes.append('finite_singleton_long')
     if not routes:
         row.update(status='capacity_blocked', track_capacity=capacity)
         return row
     pack_errors = False
     for route in routes:
+        finite = route == 'finite_singleton_long'
         live_toggle = route in ('live_toggle_pitch_lfo_approximation', 'envelope_live_toggle_pitch_lfo_approximation')
         live_depth = route in ('live_depth_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation')
         delayed = live_depth or live_toggle or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation')
@@ -217,6 +221,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             attempt = {'route': route, 'gain_db': applied_gain, 'approximations': approximations,
                        'conversion_passed': False, 'packing_passed': False}
             row['attempts'].append(attempt)
+            if finite:
+                attempt['finite_support'] = True
             try:
                 if route == 'direct':
                     blob, dependency, conversion = convert_song(archive, slot['index'], capacity,
@@ -225,6 +231,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                     options = {'native_pitch_lfo_live_depth': True} if live_depth else {}
                     if live_toggle:
                         options['native_pitch_lfo_live_toggle'] = True
+                    if finite:
+                        options['finite_support'] = True
                     blob, dependency, conversion = convert_merged_song(
                         archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else groups,
                         capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope,
@@ -244,7 +252,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_envelope_live_toggle_lfo_approximation' if envelope and live_toggle else
+            status = ('packed_finite_standard' if finite else
+                      'packed_envelope_live_toggle_lfo_approximation' if envelope and live_toggle else
                       'packed_live_toggle_lfo_approximation' if live_toggle else
                       'packed_envelope_live_depth_lfo_approximation' if envelope and live_depth else
                       'packed_live_depth_lfo_approximation' if live_depth else
@@ -264,6 +273,7 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             row['long_note_loop_carries'] = conversion.get('long_note_loop_carries', [])
             row['note_timing_validation'] = conversion.get('note_timing_validation', [])
             row['voice_context_splits'] = conversion.get('voice_context_splits', [])
+            row['finite_song'] = conversion.get('finite_song')
             if envelope:
                 row['envelope_approximation'] = conversion['envelope_approximation']
             if pitch_lfo:
@@ -340,13 +350,14 @@ def write_reports(directory, report):
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     summary = ['# NDS → EXE6 兼容性扫描', '',
                '扫描仅覆盖 SSEQ。通过转换与 ROM 打包不等于人工试听通过；本轮没有执行新曲目的游戏运行测试。', '',
-               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 启闭颤音 | 包络＋启闭颤音 | 其余受阻 |',
-               '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 启闭颤音 | 包络＋启闭颤音 | 非循环常规 | 其余受阻 |',
+               '| ' + ' | '.join(['---'] + ['---:'] * 14) + ' |']
     for family in ('ssr1', 'ssr2', 'ssr3'):
         values = report['summary']['by_family'][family]
         slots = sum(values.values())
         candidates = slots - values.get('empty_slot', 0) - values.get('silent_sequence', 0)
         standard, lfo = values.get('packed_standard', 0), values.get('packed_lfo_approximation', 0)
+        finite = values.get('packed_finite_standard', 0)
         envelope = values.get('packed_envelope_approximation', 0)
         combined = values.get('packed_envelope_lfo_approximation', 0)
         delayed = values.get('packed_delayed_lfo_approximation', 0)
@@ -356,8 +367,8 @@ def write_reports(directory, report):
         live_toggle = values.get('packed_live_toggle_lfo_approximation', 0)
         envelope_live_toggle = values.get('packed_envelope_live_toggle_lfo_approximation', 0)
         summary.append(f'| {family} | {slots} | {candidates} | {standard} | {lfo} | {envelope} | {combined} | '
-                       f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | {live_toggle} | {envelope_live_toggle} | '
-                       f'{candidates - standard - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle} |')
+                       f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | {live_toggle} | {envelope_live_toggle} | {finite} | '
+                       f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
                     '常规路径仍使用既有 PCM8、包络和速度量化近似；颤音近似还有共享相位和波形差异。',
@@ -366,13 +377,15 @@ def write_reports(directory, report):
                     '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。',
                     '启闭路径允许深度零与单个固定正深度之间切换，其余参数固定。GBA 关闭时清零共享相位，DS 保留各声道相位，仍有近似差异。所有分类互斥，组合路径不重复计数。',
                     '长音跨循环仅接受入口与出口匹配的延续区间，不在跳转处重新起音；独立解码继续追踪窗口末尾音符的停音。扫描未执行原生全循环播放。',
-                    '不同原始音高共用同一乐器别名时，使用独立音色表项消除冲突；优先复用兼容音色表，仍限制在 128 个乐器表项内。'])
+                    '不同原始音高共用同一乐器别名时，使用独立音色表项消除冲突；优先复用兼容音色表，仍限制在 128 个乐器表项内。',
+                    '非循环路径仅接受全部轨道自然结束、固定速度的独立轨道；长音先显式停音，再按各轨原定时间结束。仍拒绝主动颤音、渐强包络拟合及结束后仍未完结的音符。'])
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
               'route', 'gain_db', 'appended_bytes', 'native_pitch_lfo_approximation',
               'envelope_approximation', 'fixed_delay_approximation', 'live_depth_approximation', 'live_toggle_approximation',
               'source_depth_changes', 'source_depth_toggles', 'modulation_initializations', 'delay_mappings',
-              'attack_fits', 'long_note_loop_carries', 'voice_context_splits', 'manual_matches_packed_variant', 'errors']
+              'attack_fits', 'long_note_loop_carries', 'voice_context_splits', 'finite_song', 'finite_track_end_ticks',
+              'manual_matches_packed_variant', 'errors']
     with (directory / 'report.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
@@ -395,12 +408,14 @@ def write_reports(directory, report):
                              'attack_fits': json.dumps(row.get('envelope_approximation', {}).get('attack_fits', [])),
                              'long_note_loop_carries': json.dumps(row.get('long_note_loop_carries', [])),
                              'voice_context_splits': json.dumps(row.get('voice_context_splits', [])),
+                             'finite_song': bool(row.get('finite_song')),
+                             'finite_track_end_ticks': json.dumps((row.get('finite_song') or {}).get('track_end_ticks', {})),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False)})
     payload = json.dumps({'report': report, 'labels': STATUS_LABELS}, ensure_ascii=False).replace('<', '\\u003c')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
-<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
+<h1>NDS → EXE6 曲目兼容性扫描</h1><p>非循环路径接受固定速度、全部轨道自然结束的独立轨道，长音显式停音后按各轨原定时间结束。常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
 <p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>现有人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
@@ -435,7 +450,14 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 7, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 8, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'finite_route_policy': {'singleton_tracks_only': True, 'all_source_tracks_end': True,
+                                      'fixed_tempo': True, 'all_gates_close_before_or_at_source_end': True,
+                                      'native_lfo_or_fitted_envelope': False,
+                                      'explicit_eot_before_individual_fine': True,
+                                      'tried_after_existing_routes': True,
+                                      'neutral_gain_headroom_retry': True,
+                                      'batch_native_runtime_validation': False},
               'voice_context_split_policy': {
                   'context_fields': ['source_instrument', 'merged_pan_shift', 'effective_note_on_adsr_if_enabled'],
                   'first_compatible_bank_reused': True,
