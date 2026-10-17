@@ -24,7 +24,10 @@ and delay must remain fixed after activation at the first note timestamp.
 Later activation, disabling modulation and changing other active parameters
 remain rejected. All active states must fit the existing native mapping.
 Singleton source tracks and a fixed tempo remain required. The default
-compiler policy and v5 audit routes are unchanged.
+compiler policy and archived v5 audit routes are unchanged. The later
+[v6 audit](nds-compatibility-audit.md) tries this opt-in policy after the
+existing routes, separately labeling live-depth and envelope/live-depth
+successes. HOMETOWN is its only newly packed candidate and matches this ROM.
 
 Depth controls emit MOD alone, in original execution order. They do not
 emit LFOS=0 or LFODL, so they preserve the shared target phase and delay
