@@ -1,16 +1,16 @@
 # Star Force 1/2/3 compatibility audit
 
 The updated batch audit covers every SSEQ slot in the three pinned Japanese
-Star Force archives. Forty-six candidates pass conversion, independent MPlay
+Star Force archives. Forty-eight candidates pass conversion, independent MPlay
 reparsing, shared EXE6 packing and BPS reconstruction. The exclusive success
-categories are 24 standard, four LFO-only, one envelope-only, three envelope
-plus LFO, seven fixed delayed-LFO, four envelope plus fixed delayed-LFO, one
+categories are 24 standard, four LFO-only, two envelope-only, three envelope
+plus LFO, eight fixed delayed-LFO, four envelope plus fixed delayed-LFO, one
 envelope plus live-depth LFO, one live-toggle LFO and one envelope plus live-toggle
 LFO. The live-depth-only category has no successes.
 These are automated resource/export results; this run performs no new gameplay
 or listening tests and does not enable NDS songs in the manager.
 
-Report directory: `out/nds-research/compatibility-audit-v7/` (schema 5):
+Report directory: `out/nds-research/compatibility-audit-v8/` (schema 6):
 
 - `index.html`: standalone searchable/filterable report, with every route,
   source feature, error and manual-evidence association available per row.
@@ -82,14 +82,18 @@ single-song experiments: dependency relocation, native-data preservation,
 output bounds and BPS reconstruction. The pack step was extracted into
 `pack_converted_experiment`; all six previously accepted artifacts rebuild
 byte-identically after that refactor. The batch writes reports only, retaining
-ROM/BPS fingerprints rather than creating forty-six new ROM files.
-All 43 previously packed v6 variants retain their exact ROM and BPS fingerprints,
-route, status and gain. The v2/v3/v4/v5/v6 snapshots are preserved separately.
+ROM/BPS fingerprints rather than creating forty-eight new ROM files.
+All 46 previously packed v7 variants retain their exact ROM and BPS fingerprints,
+route, status and gain. The v2/v3/v4/v5/v6/v7 snapshots are preserved separately.
+V8 includes matching long-note carries across loop jumps; the entry/exit
+intervals must agree and aliases cannot overlap. The independent decoder
+continues beyond the note-on window to close every included gate. This does
+not constitute native full-loop playback.
 
 Configuration: original Japanese EXE6 Gregar, eight music tracks, ten PCM
 voices at native 10,512 Hz, +3.5 dB imported gain, title/ordinary ID 21/
 communication scene pools. A headroom failure can retry the same route at
-neutral gain with an explicit record; none of the forty-six successes needed
+neutral gain with an explicit record; none of the forty-eight successes needed
 that retry in this run. Gain and voice allocation are not calibrated by the
 audit. Standard conversion still includes PCM8/envelope/tempo approximations.
 
@@ -102,10 +106,10 @@ counted separately, not asserted to be distinct musical compositions.
 
 | Game | SSEQ slots | Candidates | Standard | LFO | Envelope | Envelope + LFO | Delayed LFO | Envelope + delayed LFO | Live-depth LFO | Envelope + live-depth LFO | Live-toggle LFO | Envelope + live-toggle LFO | Blocked |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Star Force 1 | 38 | 35 | 14 | 4 | 0 | 0 | 5 | 0 | 0 | 1 | 1 | 0 | 10 |
-| Star Force 2 | 43 | 40 | 5 | 0 | 0 | 2 | 2 | 3 | 0 | 0 | 0 | 1 | 27 |
+| Star Force 1 | 38 | 35 | 14 | 4 | 0 | 0 | 6 | 0 | 0 | 1 | 1 | 0 | 9 |
+| Star Force 2 | 43 | 40 | 5 | 0 | 1 | 2 | 2 | 3 | 0 | 0 | 0 | 1 | 26 |
 | Star Force 3 | 51 | 47 | 5 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 39 |
-| Total | 132 | 122 | 24 | 4 | 1 | 3 | 7 | 4 | 0 | 1 | 1 | 1 | 76 |
+| Total | 132 | 122 | 24 | 4 | 2 | 3 | 8 | 4 | 0 | 1 | 1 | 1 | 74 |
 
 Five slots are empty; five other sequences execute no notes (three dummy
 sequences and Star Force 2 KODAI/HERO). Of the remaining 122 candidates,
@@ -126,7 +130,9 @@ The LFO-approximation list is Star Force 1 `8 YUMENOSHIMA`, `15 GOWADENNO`,
 original symbols. Every new candidate still needs song-specific listening,
 long playback, effects coexistence and lifecycle checks before acceptance.
 
-The envelope-only pass is Star Force 3 `10 BGM_HOKORA`. The combined passes
+The envelope-only passes are Star Force 3 `10 BGM_HOKORA` and the newly
+unblocked Star Force 2 `11 BGM_DEMPAJIKEN`. DEMPAJIKEN still needs independent
+source/runtime checks and listening acceptance. The combined passes
 are Star Force 2 `14 BGM_FRIEND` and `15 BGM_NESSIE`, and Star Force 3
 `29 BGM_FRIEND`. HOKORA and Star Force 3 FRIEND match the accepted
 [envelope experiments](nds-envelope-research.md). The two Star Force 2
@@ -139,7 +145,8 @@ the v4 report retains its original evidence snapshot. NESSIE uses DS attack
 
 The fixed delayed-LFO pass list is:
 
-- Star Force 1: `2 FMPLANET`, `7 GOWAIINCHO`, `10 DEMPA`, `12 TRUCK`, `29 LASTBOSS`.
+- Star Force 1: `2 FMPLANET`, `7 GOWAIINCHO`, `10 DEMPA`, `12 TRUCK`,
+  `13 PLANETARIUM`, `29 LASTBOSS`.
 - Star Force 2: `1 TEKI`, `27 BATTLE`.
 
 The envelope plus fixed delayed-LFO pass list is:
@@ -152,6 +159,8 @@ The [Star Force 2 BATTLE experiment](nds-sf2-battle-research.md) subsequently
 passed independent reference/runtime checks and user-reported listening.
 The [GOWAIINCHO experiment](nds-pre-note-lfo-research.md) also has user-reported
 acceptance and now passes the scanner's corrected pre-note initialization check.
+The [PLANETARIUM experiment](nds-planetarium-research.md) matches the v8
+output exactly and has user-reported listening/gameplay acceptance.
 The other eight fixed-delay variants still need song-specific reference,
 runtime and listening validation; this scan supplies packing evidence only.
 
@@ -170,17 +179,33 @@ The three newly packed v7 candidates are:
 | Star Force 2 / 16 | KAICYOU | Envelope + live toggle | 8 / 24 | No |
 
 GOWAIINCHO and BOSS match their accepted standalone experiments exactly.
-KAICYOU needs independent source, runtime, sustained listening and lifecycle
-validation; automatic packing does not establish those checks. No new
+At v7 scan time KAICYOU still needed independent source, runtime, sustained
+listening and lifecycle validation; automatic packing did not establish those checks. No new
 runtime or listening test was performed by the scan.
 The subsequent [KAICYOU experiment](nds-kaicyou-research.md) supplies a
 standalone ROM and song-specific automated checks, followed by user-reported
 listening and gameplay acceptance on 2026-10-17. Its later evidence does not
 change this scan's snapshot.
 
-Fourteen packed variants are byte-identical to artifacts with structured
-user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/LAST/KINCHO/BATTLE-LFO,
-Star Force 2 NESSIE/WIN/BATTLE and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
+The two newly packed v8 candidates are:
+
+| Game / ID | Song | Route | Tracks / samples | Existing manual match |
+| --- | --- | --- | --- | --- |
+| Star Force 1 / 13 | PLANETARIUM | Fixed-delay + carried long note | 8 / 29 | Yes |
+| Star Force 2 / 11 | DEMPAJIKEN | Envelope + carried long note | 8 / 19 | No |
+
+PLANETARIUM carries track 7 key 53 from 192 ticks before the jump to 192
+ticks afterward. DEMPAJIKEN carries track 2 key 86 from 120 ticks before
+the jump to 119 ticks afterward, using alias 127. Its fitted attack 100 maps
+to native attack 74; it needs no pitch-LFO mode. DEMPAJIKEN is the recommended
+next standalone reference/runtime/listening experiment.
+Star Force 1 URA also passes the former boundary guard, but then fails with
+`Conflicting per-note alias/instrument definition`; it remains blocked.
+The audit introduces no new listening or runtime evidence.
+
+Sixteen packed variants are byte-identical to artifacts with structured
+user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/LAST/KINCHO/BATTLE-LFO,
+Star Force 2 NESSIE/KAICYOU/WIN/BATTLE and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
 does not create new manual evidence. The earlier accepted Star Force 3 ROOM
 build uses title-only rules and its original priority policy, so the uniformly
 configured audit variant is not marked as that previously accepted artifact.
@@ -189,8 +214,9 @@ Its historical title listening result remains in the ROOM research.
 JSON rows and attempts record separate envelope/LFO/fixed-delay/live-depth/live-toggle flags. Envelope
 rows retain attack fitting errors and method limitations; LFO rows retain their
 configs, including delay rounding/counter timing where enabled. CSV exposes all
-five flags, attack fits, delay mappings, initializations, source depth changes
-and toggles; HTML offers separate status filters for all ten success categories.
+five flags, attack fits, delay mappings, initializations, source depth changes,
+toggles and matching long-note carries. JSON also retains complete gate-window
+validation and the carry policy; HTML offers separate status filters for all ten success categories.
 `summary.md` counts the categories exclusively;
 combined rows must not be added twice when discussing envelope/LFO coverage.
 The earlier envelope audit regressions cover envelope/combined selection,
@@ -216,13 +242,13 @@ The primary result categories are exclusive:
 | Result | Count | Meaning |
 | --- | ---: | --- |
 | Capacity blocked | 58 | More than eight source tracks and no registered mapping |
-| Conversion blocked | 17 | Current control, envelope, timing or compiler preconditions reject every attempted route |
+| Conversion blocked | 15 | Current control, envelope, timing or compiler preconditions reject every attempted route |
 | Converter model blocked | 0 | All eight earlier boundary assertions are resolved |
 | Execution analysis blocked | 1 | Bounded source execution cannot complete |
 
 Source features can overlap these categories. Among blocked candidates,
-19 use non-instant instrument attacks, 28 execute envelope overrides, 43
-contain gates above 223 ticks, and 14 have modulated note states with a
+18 use non-instant instrument attacks, 28 execute envelope overrides, 41
+contain gates above 223 ticks, and 13 have modulated note states with a
 nonzero delay. A long gate alone is not a general blocker: existing TIE/EOT
 conversion already handles some songs. These counts describe investigation
 work, not independent sets to add together or promises of compatibility after
@@ -275,6 +301,11 @@ V6 passed all 191 Python regression tests. The current report's JavaScript
 passes the Node syntax check. `compatibility-audit-v7/validation.json` records
 the complete scan, cross-format checks, prior 43 fingerprint comparisons and
 the three changed results. All 201 Python regression tests pass for v7.
+The v8 scan passes all 206 tests; `compatibility-audit-v8/validation.json`
+records cross-format agreement, JavaScript syntax validation, identical
+fingerprints/routes/status/gain for all 46 earlier packed variants, the two
+newly packed rows and URA's changed failure diagnostic. Inputs and archived
+v7 files remain unchanged.
 
 Each of the eight recovered songs also has a 180-second independent software
 DS reference in `out/nds-research/loop-boundary-validation-v1/`. Source notes
@@ -317,7 +348,10 @@ and provides a song-specific ROM accepted by user-reported listening and
 gameplay checks on 2026-10-17. V7 now tries this flag and its envelope
 combination after existing routes. KAICYOU subsequently passed its standalone
 automated and user-reported listening/gameplay checks; the archived v6 and v7
-counts remain unchanged.
+counts remain unchanged. V8 now includes PLANETARIUM and the newly unblocked
+Star Force 2 DEMPAJIKEN. The next song-specific validation should test
+DEMPAJIKEN's combined gradual attack and carried long note before investigating
+additional conversion policies.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once
