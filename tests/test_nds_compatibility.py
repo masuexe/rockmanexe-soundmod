@@ -49,6 +49,88 @@ def scan(archive, **changes):
 
 
 class CompatibilityAuditTests(unittest.TestCase):
+    def test_toggle_features_include_controls_after_last_note(self):
+        class NoBank:
+            def bank(self, index):
+                raise ValueError('No resource inspection in this fixture')
+        raw = b'\xC7\x00\x3C\x64\x30\x80\x0C\xCA\x23\x80\x0C\xCA\x00\x80\x18\xFF'
+        result = features(NoBank(), {'bank_id': 0}, trace_sequence(raw, analysis_only=True))
+        self.assertEqual(result['mod_depth_toggles'],
+                         [{'source_track': 0, 'ticks': 12, 'before': 0, 'after': 35},
+                          {'source_track': 0, 'ticks': 24, 'before': 35, 'after': 0}])
+        self.assertEqual(result['modulation_configs_at_note_on'], [])
+        self.assertTrue(result['nonzero_mod_depth_executed'])
+
+    def test_toggle_fallbacks_reports_and_manual_matching(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        toggles = [{'source_track': 0, 'ticks': 12, 'before': 0, 'after': 35},
+                   {'source_track': 0, 'ticks': 24, 'before': 35, 'after': 0}]
+        setup = [{'source_track': 0, 'activation_tick': 12, 'first_note_tick': 0, 'depth': 35}]
+        for needs_envelope in (False, True):
+            with self.subTest(envelope=needs_envelope):
+                feature = {'executed_note_events_in_trace': 1, 'track_count': 1,
+                           'nonzero_mod_depth_executed': True, 'active_delayed_modulation_executed': True,
+                           'positive_mod_depth_changes': [{}], 'mod_depth_toggles': toggles,
+                           'noninstant_attack_definitions': int(needs_envelope)}
+                def convert(*args, **kwargs):
+                    if not kwargs.get('native_pitch_lfo_live_toggle') or kwargs['envelope_support'] != needs_envelope:
+                        raise ValueError('unsupported feature')
+                    self.assertTrue(kwargs['native_pitch_lfo'])
+                    self.assertTrue(kwargs['native_pitch_lfo_delay'])
+                    self.assertFalse(kwargs.get('native_pitch_lfo_live_depth', False))
+                    return b'blob', {'samples': []}, {'track_count': 1,
+                        'envelope_approximation': {'attack_fits': []},
+                        'native_pitch_lfo': {'live_toggle_approximation': {'source_depth_toggles': toggles},
+                                             'delay_approximation': {'initializations': setup}}}
+                with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+                     patch('audit_nds_compatibility.features', return_value=feature), \
+                     patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported')), \
+                     patch('audit_nds_compatibility.convert_merged_song', side_effect=convert), \
+                     patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+                    result = scan(archive, manual_records=[{'family': 'ssr1', 'sequence_index': 1,
+                                                           'output_sha256': 'expected'}])
+                self.assertEqual(result['status'], 'packed_envelope_live_toggle_lfo_approximation'
+                                 if needs_envelope else 'packed_live_toggle_lfo_approximation')
+                self.assertEqual(result['approximations'], {'native_pitch_lfo': True, 'envelope': needs_envelope,
+                                                            'fixed_delay': True, 'live_depth': False, 'live_toggle': True})
+                self.assertTrue(result['manual_matches_packed_variant'])
+                self.assertFalse(result['runtime_tested_by_audit'])
+                routes = [a['route'] for a in result['attempts']]
+                self.assertLess(routes.index('live_depth_pitch_lfo_approximation'),
+                                routes.index('live_toggle_pitch_lfo_approximation'))
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory)
+                    write_reports(path, {'rows': [result], 'summary': summarize([result])})
+                    record = next(csv.DictReader((path / 'report.csv').read_text().splitlines()))
+                    self.assertEqual(record['live_toggle_approximation'], 'True')
+                    self.assertEqual(json.loads(record['source_depth_toggles']), toggles)
+                    self.assertEqual(json.loads(record['modulation_initializations']), setup)
+                    line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
+                    numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
+                    self.assertEqual(sum(numbers[2:12]), 1)
+                    self.assertEqual(numbers[2:12][9 if needs_envelope else 8], 1)
+                    self.assertEqual(numbers[-1], 0)
+
+    def test_fixed_delay_success_precedes_new_toggle_mode(self):
+        archive = SimpleNamespace(sequence=lambda index: (b'', {}))
+        feature = {'executed_note_events_in_trace': 1, 'track_count': 1,
+                   'nonzero_mod_depth_executed': True, 'active_delayed_modulation_executed': True}
+        manifest = {'appended_bytes': 20, 'output_fingerprint': {'sha256': 'expected'}}
+        def convert(*args, **kwargs):
+            self.assertFalse(kwargs.get('native_pitch_lfo_live_toggle', False))
+            if not kwargs['native_pitch_lfo_delay']:
+                raise ValueError('unsupported delay')
+            return b'blob', {'samples': []}, {'track_count': 1}
+        with patch('audit_nds_compatibility.trace_sequence', return_value=[{'track': 0}]), \
+             patch('audit_nds_compatibility.features', return_value=feature), \
+             patch('audit_nds_compatibility.convert_song', side_effect=ValueError('unsupported')), \
+             patch('audit_nds_compatibility.convert_merged_song', side_effect=convert), \
+             patch('audit_nds_compatibility.pack_converted_experiment', return_value=(b'rom', b'bps', manifest)):
+            result = scan(archive)
+        self.assertEqual(result['route'], 'fixed_delay_pitch_lfo_approximation')
+        self.assertFalse(result['approximations']['live_toggle'])
+
     def test_live_depth_feature_includes_changes_after_last_note(self):
         class NoBank:
             def bank(self, index):
@@ -87,7 +169,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                 self.assertEqual(result['status'], 'packed_envelope_live_depth_lfo_approximation'
                                  if needs_envelope else 'packed_live_depth_lfo_approximation')
                 self.assertEqual(result['approximations'], {'native_pitch_lfo': True, 'envelope': needs_envelope,
-                                                            'fixed_delay': True, 'live_depth': True})
+                                                            'fixed_delay': True, 'live_depth': True, 'live_toggle': False})
                 self.assertTrue(result['manual_matches_packed_variant'])
                 self.assertFalse(result['runtime_tested_by_audit'])
                 routes = [a['route'] for a in result['attempts']]
@@ -101,7 +183,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                     self.assertEqual(json.loads(record['source_depth_changes']), changes)
                     line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
                     numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
-                    categories = numbers[2:10]
+                    categories = numbers[2:12]
                     self.assertEqual(sum(categories), 1)
                     self.assertEqual(categories[7 if needs_envelope else 6], 1)
                     self.assertEqual(numbers[-1], 0)
@@ -158,7 +240,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                                  if needs_envelope else 'packed_delayed_lfo_approximation')
                 self.assertEqual(result['approximations'], {'native_pitch_lfo': True,
                                                             'envelope': needs_envelope, 'fixed_delay': True,
-                                                            'live_depth': False})
+                                                            'live_depth': False, 'live_toggle': False})
                 self.assertTrue(result['manual_matches_packed_variant'])
                 self.assertFalse(result['runtime_tested_by_audit'])
                 with tempfile.TemporaryDirectory() as directory:
@@ -169,7 +251,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                     self.assertEqual(json.loads(record['delay_mappings']), [mapping])
                     line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
                     numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
-                    categories = numbers[2:10]
+                    categories = numbers[2:12]
                     self.assertEqual(sum(categories), 1)
                     self.assertEqual(categories[5 if needs_envelope else 4], 1)
                     self.assertEqual(numbers[-1], 0)
@@ -186,7 +268,7 @@ class CompatibilityAuditTests(unittest.TestCase):
              patch('audit_nds_compatibility.pack_converted_experiment') as packer:
             result = scan(archive)
         self.assertEqual(result['status'], 'conversion_blocked')
-        self.assertEqual(result['attempts'][-1]['route'], 'live_depth_pitch_lfo_approximation')
+        self.assertEqual(result['attempts'][-1]['route'], 'live_toggle_pitch_lfo_approximation')
         packer.assert_not_called()
 
     def test_symbol_directory_alignment_and_empty_slots(self):
@@ -308,7 +390,7 @@ class CompatibilityAuditTests(unittest.TestCase):
                 expected = 'packed_envelope_lfo_approximation' if active_pitch else 'packed_envelope_approximation'
                 self.assertEqual(result['status'], expected)
                 self.assertEqual(result['approximations'], {'native_pitch_lfo': active_pitch, 'envelope': True,
-                                                            'fixed_delay': False, 'live_depth': False})
+                                                            'fixed_delay': False, 'live_depth': False, 'live_toggle': False})
                 self.assertEqual(result['envelope_approximation'], fit)
                 self.assertTrue(result['manual_matches_packed_variant'])
                 self.assertFalse(result['runtime_tested_by_audit'])

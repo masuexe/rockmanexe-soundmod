@@ -30,6 +30,8 @@ STATUS_LABELS = {
     'packed_envelope_delayed_lfo_approximation': '包络＋固定延迟颤音近似打包通过',
     'packed_live_depth_lfo_approximation': '实时深度颤音近似打包通过',
     'packed_envelope_live_depth_lfo_approximation': '包络＋实时深度颤音近似打包通过',
+    'packed_live_toggle_lfo_approximation': '启闭颤音近似打包通过',
+    'packed_envelope_live_toggle_lfo_approximation': '包络＋启闭颤音近似打包通过',
     'capacity_blocked': '超轨数，缺少映射', 'conversion_blocked': '转换受阻',
     'converter_model_blocked': '转换校验待研究', 'packing_blocked': '转换通过，打包受阻',
 }
@@ -96,7 +98,7 @@ class AuditArchive(SoundArchive):
 def features(archive, info, tracks):
     notes = [a for t in tracks for a in t['actions'] if a['name'] == 'note']
     controls = [a for t in tracks for a in t['actions'] if a['name'] == 'control']
-    depth_changes = []
+    depth_changes, depth_toggles = [], []
     for track in tracks:
         previous = 0
         for action in track['actions']:
@@ -105,6 +107,9 @@ def features(archive, info, tracks):
             depth = action['state_after']['mod_depth']
             if previous > 0 and depth > 0 and previous != depth:
                 depth_changes.append({'source_track': track['track'], 'ticks': action['ticks'],
+                                      'before': previous, 'after': depth})
+            if previous != depth and (previous == 0 or depth == 0):
+                depth_toggles.append({'source_track': track['track'], 'ticks': action['ticks'],
                                       'before': previous, 'after': depth})
             previous = depth
     configs = sorted({tuple(a['state_after'][k] for k in
@@ -119,6 +124,7 @@ def features(archive, info, tracks):
               'executed_controls': sorted({f'0x{a["opcode"]:02X}' for a in controls}),
               'nonzero_mod_depth_executed': any(a['opcode'] == 0xCA and a['value'] for a in controls),
               'positive_mod_depth_changes': depth_changes,
+              'mod_depth_toggles': depth_toggles,
               'active_delayed_modulation_executed': any(a.get('state_after', {}).get('mod_depth')
                                                        and a['state_after'].get('mod_delay')
                                                        for t in tracks for a in t['actions']),
@@ -186,6 +192,10 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         routes.append('live_depth_pitch_lfo_approximation')
         if envelope_needed:
             routes.append('envelope_live_depth_pitch_lfo_approximation')
+    if len(tracks) <= capacity and row['features']['nonzero_mod_depth_executed']:
+        routes.append('live_toggle_pitch_lfo_approximation')
+        if envelope_needed:
+            routes.append('envelope_live_toggle_pitch_lfo_approximation')
     if family == 'ssr3' and slot['index'] == 35:
         routes.append('known_sf3_battle_merge')
     if not routes:
@@ -193,13 +203,15 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         return row
     pack_errors = False
     for route in routes:
+        live_toggle = route in ('live_toggle_pitch_lfo_approximation', 'envelope_live_toggle_pitch_lfo_approximation')
         live_depth = route in ('live_depth_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation')
-        delayed = live_depth or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation')
+        delayed = live_depth or live_toggle or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation')
         pitch_lfo = delayed or route in ('native_pitch_lfo_approximation', 'envelope_pitch_lfo_approximation')
         envelope = route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation',
-                             'envelope_fixed_delay_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation')
+                             'envelope_fixed_delay_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation',
+                             'envelope_live_toggle_pitch_lfo_approximation')
         approximations = {'native_pitch_lfo': pitch_lfo, 'envelope': envelope,
-                          'fixed_delay': delayed, 'live_depth': live_depth}
+                          'fixed_delay': delayed, 'live_depth': live_depth, 'live_toggle': live_toggle}
         gains = [gain_db]
         for applied_gain in gains:
             attempt = {'route': route, 'gain_db': applied_gain, 'approximations': approximations,
@@ -211,6 +223,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                                                                song_gain_db=applied_gain, native_effect_headroom=True)
                 else:
                     options = {'native_pitch_lfo_live_depth': True} if live_depth else {}
+                    if live_toggle:
+                        options['native_pitch_lfo_live_toggle'] = True
                     blob, dependency, conversion = convert_merged_song(
                         archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else groups,
                         capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope,
@@ -230,7 +244,9 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_envelope_live_depth_lfo_approximation' if envelope and live_depth else
+            status = ('packed_envelope_live_toggle_lfo_approximation' if envelope and live_toggle else
+                      'packed_live_toggle_lfo_approximation' if live_toggle else
+                      'packed_envelope_live_depth_lfo_approximation' if envelope and live_depth else
                       'packed_live_depth_lfo_approximation' if live_depth else
                       'packed_envelope_delayed_lfo_approximation' if envelope and delayed else
                       'packed_delayed_lfo_approximation' if delayed else
@@ -321,8 +337,8 @@ def write_reports(directory, report):
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     summary = ['# NDS → EXE6 兼容性扫描', '',
                '扫描仅覆盖 SSEQ。通过转换与 ROM 打包不等于人工试听通过；本轮没有执行新曲目的游戏运行测试。', '',
-               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 其余受阻 |',
-               '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 启闭颤音 | 包络＋启闭颤音 | 其余受阻 |',
+               '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for family in ('ssr1', 'ssr2', 'ssr3'):
         values = report['summary']['by_family'][family]
         slots = sum(values.values())
@@ -334,20 +350,23 @@ def write_reports(directory, report):
         envelope_delayed = values.get('packed_envelope_delayed_lfo_approximation', 0)
         live_depth = values.get('packed_live_depth_lfo_approximation', 0)
         envelope_live_depth = values.get('packed_envelope_live_depth_lfo_approximation', 0)
+        live_toggle = values.get('packed_live_toggle_lfo_approximation', 0)
+        envelope_live_toggle = values.get('packed_envelope_live_toggle_lfo_approximation', 0)
         summary.append(f'| {family} | {slots} | {candidates} | {standard} | {lfo} | {envelope} | {combined} | '
-                       f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | '
-                       f'{candidates - standard - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth} |')
+                       f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | {live_toggle} | {envelope_live_toggle} | '
+                       f'{candidates - standard - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
                     '常规路径仍使用既有 PCM8、包络和速度量化近似；颤音近似还有共享相位和波形差异。',
                     '包络路径按音符开始时的 ADSR 快照生成乐器；渐入起音拟合有明确误差上限。组合路径同时包含两类近似。',
                     '固定延迟路径接受首次音符之前或同一时刻完成初始化、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。',
-                    '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。分类互斥，组合路径不重复计数。'])
+                    '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。',
+                    '启闭路径允许深度零与单个固定正深度之间切换，其余参数固定。GBA 关闭时清零共享相位，DS 保留各声道相位，仍有近似差异。所有分类互斥，组合路径不重复计数。'])
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
               'route', 'gain_db', 'appended_bytes', 'native_pitch_lfo_approximation',
-              'envelope_approximation', 'fixed_delay_approximation', 'live_depth_approximation',
-              'source_depth_changes', 'delay_mappings',
+              'envelope_approximation', 'fixed_delay_approximation', 'live_depth_approximation', 'live_toggle_approximation',
+              'source_depth_changes', 'source_depth_toggles', 'modulation_initializations', 'delay_mappings',
               'attack_fits', 'manual_matches_packed_variant', 'errors']
     with (directory / 'report.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -362,6 +381,9 @@ def write_reports(directory, report):
                              'envelope_approximation': row.get('approximations', {}).get('envelope', False),
                              'fixed_delay_approximation': row.get('approximations', {}).get('fixed_delay', False),
                              'live_depth_approximation': row.get('approximations', {}).get('live_depth', False),
+                             'live_toggle_approximation': row.get('approximations', {}).get('live_toggle', False),
+                             'source_depth_toggles': json.dumps(row.get('native_pitch_lfo', {}).get('live_toggle_approximation', {}).get('source_depth_toggles', [])),
+                             'modulation_initializations': json.dumps(row.get('native_pitch_lfo', {}).get('delay_approximation', {}).get('initializations', [])),
                              'source_depth_changes': json.dumps(row.get('native_pitch_lfo', {}).get('live_depth_approximation', {}).get('source_depth_changes', [])),
                              'delay_mappings': json.dumps([c['delay_mapping'] for c in row.get('native_pitch_lfo', {}).get('configs', [])
                                                           if 'delay_mapping' in c]),
@@ -371,7 +393,7 @@ def write_reports(directory, report):
     payload = json.dumps({'report': report, 'labels': STATUS_LABELS}, ensure_ascii=False).replace('<', '\\u003c')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
-<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音、实时深度颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
+<h1>NDS → EXE6 曲目兼容性扫描</h1><p>常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
 <p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>现有人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
@@ -406,7 +428,16 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 4, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 5, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'live_toggle_route_policy': {'singleton_tracks_only': True, 'fixed_tempo': True,
+                                           'allowed_depths': 'Zero or one fixed representable positive depth per track',
+                                           'fixed_fields': ['mod_type', 'mod_speed', 'mod_range', 'mod_delay'],
+                                           'late_activation_and_disabling_supported': True,
+                                           'combined_live_depth_changes_supported': False,
+                                           'toggle_updates_preserve_delay_count': True,
+                                           'target_disable_resets_shared_phase': True,
+                                           'source_inactive_voice_phase_is_frozen': True,
+                                           'new_notes_reset_shared_phase_and_delay': True},
               'live_depth_route_policy': {'singleton_tracks_only': True, 'fixed_tempo': True,
                                           'activation': 'Before or at first note timestamp, including depth enabled after note at the same tick',
                                           'positive_depth_changes_only': True,

@@ -103,6 +103,11 @@ the batch or claim other newly accepted songs. Further source inspection
 also identifies PLANETARIUM's setup before its first note (0 versus 24),
 while BOSS (3840 versus 0) and Star Force 2 KAICYOU (768 versus 48) are
 confirmed examples of actual later activation requiring further research.
+The subsequent [v7 audit](nds-compatibility-audit.md) incorporates pre-note
+initialization and the separately accepted BOSS toggle mode. GOWAIINCHO
+matches this accepted ROM; PLANETARIUM remains rejected because a long note
+crosses the selected merged-loop boundary. No new listening evidence comes
+from the scan.
 
 ## Reproduce and listen
 

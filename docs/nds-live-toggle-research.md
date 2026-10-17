@@ -18,7 +18,11 @@ activation. Positive-depth changes remain rejected. The flag cannot combine
 with the separate positive live-depth experiment. Singleton tracks, fixed
 tempo, representable parameters and existing resource constraints still apply.
 Default fixed-delay and live-depth modes retain their activation restrictions.
-Batch routes do not automatically opt into the new flag.
+The compiler requires explicit opt-in. The subsequent
+[v7 batch audit](nds-compatibility-audit.md) tries this flag and its envelope
+combination after existing routes, with separate result categories. BOSS
+matches this accepted ROM; Star Force 2 KAICYOU is a new untested packing
+candidate. The v6 report remains an unchanged historical snapshot.
 
 Inactive notes preload the quantized delay while MOD/LFOS are zero. Their
 delay counter does not advance until modulation is enabled. Ordered MOD/LFOS
