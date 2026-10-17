@@ -344,7 +344,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                      'source_key': context[1], 'gba_key': alias,
                                      'note_start_relative_ticks': start,
                                      'eot_relative_ticks': end})
-    voice_contexts, mappings = {}, []
+    voice_contexts, voice_definitions, voice_keys = {}, [], []
+    voice_splits, mappings = [], []
     for note in source_notes:
         group = note['target_track']
         pan_shift = note['state_after']['pan'] - 64 if len(groups[group]) > 1 else 0
@@ -355,12 +356,28 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         else getattr(definition, field) for field in ('attack', 'decay', 'sustain', 'release')}
             note['source_envelope'] = envelope
             context += tuple(envelope.values())
-        if context not in voice_contexts:
-            voice_contexts[context] = len(voice_contexts)
         played_key = aliases.get((group, note['source_track'], note['key']), note['key']) if note['duration'] > 223 else note['key']
+        # Rhythm-bank slots are shared by every track selecting this voice.
+        # Track-local aliases can name different source keys on other tracks.
+        # Reuse the first compatible bank, splitting only a conflicting slot.
+        candidates = voice_contexts.setdefault(context, [])
+        voice = next((v for v in candidates
+                      if voice_keys[v].get(played_key, note['key']) == note['key']), None)
+        if voice is None:
+            voice = len(voice_definitions)
+            if candidates:
+                voice_splits.append({'gba_voice': voice, 'existing_voices': list(candidates),
+                                     'source_track': note['source_track'], 'tick': note['ticks'],
+                                     'source_instrument': note['instrument'],
+                                     'gba_key': played_key, 'source_key': note['key'],
+                                     'conflicting_source_keys': [voice_keys[v][played_key] for v in candidates]})
+            candidates.append(voice)
+            voice_definitions.append(context)
+            voice_keys.append({})
+        voice_keys[voice][played_key] = note['key']
         ratio = level(note['state_after']['volume']) / level(group_volume[group]) if len(groups[group]) > 1 else 1.0
         velocity = round(127 * level(note['velocity']) * ratio)
-        note.update(gba_voice=voice_contexts[context], gba_key=played_key,
+        note.update(gba_voice=voice, gba_key=played_key,
                     gba_velocity=velocity, pan_shift=pan_shift,
                     gba_priority=priority_map[note['state_after']['priority']])
         mappings.append({'tick': note['ticks'], 'source_track': note['source_track'],
@@ -371,7 +388,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                          'long_note': note['duration'] > 223})
         if envelope_support:
             mappings[-1]['source_envelope'] = note['source_envelope']
-    if len(voice_contexts) > 128:
+    if len(voice_definitions) > 128:
         raise ValueError('Merged voice contexts exceed GBA bank capacity')
     output = bytearray((index + 1) * 8)
 
@@ -411,7 +428,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             raise ValueError('Conflicting per-note alias/instrument definition')
         tone_map[site] = raw
     instrument_reports = []
-    for context, voice in voice_contexts.items():
+    for voice, context in enumerate(voice_definitions):
         children = allocate(bytes(128 * 12))
         keys = sorted(key for v, key in tone_map if v == voice)
         for key in keys:
@@ -514,6 +531,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
               'merged_loop_start_ticks': loop_start, 'merged_loop_ticks': period,
               'note_mapping': mappings, 'target_schedules': schedules,
               'samples': sample_reports, 'instruments': instrument_reports,
+              'voice_context_splits': voice_splits,
               'tempo_mapping': tempo_reports, 'song_gain_db': song_gain_db, 'song_gain_linear': gain,
               'song_gain_scope': 'Imported sequence VOL commands only',
               'priority_mapping': {str(k): v for k, v in priority_map.items()}, 'song_priority': 20,

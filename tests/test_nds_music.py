@@ -139,6 +139,29 @@ class SampleConversionTests(unittest.TestCase):
 
 
 class TrackMergingTests(unittest.TestCase):
+    def test_shared_instrument_splits_only_conflicting_track_local_alias(self):
+        for second_key in (60, 96):
+            with self.subTest(second_key=second_key):
+                header = b'\xFE\x03\x00\x93\x01' + bytes(3)
+                setup = b'\xC7\x00\x81\x02'
+                def program(start, key, tempo=b''):
+                    intro = setup + tempo
+                    return (intro + bytes([key, 100, 0x82, 0x2C]) + b'\x80\x83\x00\x94'
+                            + (start + len(intro)).to_bytes(3, 'little'))
+                first = program(len(header), 60, b'\xE1\x78\x00')
+                second_offset = len(header) + len(first)
+                raw = header[:5] + second_offset.to_bytes(3, 'little') + first + program(second_offset, second_key)
+                blob, dep, report = convert_merged_song(SampleConversionTests.archive_for(raw), 0, [(0,), (1,)])
+                self.assertEqual(len(report['instruments']), 1 if second_key == 60 else 2)
+                self.assertEqual(len(report['voice_context_splits']), int(second_key != 60))
+                bank = dep['header']['tone_bank']['file_offset']
+                for track, source_key in enumerate((60, second_key)):
+                    n = next(n for n in report['note_mapping'] if n['target_track'] == track)
+                    self.assertEqual(n['gba_key'], 127)
+                    child = struct.unpack_from('<I', blob, bank + n['gba_voice'] * 12 + 4)[0] - 0x08000000
+                    self.assertEqual(blob[child + 127 * 12 + 1], source_key)
+                    self.assertTrue(any(e['name'] == 'EOT' and e['ticks'] == 300 for e in dep['tracks'][track]['events']))
+
     def test_long_note_carries_across_jump_without_retrigger(self):
         # 500-tick cycle, 300-tick gate beginning at 400. Native LFO's
         # warmup gives a matching carried voice at both loop boundaries.
@@ -338,6 +361,33 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_ura_splits_shared_percussion_alias_and_preserves_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-ura')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 18)
+        self.assertNotIn('native_pitch_lfo_approximation', manifest['nds_conversion'])
+        self.assertNotIn('envelope_approximation', manifest['nds_conversion'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples']), len(conversion['instruments'])), (8, 10, 6))
+        self.assertEqual(conversion['voice_context_splits'], [
+            {'gba_voice': 5, 'existing_voices': [4], 'source_track': 3, 'tick': 791,
+             'source_instrument': 123, 'gba_key': 127, 'source_key': 60, 'conflicting_source_keys': [96]}])
+        bank = dependency['header']['tone_bank']['file_offset']
+        for track, voice, source_key in [(3, 5, 60), (7, 4, 96)]:
+            long_notes = [n for n in conversion['note_mapping'] if n['source_track'] == track and n['long_note']]
+            self.assertTrue(long_notes)
+            self.assertEqual({(n['gba_voice'], n['gba_key']) for n in long_notes}, {(voice, 127)})
+            child = struct.unpack_from('<I', blob, bank + voice * 12 + 4)[0] - 0x08000000
+            self.assertEqual(blob[child + 127 * 12 + 1], source_key)
+        self.assertEqual(len(conversion['long_note_loop_carries']), 5)
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_planetarium_carries_long_note_and_preserves_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

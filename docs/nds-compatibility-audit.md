@@ -208,6 +208,11 @@ on 2026-10-17. The archived v8 manual-match count remains sixteen.
 Star Force 1 URA also passes the former boundary guard, but then fails with
 `Conflicting per-note alias/instrument definition`; it remains blocked.
 The audit introduces no new listening or runtime evidence.
+The subsequent [URA experiment](nds-ura-research.md) resolves that shared-bank
+alias conflict with an additional compatible rhythm bank. Its independent
+source, natural first loop and actual PCM alias/stop checks pass; the user
+reported no issues with the requested listening/gameplay checklist on
+2026-10-17. The archived v8 row and counts remain unchanged.
 
 Sixteen packed variants are byte-identical to artifacts with structured
 user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/LAST/KINCHO/BATTLE-LFO,
@@ -357,8 +362,10 @@ automated and user-reported listening/gameplay checks; the archived v6 and v7
 counts remain unchanged. V8 now includes PLANETARIUM and the newly unblocked
 Star Force 2 DEMPAJIKEN. The latter subsequently passed standalone source/runtime
 validation and user-reported listening/gameplay checks. Star Force 1 URA
-remains a candidate for further research into its per-note alias/instrument
-definition conflict; it is not yet convertible.
+was a candidate for further research into its per-note alias/instrument
+definition conflict at v8 scan time. The later [URA experiment](nds-ura-research.md)
+now converts it with separate compatible banks and has user-reported
+listening/gameplay acceptance on 2026-10-17.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once
