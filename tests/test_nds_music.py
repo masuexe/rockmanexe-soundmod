@@ -361,6 +361,28 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_henkan_finite_preserves_gates_and_per_track_ends(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'),
+            song='sf1-henkan-finite', song_gain_db=0)
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertTrue(manifest['nds_conversion']['finite_song'])
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 26)
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (4, 2))
+        self.assertEqual(conversion['finite_song']['track_end_ticks'], {'0': 534, '1': 534, '2': 554, '3': 554})
+        for track, end in zip(dependency['tracks'], (534, 534, 554, 554)):
+            self.assertEqual((track['termination'], track['ticks_before_repeat']), ('fine', end))
+            names = [e['name'] for e in track['events']]
+            self.assertNotIn('GOTO', names)
+            self.assertEqual(names[-2:], ['EOT', 'FINE'])
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_satellite_preserves_split_aliases_and_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(

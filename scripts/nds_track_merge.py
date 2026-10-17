@@ -16,6 +16,32 @@ from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
 
 
+def validate_finite_notes(track, base, end_tick):
+    """Compare all finite note gates, explicit EOTs and the final FINE."""
+    if track['termination'] != 'fine' or track['ticks_before_repeat'] != end_tick:
+        raise AssertionError('Compiled finite track end differs from source')
+    actual, ties = [], {}
+    for event in track['events']:
+        if event['name'] in ('NOTE', 'TIE'):
+            row = [event['ticks'], event['voice'], event['key'], event['velocity'], event.get('duration_ticks')]
+            actual.append(row)
+            if event['name'] == 'TIE':
+                if event['key'] in ties:
+                    raise AssertionError('Converted long notes share a live alias')
+                ties[event['key']] = row
+        elif event['name'] == 'EOT':
+            if event['key'] not in ties:
+                raise AssertionError('EOT has no matching tied note')
+            row = ties.pop(event['key'])
+            row[4] = event['ticks'] - row[0]
+    if ties:
+        raise AssertionError('Unclosed tied notes before finite track end')
+    if actual != base:
+        raise AssertionError('Finite note/gate/timing model differs')
+    return {'checked_until_ticks': end_tick, 'complete_finite_track': True,
+            'note_events_compared': len(actual), 'explicit_eot_before_fine': True}
+
+
 def validate_loop_notes(track, base, loop_start, period):
     """Check an intro and two whole musical loops, including boundary EOTs.
 
@@ -139,11 +165,20 @@ def pitch_commands(units):
     return bytes([0xC1, 12, 0xC0, 64 + bend, 0xC8, 64 + tune])
 
 
-def assess_groups(tracks, groups):
+def assess_groups(tracks, groups, finite_support=False):
     ids = {t['track'] for t in tracks}
     flat = [n for group in groups for n in group]
     if len(set(flat)) != len(flat) or set(flat) != ids:
         raise ValueError('Track groups must include each source track exactly once')
+    if finite_support:
+        if any(len(group) != 1 for group in groups) or any(t['termination'] != 'end' for t in tracks):
+            raise ValueError('Finite experiment requires singleton, entirely finite source tracks')
+        for track in tracks:
+            notes = [a for a in track['actions'] if a['name'] == 'note']
+            if not notes or any(a['ticks'] + a['duration'] > track['end_ticks'] for a in notes):
+                raise ValueError('Finite notes must finish their gates before or at source END')
+        return None, None, {t['track']: [dict(a) for a in t['actions']] for t in tracks}, [
+            {'source_tracks': list(group), 'shared_expression': True, 'shared_pitch': True} for group in groups]
     if any(t['termination'] != 'loop' for t in tracks):
         raise ValueError('Merged experiment requires looping source tracks')
     periods = {t['loop_ticks'] for t in tracks}
@@ -183,13 +218,18 @@ def assess_groups(tracks, groups):
 
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
-                        native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False):
+                        native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
+                        finite_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
+    if finite_support and (native_pitch_lfo or envelope_support):
+        raise ValueError('Finite experiment currently excludes native LFO and fitted-envelope modes')
+    if finite_support and len({a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}) != 1:
+        raise ValueError('Finite experiment currently requires a fixed source tempo')
     if native_pitch_lfo_delay and not native_pitch_lfo:
         raise ValueError('Delay approximation requires native pitch LFO mode')
     if native_pitch_lfo_live_depth and not (native_pitch_lfo and native_pitch_lfo_delay):
@@ -273,7 +313,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                     raise ValueError('Merged experiment requires tempo in source track 0')
             if action['name'] == 'note' and not 1 <= action['duration'] <= 65535:
                 raise ValueError('Unsupported merged note duration')
-    loop_start, period, expanded, decisions = assess_groups(tracks, groups)
+    loop_start, period, expanded, decisions = assess_groups(tracks, groups, finite_support)
     lfo_tempo, lfo_configs = None, {}
     if native_pitch_lfo:
         if any(len(group) != 1 for group in groups):
@@ -297,7 +337,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                     if state['mod_depth']:
                         key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
                         lfo_configs[key] = compare_config(state, lfo_tempo, native_pitch_lfo_delay)
-    end_tick = loop_start + period
+    end_tick = max(t['end_ticks'] for t in tracks) + 1 if finite_support else loop_start + period
     bank, archives = archive.bank(info['bank_id'])
     source_map = {n: i for i, group in enumerate(groups) for n in group}
     gain = 10 ** (song_gain_db / 20)
@@ -332,9 +372,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             if any(start < end for (_, end), (start, _) in zip(intervals, intervals[1:])):
                 raise ValueError('Overlapping long notes require more aliases')
             entry = [(start - loop_start, end - loop_start) for start, end in intervals
-                     if start < loop_start < end]
+                     if not finite_support and start < loop_start < end]
             exit = [(start - end_tick, end - end_tick) for start, end in intervals
-                    if start < end_tick < end]
+                    if not finite_support and start < end_tick < end]
             if entry != exit:
                 raise ValueError('Long notes require matching carry across merged loop boundary')
             # The warmup's EOT inside the body also closes the previous
@@ -491,25 +531,31 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                bytes([0xCE, note['gba_key']]), None))
             order = 1 + note['event_order'] if native_pitch_lfo else 2
             events.append((note['ticks'], order, note['source_track'], command, note))
-        events.append((loop_start, -1, 0, b'', None))
+        if not finite_support:
+            events.append((loop_start, -1, 0, b'', None))
         events.sort(key=lambda event: event[:3])
         code = bytearray([0xBD, 0, 0xBE, volume(group_volume[group_index], 127), 0xBF, 64])
         code.extend(pitch_commands(0))
         tick, loop_position = 0, None
+        stop_tick = next(t['end_ticks'] for t in tracks if t['track'] == primary) if finite_support else end_tick
         for when, category, _, command, note in events:
-            if when >= end_tick:
+            if when > stop_tick or (not finite_support and when == stop_tick):
                 continue
             code.extend(wait_bytes(when - tick))
             tick = when
             if category == -1:
                 loop_position = len(code)
             code.extend(command)
-        code.extend(wait_bytes(end_tick - tick))
-        offset = allocate(code + b'\xB2' + bytes(4))
-        struct.pack_into('<I', output, offset + len(code) + 1, ROM_BASE + offset + loop_position)
+        code.extend(wait_bytes(stop_tick - tick))
+        if finite_support:
+            offset = allocate(code + b'\xB1')
+        else:
+            offset = allocate(code + b'\xB2' + bytes(4))
+            struct.pack_into('<I', output, offset + len(code) + 1, ROM_BASE + offset + loop_position)
         track_offsets.append(offset)
         schedules.append({'source_tracks': list(group), 'target_track': group_index,
-                          'loop_start_ticks': loop_start, 'loop_ticks': period})
+                          **({'termination': 'end', 'end_ticks': stop_tick} if finite_support else
+                             {'loop_start_ticks': loop_start, 'loop_ticks': period})})
     header = allocate(struct.pack('<BBBBI', len(groups), 0, 20, 128, ROM_BASE + bank_offset)
                       + struct.pack('<' + 'I' * len(groups), *(ROM_BASE + offset for offset in track_offsets)))
     struct.pack_into('<IHH', output, index * 8, ROM_BASE + header, 0, 0)
@@ -522,7 +568,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         base = [[a['ticks'], a['gba_voice'], a['gba_key'], a['gba_velocity'], a['duration']]
                 for a in source_notes if a['target_track'] == group_index]
         try:
-            note_validation.append(validate_loop_notes(track, base, loop_start, period))
+            note_validation.append(validate_finite_notes(track, base, schedules[group_index]['end_ticks'])
+                                   if finite_support else validate_loop_notes(track, base, loop_start, period))
         except AssertionError as error:
             raise AssertionError(f'{error} on track {group_index}') from error
     report = {'schema_version': 1, 'sequence_index': index, 'sequence_info': info,
@@ -547,6 +594,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                               'Relative music priorities mapped below native effect priorities.',
                               'Target PCM voice allocation is separate from sequence track merging.',
                               'Independent source execution and actual GBA playback must still be validated.']}
+    if finite_support:
+        report['finite_song'] = {'policy': 'Singleton finite tracks; all gates close before or at source END',
+                                 'track_end_ticks': {str(t['track']): t['end_ticks'] for t in tracks},
+                                 'explicit_long_note_eot': True, 'native_lfo_or_fitted_envelope': False}
     if native_pitch_lfo:
         report['native_pitch_lfo'] = {'approximation': True, 'configs': list(lfo_configs.values()),
                                     'method': 'MPlay triangle pitch LFO; reset on every note with one-tick onset delay',

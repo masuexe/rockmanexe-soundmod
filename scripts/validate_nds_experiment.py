@@ -187,12 +187,23 @@ def check_reference(experiment, reference):
     if not notes or {n['track'] for n in notes} != {t['track'] for t in conversion['tracks']}:
         raise AssertionError('Independent DS reference does not cover all tracks')
     counts = {}
+    finite = bool(conversion.get('finite_song'))
+    if finite:
+        rates = {t['nds_ticks_per_second'] for t in conversion['tempo_mapping']}
+        metadata = json.loads((reference / 'reference.json').read_text())
+        if len(rates) != 1 or metadata['seconds'] < max(t['end_ticks'] for t in conversion['tracks']) / min(rates) + 1:
+            raise AssertionError('Finite reference must cover source END and at least one second of tail')
     for track in conversion['tracks']:
         actual = [(n['tick'], n['instrument'], n['key'], n['velocity'], n['duration'])
                   for n in notes if n['track'] == track['track']]
         last = actual[-1][0]
         basis = [(a['ticks'], a['instrument'], a['key'], a['velocity'], a['duration'])
                  for a in track['actions'] if a['name'] == 'note']
+        if finite:
+            if track['termination'] != 'end' or actual != basis:
+                raise AssertionError(f'Independent finite DS note execution differs on track {track["track"]}')
+            counts[str(track['track'])] = len(actual)
+            continue
         if track['termination'] != 'loop' or last < track['end_ticks'] + track['loop_ticks']:
             raise AssertionError('Reference must cover two complete loops')
         expected = basis[:]
@@ -223,6 +234,8 @@ def check_reference(experiment, reference):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
+                    if finite and any(a['opcode'] == opcode for a in track['actions']):
+                        raise AssertionError('Independent finite DS controls are missing')
                     if opcode == 0xCA and any(a['opcode'] == opcode for a in track['actions']):
                         raise AssertionError('Independent DS depth controls are missing')
                     continue
@@ -231,11 +244,12 @@ def check_reference(experiment, reference):
                     raw = action['value']
                     return raw - 256 if opcode == 0xC4 and raw >= 128 else raw
                 basis = [(a['ticks'], value(a)) for a in track['actions'] if a['opcode'] == opcode]
-                body = [(a['ticks'], value(a)) for a in track['actions'][track['loop_action']:] if a['opcode'] == opcode]
+                body = [] if finite else [(a['ticks'], value(a)) for a in track['actions'][track['loop_action']:] if a['opcode'] == opcode]
                 expected = basis[:]
-                for turn in range(1, 1 + last // track['loop_ticks']):
+                for turn in (() if finite else range(1, 1 + last // track['loop_ticks'])):
                     expected.extend((tick + turn * track['loop_ticks'], v) for tick, v in body)
-                expected = [a for a in expected if a[0] <= last]
+                if not finite:
+                    expected = [a for a in expected if a[0] <= last]
                 if actual != expected:
                     raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
                 if opcode == 0xCA:
@@ -274,6 +288,7 @@ def check_reference(experiment, reference):
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
+            'finite_complete_note_schedule_checked': finite,
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
             'live_depth_control_matches': depth_control_matches if live_depth else 0,

@@ -402,6 +402,13 @@ variant subsequently passed standalone source/runtime checks and user-reported
 listening/gameplay acceptance. A next research candidate is Star Force 1
 HENKAN: its finite sequence still fails the singleton compiler's looping-track
 requirement and needs explicit long-gate/end-of-song support.
+The subsequent [HENKAN experiment](nds-henkan-research.md) adds an explicit
+finite singleton mode, with individual EOT/FINE times, independent finite
+source checking and natural completion/idle validation. It is not enabled
+by this archived scan. The user reported no issues with its requested cue
+completion, post-song silence, effects, map restoration and repeated encounter
+starts on 2026-10-17. A subsequent scan can add this bounded finite route
+without changing v9's archived counts.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once
