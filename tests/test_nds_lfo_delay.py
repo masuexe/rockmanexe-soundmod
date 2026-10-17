@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import test_nds_music as fixtures
 from nds_track_merge import convert_merged_song
-from validate_nds_experiment import check_delay_reference, check_live_depth_reference
+from validate_nds_experiment import check_delay_reference, check_live_depth_reference, check_toggle_reference
 from validate_nds_lfo import LfoModel
 
 
@@ -19,6 +19,58 @@ def archive_for(body):
 
 
 class DelayedPitchLfoTests(unittest.TestCase):
+    def test_toggle_preserves_initial_wait_and_models_disable_phase_approximation(self):
+        body = (fixtures.note(length=96) + b'\x80\x0C\xCA\x14\x80\x18\xCA\x00'
+                + b'\x80\x0C\xCA\x14\x80\x30\xCA\x00')
+        with self.assertRaises(ValueError):
+            convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                                native_pitch_lfo_delay=True)
+        _, dep, report = convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                                native_pitch_lfo_delay=True, native_pitch_lfo_live_toggle=True)
+        model = LfoModel(dep['tracks'][0]['events'])
+        before = model.advance(12)
+        self.assertEqual((before['phase'], before['count']), (0, 6))
+        after = model.advance(13)
+        self.assertEqual((after['phase'], after['count'], after['depth']), (0, 5, 2))
+        off_before = model.advance(36)
+        self.assertNotEqual(off_before['phase'], 0)
+        off = model.advance(37)
+        self.assertEqual((off['phase'], off['value'], off['depth'], off['count']), (0, 0, 0, off_before['count']))
+        resumed = model.advance(49)
+        self.assertEqual(resumed['phase'], resumed['speed'])
+        changes = report['native_pitch_lfo']['live_toggle_approximation']['source_depth_toggles']
+        self.assertEqual([(c['ticks'], c['before'], c['after']) for c in changes],
+                         [(12, 0, 20), (36, 20, 0), (48, 0, 20), (96, 20, 0)])
+
+    def test_toggle_rejects_other_parameter_changes_and_flag_combinations(self):
+        for control in (b'\xCA\x0A', b'\xCB\x14', b'\xCC\x01', b'\xCD\x02', b'\xE0\x14\x00'):
+            body = fixtures.note(length=96) + b'\x80\x0C\xCA\x14\x80\x0C' + control + b'\x80\x48'
+            with self.subTest(control=control), self.assertRaises(ValueError):
+                convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,
+                                    native_pitch_lfo_delay=True, native_pitch_lfo_live_toggle=True)
+        for options in ({'native_pitch_lfo_live_toggle': True},
+                        {'native_pitch_lfo': True, 'native_pitch_lfo_delay': True,
+                         'native_pitch_lfo_live_depth': True, 'native_pitch_lfo_live_toggle': True}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                convert_merged_song(archive_for(fixtures.note() + b'\x80\x0C'), 0, [(0,)], **options)
+
+    def test_independent_toggle_updates_preserve_both_counters(self):
+        header = 'tick,track,channel,before_depth,depth,phase_before,phase_after,counter_before,counter_after\n'
+        on = '12,0,0,0,20,0,0,0,0\n'
+        off = '36,0,0,20,0,1600,1600,10,10\n'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory);file = root / 'modulation-changes.csv'
+            (root / 'controls.csv').write_text('tick,track,opcode,value\n12,0,202,20\n36,0,202,0\n')
+            file.write_text(header + on + off)
+            self.assertEqual(check_toggle_reference(root, require_carried_disable=True)['disable_updates_with_carried_state'], 1)
+            file.write_text(header + on)
+            self.assertFalse(check_toggle_reference(root)['carried_disable_covered'])
+            with self.assertRaisesRegex(AssertionError, 'required toggle'):
+                check_toggle_reference(root, require_carried_disable=True)
+            file.write_text(header + on + off.replace(',1600,1600,', ',1600,0,'))
+            with self.assertRaisesRegex(AssertionError, 'phase/counter'):
+                check_toggle_reference(root)
+
     def test_setup_in_rest_before_first_note_keeps_note_on_delay_reset(self):
         body = b'\x80\x04\xCA\x14\x80\x10' + fixtures.note(length=36) + b'\x80\x24'
         _, dep, report = convert_merged_song(archive_for(body), 0, [(0,)], native_pitch_lfo=True,

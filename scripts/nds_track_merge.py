@@ -178,7 +178,7 @@ def assess_groups(tracks, groups):
 
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
-                        native_pitch_lfo_live_depth=False):
+                        native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -189,19 +189,23 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Delay approximation requires native pitch LFO mode')
     if native_pitch_lfo_live_depth and not (native_pitch_lfo and native_pitch_lfo_delay):
         raise ValueError('Live depth approximation requires native pitch LFO delay mode')
-    depth_changes, initializations = [], []
+    if native_pitch_lfo_live_toggle and not (native_pitch_lfo and native_pitch_lfo_delay):
+        raise ValueError('Live toggle approximation requires native pitch LFO delay mode')
+    if native_pitch_lfo_live_toggle and native_pitch_lfo_live_depth:
+        raise ValueError('Live toggle and positive depth-change modes are separate experiments')
+    depth_changes, initializations, toggles = [], [], []
     if native_pitch_lfo_delay:
         fields = ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay')
         for track in tracks:
             notes = [a for a in track['actions'] if a['name'] == 'note']
             active = [i for i, a in enumerate(track['actions'])
                       if a.get('state_after', {}).get('mod_depth') and
-                      (a['state_after']['mod_delay'] or native_pitch_lfo_live_depth)]
+                      (a['state_after']['mod_delay'] or native_pitch_lfo_live_depth or native_pitch_lfo_live_toggle)]
             if not active:
                 continue
             activation = active[0]
             baseline = tuple(track['actions'][activation]['state_after'][k] for k in fields)
-            if not notes or track['actions'][activation]['ticks'] > notes[0]['ticks']:
+            if not notes or (not native_pitch_lfo_live_toggle and track['actions'][activation]['ticks'] > notes[0]['ticks']):
                 raise ValueError('Delayed LFO requires activation before or at the first note timestamp')
             initializations.append({'source_track': track['track'],
                                     'activation_tick': track['actions'][activation]['ticks'],
@@ -212,22 +216,35 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 current = tuple(a['state_after'][k] for k in fields)
                 # Some originals enable depth just after their first note at
                 # the same tick. No DS timer update has elapsed in between.
-                initial_off = i < activation and a['ticks'] == notes[0]['ticks'] and current[2] == 0
+                initial_off = (i < activation and (native_pitch_lfo_live_toggle or a['ticks'] == notes[0]['ticks'])
+                               and current[2] == 0)
+                toggled_off = native_pitch_lfo_live_toggle and current[2] == 0
                 live_depth = (native_pitch_lfo_live_depth and current[2] > 0 and
                               current[:2] + current[3:] == baseline[:2] + baseline[3:])
-                if current != baseline and not live_depth and not (initial_off and current[:2] + current[3:] == baseline[:2] + baseline[3:]):
+                if current != baseline and not live_depth and not ((initial_off or toggled_off) and current[:2] + current[3:] == baseline[:2] + baseline[3:]):
                     raise ValueError('Delayed LFO requires fixed per-track modulation after initial activation')
             previous_depth = baseline[2]
+            if native_pitch_lfo_live_toggle:
+                previous = 0
+                for a in track['actions']:
+                    if a['opcode'] == 0xCA:
+                        depth = a['state_after']['mod_depth']
+                        if depth != previous:
+                            toggles.append({'source_track': track['track'], 'ticks': a['ticks'],
+                                            'before': previous, 'after': depth})
+                        previous = depth
             for a in track['actions'][activation + 1:]:
                 if a['opcode'] not in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
                     continue
                 current = tuple(a['state_after'][k] for k in fields)
                 if current == baseline and not native_pitch_lfo_live_depth:
                     continue
-                if not (native_pitch_lfo_live_depth and current[2] > 0 and
+                accepted_depth = ((native_pitch_lfo_live_depth and current[2] > 0) or
+                                  (native_pitch_lfo_live_toggle and current[2] in (0, baseline[2])))
+                if not (accepted_depth and
                         current[:2] + current[3:] == baseline[:2] + baseline[3:]):
                     raise ValueError('Live delayed-LFO parameter changes are outside this experiment')
-                if current[2] != previous_depth:
+                if native_pitch_lfo_live_depth and current[2] != previous_depth:
                     depth_changes.append({'source_track': track['track'], 'ticks': a['ticks'],
                                           'before': previous_depth, 'after': current[2]})
                 previous_depth = current[2]
@@ -532,4 +549,15 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                             'Depth updates use shared target phase for overlapping voices and release tails.']}
         report['native_pitch_lfo']['delay_approximation']['policy'] = report['native_pitch_lfo']['live_depth_approximation']['policy']
         report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; quantized fixed delay with live positive depth updates'
+    if native_pitch_lfo_live_toggle:
+        report['native_pitch_lfo']['live_toggle_approximation'] = {
+            'policy': 'Depth zero or one fixed positive depth per track; fixed pitch type, speed, range and delay',
+            'method': 'MOD/LFOS toggles preserve the preloaded delay count; inactive target phase is reset to zero',
+            'source_depth_toggles': toggles,
+            'limitations': ['DS inactive voice phase/count freeze; target disabling resets shared phase/value.',
+                            'Re-enabling older voices approximates independent frozen phases with shared zero phase.',
+                            'New notes reset shared phase/delay for overlapping voices and release tails.',
+                            'Changing active depth or other modulation parameters remains rejected.']}
+        report['native_pitch_lfo']['delay_approximation']['policy'] = report['native_pitch_lfo']['live_toggle_approximation']['policy']
+        report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; fixed delay with live on/off approximation'
     return blob, dependency, report

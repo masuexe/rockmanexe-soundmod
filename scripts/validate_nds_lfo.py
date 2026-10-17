@@ -117,6 +117,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     observed_depths = {i: set() for i in range(len(models))}
     modeled = {i: set() for i in range(len(models))}
     delayed_holds = {}
+    previous_depths, toggle_observations = {}, []
     report = {'complete': False, 'scope': 'requested natural-title window only',
               'rom_fingerprint': fingerprint(data),
               'register_or_ram_injection': False, 'full_loop_validation': False,
@@ -156,6 +157,12 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                     if actual != expected:
                         raise AssertionError({'frame': frame, 'clock': clock, 'track': i,
                                               'actual_lfo': actual, 'expected_lfo': expected})
+                    if manifest['nds_conversion'].get('native_pitch_lfo_live_toggle_approximation'):
+                        previous = previous_depths.get(i)
+                        if previous is not None and previous != actual['depth']:
+                            toggle_observations.append({'track': i, 'clock': clock,
+                                                        'before': previous, 'after': actual['depth']})
+                        previous_depths[i] = actual['depth']
                     if manifest['nds_conversion'].get('native_pitch_lfo_delay_approximation') and actual['depth'] and actual['count']:
                         if actual['phase'] or actual['value']:
                             raise AssertionError('Delayed native onset did not hold zero phase/pitch')
@@ -180,6 +187,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
                           active_modulation_tracks=sorted(active),
                           delayed_zero_phase_hold_observations=delayed_holds,
                           observed_positive_depths={str(i): sorted(v) for i, v in observed_depths.items() if v},
+                          live_toggle_observations=toggle_observations,
                           observed_values={str(i): sorted(values) for i, values in observed.items()})
         except BaseException as error:
             report['error'] = repr(error)

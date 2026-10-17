@@ -318,6 +318,31 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_boss_toggle_preserves_order_and_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-boss-toggle')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 28)
+        self.assertTrue(manifest['nds_conversion']['native_pitch_lfo_live_toggle_approximation'])
+        self.assertNotIn('envelope_approximation', manifest['nds_conversion'])
+        self.assertEqual(conversion['track_count'], 7)
+        self.assertEqual(len(dependency['samples']), 21)
+        toggles = conversion['native_pitch_lfo']['live_toggle_approximation']['source_depth_toggles']
+        self.assertEqual([(r['source_track'], r['ticks'], r['before'], r['after']) for r in toggles],
+                         [(4, 3840, 0, 35), (4, 5952, 35, 0)])
+        events = [e for e in dependency['tracks'][4]['events'] if e['ticks'] == 3840 and e['name'] != 'WAIT']
+        index = next(i for i, e in enumerate(events) if e['name'] == 'NOTE')
+        self.assertEqual([(e['name'], e.get('value')) for e in events[index + 1:]
+                          if e['name'] in ('MOD', 'LFOS', 'LFODL', 'MODT')],
+                         [('MOD', 4), ('LFOS', conversion['native_pitch_lfo']['configs'][0]['lfos'])])
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_gowaiincho_initializes_before_first_note_and_preserves_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

@@ -15,10 +15,12 @@ CLI song: `sf1-gowaiincho-delay`.
 
 The fixed-delay compiler now accepts initialization before or at the first
 note timestamp, including the existing same-tick note-then-depth order.
-Activation after the first note's timestamp remains rejected. Modulation
+Activation after the first note's timestamp remains rejected in this mode. Modulation
 settings must still remain fixed after activation, except positive depth
 changes when the separate live-depth flag is explicitly enabled. This build
 does not enable live-depth or envelope fitting modes.
+The subsequent [BOSS experiment](nds-live-toggle-research.md) separately opts
+into binary on/off modulation; it does not change this fixed-delay mode.
 
 The silent target track can advance its shared triangle after setup, with
 no notes to sound it. The first note still emits the existing LFOS reset and

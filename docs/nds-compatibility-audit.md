@@ -274,6 +274,11 @@ no issues with the standalone ROM's requested listening and gameplay checks
 on 2026-10-17. Its policy is now included in v6, while the v5 snapshot is
 unchanged. Actual activation after the first note is a useful next bounded
 research target, with BOSS or KAICYOU as confirmed examples.
+The subsequent [BOSS experiment](nds-live-toggle-research.md) adds a separate
+binary on/off compiler flag, independently checks native held-note toggles
+and provides a song-specific ROM accepted by user-reported listening and
+gameplay checks on 2026-10-17. The scan does not yet
+try this flag; the archived v6 counts remain unchanged.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

@@ -37,6 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf1-kincho': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
+                 'sf1-boss-toggle': 'ssr1',
                  'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
@@ -88,15 +89,17 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db)
-    elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay'):
+    elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay', 'sf1-boss-toggle'):
         index, name = {'sf1-fmplanet-delay': (2, 'BGM02FMPLANET'),
                        'sf1-hometown-depth': (3, 'BGM03HOMETOWN'),
-                       'sf1-gowaiincho-delay': (7, 'BGM07GOWAIINCHO')}[song]
+                       'sf1-gowaiincho-delay': (7, 'BGM07GOWAIINCHO'),
+                       'sf1-boss-toggle': (28, 'BGM28BOSS')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
             native_pitch_lfo=True, native_pitch_lfo_delay=True,
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
+            native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
     elif song == 'sf2-battle-delay':
         index, name = 27, 'BGM_BATTLE'
@@ -180,6 +183,8 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
             manifest['nds_conversion']['native_pitch_lfo_delay_approximation'] = True
         if conversion['native_pitch_lfo'].get('live_depth_approximation'):
             manifest['nds_conversion']['native_pitch_lfo_live_depth_approximation'] = True
+        if conversion['native_pitch_lfo'].get('live_toggle_approximation'):
+            manifest['nds_conversion']['native_pitch_lfo_live_toggle_approximation'] = True
     if conversion.get('envelope_approximation'):
         manifest['nds_conversion']['envelope_approximation'] = True
     return output, patch, manifest, conversion, dependency, blob, catalog, raw_sdat

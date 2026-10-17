@@ -133,6 +133,39 @@ def check_live_depth_reference(conversion, reference):
             'phase_and_delay_count_preserved': True}
 
 
+def check_toggle_reference(reference, require_carried_disable=False):
+    """DS parameter updates preserve counters across both toggle directions."""
+    with (reference / 'controls.csv').open() as stream:
+        controls = [{k: int(v) for k, v in r.items()} for r in csv.DictReader(stream)
+                    if int(r['opcode']) == 0xCA]
+    control_points = {(r['tick'], r['track'], r['value']) for r in controls}
+    state, on_controls, off_controls = {}, 0, 0
+    for r in controls:
+        before = state.get(r['track'], 0)
+        on_controls += before == 0 and r['value'] > 0
+        off_controls += before > 0 and r['value'] == 0
+        state[r['track']] = r['value']
+    enabled = disabled = carried_disable = 0
+    with (reference / 'modulation-changes.csv').open() as stream:
+        for raw in csv.DictReader(stream):
+            r = {k: int(v) for k, v in raw.items()}
+            if (r['phase_before'], r['counter_before']) != (r['phase_after'], r['counter_after']):
+                raise AssertionError('Independent DS toggle update resets phase/counter')
+            if (r['tick'], r['track'], r['depth']) not in control_points:
+                continue
+            enabled += r['before_depth'] == 0 and r['depth'] > 0
+            off = r['before_depth'] > 0 and r['depth'] == 0
+            disabled += off
+            carried_disable += bool(off and (r['phase_before'] or r['counter_before']))
+    if not on_controls or not off_controls or not enabled or (require_carried_disable and not carried_disable):
+        raise AssertionError('Reference does not cover required toggle controls/voice updates')
+    return {'complete': True, 'voice_enable_updates': enabled, 'voice_disable_updates': disabled,
+            'disable_updates_with_carried_state': carried_disable, 'parameter_updates_preserve_counters': True,
+            'enable_controls': on_controls, 'disable_controls': off_controls,
+            'carried_disable_covered': bool(carried_disable),
+            'scope': 'UpdateMod observations at depth-control timestamps; disabling with no allocated voices is allowed; frozen inactive timer updates are not logged'}
+
+
 def check_reference(experiment, reference):
     conversion = json.loads((experiment / 'conversion.json').read_text())
     archive = SoundArchive((experiment / 'source.sdat').read_bytes())
@@ -175,9 +208,10 @@ def check_reference(experiment, reference):
         counts[str(track['track'])] = len(actual)
     control_matches = depth_control_matches = 0
     live_depth = conversion.get('native_pitch_lfo', {}).get('live_depth_approximation')
+    live_toggle = conversion.get('native_pitch_lfo', {}).get('live_toggle_approximation')
     pre_note = [r for r in conversion.get('native_pitch_lfo', {}).get('delay_approximation', {}).get('initializations', [])
                 if r['activation_tick'] < r['first_note_tick']]
-    check_depth = live_depth or pre_note
+    check_depth = live_depth or pre_note or live_toggle
     if check_depth and not (reference / 'controls.csv').is_file():
         raise AssertionError('Depth conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
@@ -242,6 +276,8 @@ def check_reference(experiment, reference):
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
             'live_depth_control_matches': depth_control_matches if live_depth else 0,
+            'live_toggle_control_matches': depth_control_matches if live_toggle else 0,
+            'live_toggle_reference': check_toggle_reference(reference) if live_toggle else None,
             'pre_note_initializations_checked': pre_note,
             'initialization_depth_control_matches': depth_control_matches if pre_note else 0,
             'live_depth_reference': check_live_depth_reference(conversion, reference) if live_depth else None,
