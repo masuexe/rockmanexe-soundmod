@@ -1,16 +1,16 @@
 # Star Force 1/2/3 compatibility audit
 
 The updated batch audit covers every SSEQ slot in the three pinned Japanese
-Star Force archives. Forty-eight candidates pass conversion, independent MPlay
+Star Force archives. Fifty candidates pass conversion, independent MPlay
 reparsing, shared EXE6 packing and BPS reconstruction. The exclusive success
-categories are 24 standard, four LFO-only, two envelope-only, three envelope
+categories are 26 standard, four LFO-only, two envelope-only, three envelope
 plus LFO, eight fixed delayed-LFO, four envelope plus fixed delayed-LFO, one
 envelope plus live-depth LFO, one live-toggle LFO and one envelope plus live-toggle
 LFO. The live-depth-only category has no successes.
 These are automated resource/export results; this run performs no new gameplay
 or listening tests and does not enable NDS songs in the manager.
 
-Report directory: `out/nds-research/compatibility-audit-v8/` (schema 6):
+Report directory: `out/nds-research/compatibility-audit-v9/` (schema 7):
 
 - `index.html`: standalone searchable/filterable report, with every route,
   source feature, error and manual-evidence association available per row.
@@ -82,18 +82,22 @@ single-song experiments: dependency relocation, native-data preservation,
 output bounds and BPS reconstruction. The pack step was extracted into
 `pack_converted_experiment`; all six previously accepted artifacts rebuild
 byte-identically after that refactor. The batch writes reports only, retaining
-ROM/BPS fingerprints rather than creating forty-eight new ROM files.
-All 46 previously packed v7 variants retain their exact ROM and BPS fingerprints,
-route, status and gain. The v2/v3/v4/v5/v6/v7 snapshots are preserved separately.
+ROM/BPS fingerprints rather than creating fifty new ROM files.
+All 48 previously packed v8 variants retain their exact ROM and BPS fingerprints,
+route, status and gain. The v2/v3/v4/v5/v6/v7/v8 snapshots are preserved separately.
 V8 includes matching long-note carries across loop jumps; the entry/exit
 intervals must agree and aliases cannot overlap. The independent decoder
 continues beyond the note-on window to close every included gate. This does
 not constitute native full-loop playback.
+V9 additionally allocates a compatible rhythm bank when a shared
+`(instrument context, alias)` slot would otherwise map to a different source
+key. The first compatible bank is reused, original key/sample and track-local
+EOT behavior are preserved, and the 128-voice bank bound remains enforced.
 
 Configuration: original Japanese EXE6 Gregar, eight music tracks, ten PCM
 voices at native 10,512 Hz, +3.5 dB imported gain, title/ordinary ID 21/
 communication scene pools. A headroom failure can retry the same route at
-neutral gain with an explicit record; none of the forty-eight successes needed
+neutral gain with an explicit record; none of the fifty successes needed
 that retry in this run. Gain and voice allocation are not calibrated by the
 audit. Standard conversion still includes PCM8/envelope/tempo approximations.
 
@@ -106,10 +110,10 @@ counted separately, not asserted to be distinct musical compositions.
 
 | Game | SSEQ slots | Candidates | Standard | LFO | Envelope | Envelope + LFO | Delayed LFO | Envelope + delayed LFO | Live-depth LFO | Envelope + live-depth LFO | Live-toggle LFO | Envelope + live-toggle LFO | Blocked |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Star Force 1 | 38 | 35 | 14 | 4 | 0 | 0 | 6 | 0 | 0 | 1 | 1 | 0 | 9 |
+| Star Force 1 | 38 | 35 | 16 | 4 | 0 | 0 | 6 | 0 | 0 | 1 | 1 | 0 | 7 |
 | Star Force 2 | 43 | 40 | 5 | 0 | 1 | 2 | 2 | 3 | 0 | 0 | 0 | 1 | 26 |
 | Star Force 3 | 51 | 47 | 5 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 39 |
-| Total | 132 | 122 | 24 | 4 | 2 | 3 | 8 | 4 | 0 | 1 | 1 | 1 | 74 |
+| Total | 132 | 122 | 26 | 4 | 2 | 3 | 8 | 4 | 0 | 1 | 1 | 1 | 72 |
 
 Five slots are empty; five other sequences execute no notes (three dummy
 sequences and Star Force 2 KODAI/HERO). Of the remaining 122 candidates,
@@ -119,8 +123,8 @@ asserted playable or silent.
 
 The standard-pass list is:
 
-- Star Force 1: `4 ROOM`, `5 LABO`, `6 SCHOOL`, `11 DEMPAJIKEN`, `16 ANTENNA`,
-  `17 LAST`, `21 COMICAL`, `22 JIKEN`, `23 KINCHO`, `24 KANDO`, `25 SETSUNAI`,
+- Star Force 1: `4 ROOM`, `5 LABO`, `6 SCHOOL`, `9 SATELLITE`, `11 DEMPAJIKEN`,
+  `16 ANTENNA`, `17 LAST`, `18 URA`, `21 COMICAL`, `22 JIKEN`, `23 KINCHO`, `24 KANDO`, `25 SETSUNAI`,
   `30 WIN`, `33 GAMEOVER`, `34 BOSSMAE`.
 - Star Force 2: `4 ROOM`, `21 COMICAL`, `24 KANDO`, `30 WIN`, `33 GAMEOVER`.
 - Star Force 3: `2 ROOM`, `28 COMICAL`, `31 KANDO`, `35 BATTLE`, `40 GAMEOVER`.
@@ -205,8 +209,9 @@ The subsequent [DEMPAJIKEN experiment](nds-dempajiken-research.md) checks the
 source, natural first loop and actual carried channel through its EOT;
 the user reported no issues with the requested listening/gameplay checklist
 on 2026-10-17. The archived v8 manual-match count remains sixteen.
-Star Force 1 URA also passes the former boundary guard, but then fails with
-`Conflicting per-note alias/instrument definition`; it remains blocked.
+In v8, Star Force 1 URA passes the former boundary guard, but then fails with
+`Conflicting per-note alias/instrument definition`; that snapshot retains
+the blocked result.
 The audit introduces no new listening or runtime evidence.
 The subsequent [URA experiment](nds-ura-research.md) resolves that shared-bank
 alias conflict with an additional compatible rhythm bank. Its independent
@@ -214,9 +219,24 @@ source, natural first loop and actual PCM alias/stop checks pass; the user
 reported no issues with the requested listening/gameplay checklist on
 2026-10-17. The archived v8 row and counts remain unchanged.
 
-Sixteen packed variants are byte-identical to artifacts with structured
-user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/LAST/KINCHO/BATTLE-LFO,
-Star Force 2 NESSIE/KAICYOU/WIN/BATTLE and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
+The two newly packed v9 candidates are:
+
+| Game / ID | Song | Route | Tracks / samples | Existing manual match |
+| --- | --- | --- | --- | --- |
+| Star Force 1 / 9 | SATELLITE | Singleton bend/long gates + compatible bank | 8 / 28 | No |
+| Star Force 1 / 18 | URA | Singleton bend/long gates + compatible bank | 8 / 10 | Yes |
+
+Both record the same instrument-123/alias-127 conflict between source keys
+96 and 60, resolved by a second compatible bank (new voice 5 at tick 791).
+Neither requires the active pitch-LFO or fitted-envelope modes. SATELLITE
+has no long-note carry across its generated loop cut; URA retains five.
+SATELLITE is the next recommended standalone source/runtime/listening test.
+The scan supplies packing evidence only; URA's manual match reuses its
+existing acceptance, and DEMPAJIKEN now matches its later accepted artifact.
+
+Eighteen packed variants are byte-identical to artifacts with structured
+user-reported manual acceptance: Star Force 1 FMPLANET/HOMETOWN/GOWAIINCHO/BOSS/PLANETARIUM/URA/LAST/KINCHO/BATTLE-LFO,
+Star Force 2 NESSIE/DEMPAJIKEN/KAICYOU/WIN/BATTLE and Star Force 3 HOKORA/FRIEND/KANDO/BATTLE. This matching
 does not create new manual evidence. The earlier accepted Star Force 3 ROOM
 build uses title-only rules and its original priority policy, so the uniformly
 configured audit variant is not marked as that previously accepted artifact.
@@ -226,8 +246,9 @@ JSON rows and attempts record separate envelope/LFO/fixed-delay/live-depth/live-
 rows retain attack fitting errors and method limitations; LFO rows retain their
 configs, including delay rounding/counter timing where enabled. CSV exposes all
 five flags, attack fits, delay mappings, initializations, source depth changes,
-toggles and matching long-note carries. JSON also retains complete gate-window
-validation and the carry policy; HTML offers separate status filters for all ten success categories.
+toggles, matching long-note carries and voice-context splits. JSON also retains
+complete gate-window validation, the carry policy and the compatible-bank
+allocation policy; HTML offers separate status filters for all ten success categories.
 `summary.md` counts the categories exclusively;
 combined rows must not be added twice when discussing envelope/LFO coverage.
 The earlier envelope audit regressions cover envelope/combined selection,
@@ -253,12 +274,12 @@ The primary result categories are exclusive:
 | Result | Count | Meaning |
 | --- | ---: | --- |
 | Capacity blocked | 58 | More than eight source tracks and no registered mapping |
-| Conversion blocked | 15 | Current control, envelope, timing or compiler preconditions reject every attempted route |
+| Conversion blocked | 13 | Current control, envelope, timing or compiler preconditions reject every attempted route |
 | Converter model blocked | 0 | All eight earlier boundary assertions are resolved |
 | Execution analysis blocked | 1 | Bounded source execution cannot complete |
 
 Source features can overlap these categories. Among blocked candidates,
-18 use non-instant instrument attacks, 28 execute envelope overrides, 41
+18 use non-instant instrument attacks, 28 execute envelope overrides, 39
 contain gates above 223 ticks, and 13 have modulated note states with a
 nonzero delay. A long gate alone is not a general blocker: existing TIE/EOT
 conversion already handles some songs. These counts describe investigation
@@ -317,6 +338,11 @@ records cross-format agreement, JavaScript syntax validation, identical
 fingerprints/routes/status/gain for all 46 earlier packed variants, the two
 newly packed rows and URA's changed failure diagnostic. Inputs and archived
 v7 files remain unchanged.
+V9 passes all 210 tests; `compatibility-audit-v9/validation.json` verifies
+JSON/CSV/HTML/summary agreement, JavaScript syntax, the two newly packed rows,
+existing manual-evidence matches and identical fingerprints/routes/status/gain
+for all 48 earlier packed variants. Original inputs and the archived v8 files
+remain unchanged.
 
 Each of the eight recovered songs also has a 180-second independent software
 DS reference in `out/nds-research/loop-boundary-validation-v1/`. Source notes
@@ -365,7 +391,9 @@ validation and user-reported listening/gameplay checks. Star Force 1 URA
 was a candidate for further research into its per-note alias/instrument
 definition conflict at v8 scan time. The later [URA experiment](nds-ura-research.md)
 now converts it with separate compatible banks and has user-reported
-listening/gameplay acceptance on 2026-10-17.
+listening/gameplay acceptance on 2026-10-17. V9 now packs both URA and SATELLITE,
+with an exact accepted-ROM match for URA. SATELLITE's eight-track, 28-sample
+variant should receive independent source/runtime and listening checks next.
 Expanding the native player or devising new mappings for over-capacity songs
 remains separate from raising PCM channel count. Manager integration should
 expose the measured support policy and approximation/acceptance state once

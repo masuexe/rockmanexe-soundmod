@@ -263,6 +263,7 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                                                         for r in row['related_manual_records']))
             row['long_note_loop_carries'] = conversion.get('long_note_loop_carries', [])
             row['note_timing_validation'] = conversion.get('note_timing_validation', [])
+            row['voice_context_splits'] = conversion.get('voice_context_splits', [])
             if envelope:
                 row['envelope_approximation'] = conversion['envelope_approximation']
             if pitch_lfo:
@@ -364,13 +365,14 @@ def write_reports(directory, report):
                     '固定延迟路径接受首次音符之前或同一时刻完成初始化、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。',
                     '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。',
                     '启闭路径允许深度零与单个固定正深度之间切换，其余参数固定。GBA 关闭时清零共享相位，DS 保留各声道相位，仍有近似差异。所有分类互斥，组合路径不重复计数。',
-                    '长音跨循环仅接受入口与出口匹配的延续区间，不在跳转处重新起音；独立解码继续追踪窗口末尾音符的停音。扫描未执行原生全循环播放。'])
+                    '长音跨循环仅接受入口与出口匹配的延续区间，不在跳转处重新起音；独立解码继续追踪窗口末尾音符的停音。扫描未执行原生全循环播放。',
+                    '不同原始音高共用同一乐器别名时，使用独立音色表项消除冲突；优先复用兼容音色表，仍限制在 128 个乐器表项内。'])
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
               'route', 'gain_db', 'appended_bytes', 'native_pitch_lfo_approximation',
               'envelope_approximation', 'fixed_delay_approximation', 'live_depth_approximation', 'live_toggle_approximation',
               'source_depth_changes', 'source_depth_toggles', 'modulation_initializations', 'delay_mappings',
-              'attack_fits', 'long_note_loop_carries', 'manual_matches_packed_variant', 'errors']
+              'attack_fits', 'long_note_loop_carries', 'voice_context_splits', 'manual_matches_packed_variant', 'errors']
     with (directory / 'report.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
@@ -392,6 +394,7 @@ def write_reports(directory, report):
                                                           if 'delay_mapping' in c]),
                              'attack_fits': json.dumps(row.get('envelope_approximation', {}).get('attack_fits', [])),
                              'long_note_loop_carries': json.dumps(row.get('long_note_loop_carries', [])),
+                             'voice_context_splits': json.dumps(row.get('voice_context_splits', [])),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False)})
     payload = json.dumps({'report': report, 'labels': STATUS_LABELS}, ensure_ascii=False).replace('<', '\\u003c')
@@ -432,7 +435,14 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 6, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 7, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'voice_context_split_policy': {
+                  'context_fields': ['source_instrument', 'merged_pan_shift', 'effective_note_on_adsr_if_enabled'],
+                  'first_compatible_bank_reused': True,
+                  'conflicting_source_key_at_same_alias_creates_bank': True,
+                  'source_keys_samples_and_track_local_eots_preserved': True,
+                  'max_voice_contexts': 128,
+                  'batch_native_runtime_validation': False},
               'long_note_loop_carry_policy': {
                   'matching_entry_exit_intervals_required': True,
                   'overlapping_aliases_supported': False,
