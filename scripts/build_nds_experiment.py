@@ -48,6 +48,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf2-kaicyou-toggle': 'ssr2',
                  'sf2-dempajiken-envelope': 'ssr2',
                  'sf2-henkan-finite': 'ssr2',
+                 'sf3-win2-finite': 'ssr3', 'sf3-win2-antialias': 'ssr3',
                  'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
 
@@ -93,15 +94,18 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
-    elif song in ('sf1-henkan-finite', 'sf2-henkan-finite', 'sf1-win2-finite', 'sf1-win2-antialias'):
+    elif song in ('sf1-henkan-finite', 'sf2-henkan-finite', 'sf1-win2-finite', 'sf1-win2-antialias',
+                  'sf3-win2-finite', 'sf3-win2-antialias'):
         index, name = {'sf1-henkan-finite': (26, 'BGM26HENKAN'),
                        'sf2-henkan-finite': (26, 'BGM_HENKAN'),
                        'sf1-win2-finite': (31, 'BGM31WIN2'),
-                       'sf1-win2-antialias': (31, 'BGM31WIN2')}[song]
+                       'sf1-win2-antialias': (31, 'BGM31WIN2'),
+                       'sf3-win2-finite': (39, 'BGM_WIN2'),
+                       'sf3-win2-antialias': (39, 'BGM_WIN2')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True,
-            bandlimited_pcm=song == 'sf1-win2-antialias')
+            bandlimited_pcm=song in ('sf1-win2-antialias', 'sf3-win2-antialias'))
     elif song in ('sf1-last', 'sf1-ura', 'sf1-satellite'):
         index, name = {'sf1-last': (17, 'BGM17LAST'), 'sf1-ura': (18, 'BGM18URA'),
                        'sf1-satellite': (9, 'BGM09SATELLITE')}[song]

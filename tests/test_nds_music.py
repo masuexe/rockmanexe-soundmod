@@ -230,6 +230,40 @@ BASE = ROOT.parent / 'roms/exe6.gba'
 
 @unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
 class LocalNdsExperimentTests(unittest.TestCase):
+    def test_sf3_win2_finite_and_antialias_keep_all_eight_source_tracks(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        ends = {'0': 167, '1': 192, '2': 95, '3': 119, '4': 119, '5': 263, '6': 83, '15': 119}
+        for song, samples in [('sf3-win2-finite', 13), ('sf3-win2-antialias', 34)]:
+            with self.subTest(song=song):
+                output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+                    source, base, events=('1', '21', 'scene:communication'), song=song)
+                self.assertEqual(apply_bps(base, patch)[0], output)
+                self.assertEqual(manifest['nds_conversion']['sequence_index'], 39)
+                self.assertEqual((conversion['track_count'], len(dependency['samples'])), (8, samples))
+                self.assertEqual(len(conversion['note_mapping']), 83)
+                self.assertEqual(conversion['finite_song']['track_end_ticks'], ends)
+                self.assertEqual([t['source_tracks'] for t in conversion['target_schedules']],
+                                 [[0], [1], [2], [3], [4], [5], [6], [15]])
+                self.assertEqual([t['ticks_before_repeat'] for t in dependency['tracks']], list(ends.values()))
+                self.assertTrue(all(t['termination'] == 'fine' for t in dependency['tracks']))
+                if song == 'sf3-win2-finite':
+                    self.assertEqual(manifest['output_fingerprint']['sha256'],
+                                     'f306d1261d4b948b0dadcc67d6e5f18343b4c07263c6ee6d7d935f8f1dd0caa2')
+                    self.assertNotIn('bandlimited_pcm', conversion)
+                else:
+                    self.assertEqual(manifest['nds_conversion']['bandlimited_pcm']['mixing_rate_hz'], 10512)
+                    for prepared, native in zip(conversion['samples'], dependency['samples']):
+                        r = prepared['resampling']
+                        self.assertLess(abs(r['pitch_error_cents']), .001)
+                        self.assertEqual((native['sample_count'], native['loop_start']),
+                                         (r['output_samples'], r['output_loop_start']))
+                table = manifest['target_table_file_offset']
+                self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+                expected = bytearray(base)
+                for start, end in manifest['declared_prefix_ranges']:
+                    expected[start:end] = output[start:end]
+                self.assertEqual(output[:len(base)], expected)
+
     def test_envelope_experiments_preserve_native_data_and_explicit_policy(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         for song, index, samples in [('sf3-hokora-envelope', 10, 18), ('sf3-friend-envelope', 29, 23)]:

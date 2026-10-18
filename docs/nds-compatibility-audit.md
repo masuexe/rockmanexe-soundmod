@@ -494,3 +494,12 @@ Its v2 ROM is a separate variant outside archived batch routes and counts.
 On 2026-10-18 the user reported no issues after its requested listening/gameplay
 checklist, accepting the exact v2 ROM. The unfiltered variant remains unaccepted. All 22 previously accepted variants and old WIN2
 retain byte-identical ROM/BPS output with the option disabled.
+
+The subsequent [Star Force 3 WIN2 antialias experiment](nds-sf3-win2-antialias-research.md)
+reuses the existing per-key offline filter for eight tracks and 83 notes, with
+34 prepared PCM waves. Its unfiltered control matches v10 `ssr3:39` ROM/BPS;
+the antialias variant has separate source/runtime evidence. On 2026-10-18
+the user reported no issues after its requested listening/gameplay checklist,
+accepting this exact antialias ROM. Eleven simultaneous held source notes exceed the ten-channel
+native budget; conversion success does not imply allocation equivalence.
+Archived routes, counts and acceptance associations remain unchanged.
