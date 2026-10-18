@@ -121,3 +121,7 @@ Omit `--antialias-variants` for primary-only scanning. Neither mode adds songs
 to the production manager. Scan timing depends on offline FIR preparation;
 its standard-library implementation is deliberately bounded and does not
 change the native mixer.
+
+## Follow-up: Star Force 2 WIN
+
+The [WIN antialias experiment](nds-sf2-win-antialias-research.md) now provides a standalone ROM/BPS matching the archived `ssr2:30` candidate exactly. Source checks, two complete natural loops with all 89 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Filtered experiments now have user-reported acceptance across all three source games. The archived four accepted / 21 pending counts remain the historical scan snapshot.

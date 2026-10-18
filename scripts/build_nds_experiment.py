@@ -44,7 +44,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-win2-finite': 'ssr1',
                  'sf1-win2-antialias': 'ssr1',
                  'sf1-boss-toggle': 'ssr1',
-                 'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
+                 'sf2-win': 'ssr2', 'sf2-win-antialias': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf2-kaicyou-toggle': 'ssr2',
                  'sf2-dempajiken-envelope': 'ssr2',
                  'sf2-henkan-finite': 'ssr2',
@@ -106,13 +106,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True,
             bandlimited_pcm=song in ('sf1-win2-antialias', 'sf3-win2-antialias'))
-    elif song in ('sf1-last', 'sf1-last-antialias', 'sf1-ura', 'sf1-satellite', 'room-antialias'):
+    elif song in ('sf1-last', 'sf1-last-antialias', 'sf1-ura', 'sf1-satellite', 'room-antialias', 'sf2-win-antialias'):
         index, name = {'sf1-last': (17, 'BGM17LAST'), 'sf1-last-antialias': (17, 'BGM17LAST'), 'sf1-ura': (18, 'BGM18URA'),
-                       'sf1-satellite': (9, 'BGM09SATELLITE'), 'room-antialias': (2, 'BGM_ROOM')}[song]
+                       'sf1-satellite': (9, 'BGM09SATELLITE'), 'room-antialias': (2, 'BGM_ROOM'), 'sf2-win-antialias': (30, 'BGM_WIN')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
-            bandlimited_pcm=song in ('room-antialias', 'sf1-last-antialias'))
+            bandlimited_pcm=song in ('room-antialias', 'sf1-last-antialias', 'sf2-win-antialias'))
     elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay', 'sf1-boss-toggle', 'sf1-planetarium-delay'):
         index, name = {'sf1-fmplanet-delay': (2, 'BGM02FMPLANET'),
                        'sf1-hometown-depth': (3, 'BGM03HOMETOWN'),
