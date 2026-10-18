@@ -230,6 +230,31 @@ BASE = ROOT.parent / 'roms/exe6.gba'
 
 @unittest.skipUnless(NDS.exists() and BASE.exists(), 'local NDS/EXE6 inputs unavailable')
 class LocalNdsExperimentTests(unittest.TestCase):
+    def test_room_antialias_keeps_six_looping_tracks_and_per_key_wave_tuning(self):
+        source, base = NDS.read_bytes(), BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            source, base, events=('1', '21', 'scene:communication'), song='room-antialias')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 2)
+        self.assertNotIn('finite_song', conversion)
+        self.assertNotIn('finite_song', manifest['nds_conversion'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (6, 80))
+        self.assertEqual(len(conversion['note_mapping']), 471)
+        self.assertEqual((conversion['merged_loop_start_ticks'], conversion['merged_loop_ticks']), (24, 1536))
+        self.assertTrue(all((t['termination'], t['loop_start_ticks'], t['loop_ticks']) ==
+                            ('repeated_state', 24, 1536) for t in dependency['tracks']))
+        for prepared, native in zip(conversion['samples'], dependency['samples']):
+            r = prepared['resampling']
+            self.assertLess(abs(r['pitch_error_cents']), .001)
+            self.assertEqual((native['sample_count'], native['loop_start']),
+                             (r['output_samples'], r['output_loop_start']))
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_sf3_win2_finite_and_antialias_keep_all_eight_source_tracks(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         ends = {'0': 167, '1': 192, '2': 95, '3': 119, '4': 119, '5': 263, '6': 83, '15': 119}

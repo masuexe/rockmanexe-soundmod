@@ -225,8 +225,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
-    if bandlimited_pcm and not finite_support:
-        raise ValueError('Bandlimited PCM currently requires finite singleton mode')
+    if bandlimited_pcm and any(len(group) != 1 for group in groups):
+        raise ValueError('Bandlimited PCM requires singleton target tracks')
+    if bandlimited_pcm and (native_pitch_lfo or envelope_support):
+        raise ValueError('Bandlimited PCM excludes native LFO and fitted-envelope modes')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
     if bandlimited_pcm and any(a.get('state_after', {}).get('bend', 0) > 0 or
@@ -614,7 +616,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                               'Independent source execution and actual GBA playback must still be validated.']}
     if bandlimited_pcm:
         report['bandlimited_pcm'] = {'mixing_rate_hz': MIX_RATE,
-                                     'policy': 'Opt-in finite singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning',
+                                     'policy': ('Opt-in finite singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'
+                                                if finite_support else
+                                                'Opt-in looping singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'),
                                      'runtime_mixer_changed': False, 'offline_dependency': 'Python stdlib',
                                      'sample_budget': 4_000_000}
     if finite_support:

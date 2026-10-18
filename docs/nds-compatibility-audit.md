@@ -503,3 +503,12 @@ the user reported no issues after its requested listening/gameplay checklist,
 accepting this exact antialias ROM. Eleven simultaneous held source notes exceed the ten-channel
 native budget; conversion success does not imply allocation equivalence.
 Archived routes, counts and acceptance associations remain unchanged.
+
+The subsequent [ROOM looping antialias experiment](nds-room-antialias-research.md)
+adds explicit singleton-loop support to the offline filter route, without
+changing resampling, mixer settings or automatic batch routes. Source and
+native checks cover the six-track song through two complete generated loops.
+On 2026-10-18 the user reported no issues after its requested three-minute
+battle/listening checklist, accepting this exact new variant. Automated native
+coverage remains two complete loops. Archived scan results and previous
+accepted variants remain unchanged.

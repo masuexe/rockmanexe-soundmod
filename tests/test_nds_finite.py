@@ -31,13 +31,34 @@ class FiniteSongTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'too short'):
             probe_windows(short)
 
+    def test_bandlimited_looping_long_gate_keeps_eot_alias_and_rejects_merged_tracks(self):
+        raw = PROGRAM[:-1] + b'\x80\x0C\x94\x07\x00\x00'
+        archive = fixtures.SampleConversionTests.archive_for(raw)
+        archive.wave = lambda *_: ([0, 12000, 0, -12000] * 512,
+                                   {'effective_rate_hz': 22050, 'looped': True,
+                                    'loop_start_samples': 512, 'sample_count': 2048})
+        with self.assertRaisesRegex(ValueError, 'singleton'):
+            convert_merged_song(archive, 0, [(0, 1)], bandlimited_pcm=True)
+        for option in ('native_pitch_lfo', 'envelope_support'):
+            with self.subTest(option=option), self.assertRaisesRegex(ValueError, 'excludes'):
+                convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True, **{option: True})
+        _, dependency, report = convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True)
+        self.assertNotIn('finite_song', report)
+        self.assertEqual(report['merged_loop_ticks'], 312)
+        self.assertEqual(dependency['tracks'][0]['termination'], 'repeated_state')
+        self.assertEqual(report['long_note_aliases'][0]['gba_key'], 127)
+        names = {e['name'] for e in dependency['tracks'][0]['events']}
+        self.assertTrue({'TIE', 'EOT', 'GOTO'} <= names)
+        self.assertEqual(len(report['samples']), 1)
+        self.assertEqual(report['samples'][0]['source_key'], 60)
+
     def test_bandlimited_finite_cache_and_pitch_control_bounds(self):
         raw = b'\xC7\x00\xE1\x78\x00\x81\x02' + bytes([60, 100, 12, 72, 100, 12, 128, 12, 60, 100, 12, 128, 12, 255])
         archive = fixtures.SampleConversionTests.archive_for(raw)
         archive.wave = lambda *_: ([0, 12000, 0, -12000] * 512,
                                    {'effective_rate_hz': 22050, 'looped': True,
                                     'loop_start_samples': 512, 'sample_count': 2048})
-        with self.assertRaisesRegex(ValueError, 'finite singleton'):
+        with self.assertRaisesRegex(ValueError, 'looping source tracks'):
             convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True)
         _, dependency, conversion = convert_merged_song(archive, 0, [(0,)], finite_support=True, bandlimited_pcm=True)
         self.assertEqual(len(dependency['samples']), 2)
