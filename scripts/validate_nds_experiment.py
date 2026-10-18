@@ -171,8 +171,13 @@ def check_reference(experiment, reference):
     conversion = json.loads((experiment / 'conversion.json').read_text())
     archive = SoundArchive((experiment / 'source.sdat').read_bytes())
     sample_checks = []
+    seen_source_waves = set()
     for sample in conversion['samples']:
-        pcm, info = archive.wave(sample['archive_id'], sample['wave_id'])
+        source_wave = (sample['archive_id'], sample['wave_id'])
+        if source_wave in seen_source_waves:
+            continue
+        seen_source_waves.add(source_wave)
+        pcm, info = archive.wave(*source_wave)
         expected = struct.pack('<' + 'h' * len(pcm), *pcm)
         slot = conversion['sequence_info']['bank_id']
         _, archive_ids = archive.bank(slot)
@@ -289,6 +294,9 @@ def check_reference(experiment, reference):
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             'finite_complete_note_schedule_checked': finite,
+            'offline_resampling': ({'target_sample_count': len(conversion['samples']),
+                                    'scope': 'PCM16 comparisons check original source decoding; offline filtering is separate',
+                                    **conversion['bandlimited_pcm']} if conversion.get('bandlimited_pcm') else None),
             'decoded_sample_comparisons': sample_checks, 'pan_bend_expression_matches': control_matches,
             'source_pitch_modulation_matches': modulation_matches,
             'live_depth_control_matches': depth_control_matches if live_depth else 0,
@@ -301,10 +309,32 @@ def check_reference(experiment, reference):
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 
-def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
+def probe_windows(conversion):
+    """Keep controlled SFX/restart checks inside the earliest finite track END.
+
+    Shorten only finite songs; the natural-stop probe separately checks endings.
+    Reject cues too short for this controlled observation rather than waive it.
+    """
+    windows = dict(warmup=240, effects=30, lifecycle=120, restart=30)
+    if conversion and conversion.get('finite_song'):
+        rate = conversion['tempo_mapping'][0]['gba_ticks_per_second']
+        frames = min(conversion['finite_song']['track_end_ticks'].values()) / rate * 59.7275
+        if frames < 16:
+            raise ValueError('Finite cue too short for controlled live-music probe')
+        windows = dict(warmup=min(240, int(frames / 4)),
+                       effects=min(30, int(frames / 8)),
+                       lifecycle=min(120, int(frames / 3)),
+                       restart=min(30, int(frames / 8)))
+    return windows
+
+
+def probe_runtime(data, manifest, directory, mgba, lifecycle=False, conversion=None):
     layout = manifest_layout(manifest)
     if manifest['target_profile'] not in ('exe6', 'exe6f') or not manifest.get('nds_conversion'):
         raise ValueError('Requires the Japanese EXE6 NDS experiment manifest')
+    if manifest['nds_conversion'].get('finite_song') and not conversion:
+        raise ValueError('Finite runtime probe requires conversion timing')
+    windows = probe_windows(conversion)
     directory.mkdir(parents=True, exist_ok=False)
     rom = directory / 'test.gba'
     rom.write_bytes(data)
@@ -317,7 +347,7 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
     env.pop('LD_PRELOAD', None)
     report = {'complete': False, 'controlled_helper_calls': True,
               'natural_music_start': True, 'two_peer_gameplay_tested': False,
-              'effects': []}
+              'effects': [], 'observation_frames': windows}
     with (directory / 'debugger.txt').open('w') as transcript:
         debugger = Debugger([mgba, '-d', str(rom.resolve())], env, transcript)
         try:
@@ -335,12 +365,12 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
                 return sum(bool(raw[i] & 0xC7) and track_base <= struct.unpack_from('<I', raw, i + 44)[0] < track_base + count * 80
                            for i in range(0, len(raw), 64))
 
-            for _ in range(240):
+            for _ in range(windows['warmup']):
                 debugger.command('frame')
                 if debugger.read(4, player) != header:
                     raise AssertionError('Game replaced imported music during short probe')
                 max_music_voices = max(max_music_voices, voices())
-            report['max_music_voices_first_240_frames'] = max_music_voices
+            report['max_music_voices_during_warmup'] = max_music_voices
             report['music_clock_before_effects'] = debugger.read(4, player + 12)
             # Known original queue helper context, reached through normal play.
             debugger.command('break/t 0x080007BE')
@@ -378,7 +408,7 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
             # Debugger r15 includes the Thumb pipeline offset. Resume the actual
             # function entry, which recomputes flags, instead of skipping an opcode.
             debugger.command('w/r pc 0x080007BE')
-            for _ in range(30):
+            for _ in range(windows['effects']):
                 debugger.command('frame')
                 max_music_voices = max(max_music_voices, voices())
             after_clock = debugger.read(4, player + 12)
@@ -499,7 +529,7 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
                 middle_id = 3 if any(r['trigger_id'] == 21 for r in manifest['hook']['rules']) else 21
                 for cycle, native_id in enumerate((2, middle_id, 2), 1):
                     start_scene()
-                    advance(120)
+                    advance(windows['lifecycle'])
                     before = debugger.read(4, player + 12)
                     if before <= 0 or not voices():
                         raise AssertionError('Imported song failed to advance before stop')
@@ -519,10 +549,10 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
                             or debugger.read(1, state + 15) != native_id or not native_voices):
                         raise AssertionError('Native numbered music failed after imported stop')
                     start_scene()
-                    advance(120)
+                    advance(windows['lifecycle'])
                     rematch_clock = debugger.read(4, player + 12)
                     start_scene()  # Repeated scene marker must still restart.
-                    advance(30)
+                    advance(windows['restart'])
                     after = debugger.read(4, player + 12)
                     if not 0 < after < rematch_clock or not voices():
                         raise AssertionError('Rematch did not restart and resume imported music')
@@ -531,7 +561,7 @@ def probe_runtime(data, manifest, directory, mgba, lifecycle=False):
                                         'native_request_id': native_id, 'native_playback_resumes': True,
                                         'native_max_observed_pcm_voices': native_voices,
                                         'clock_before_rematch': rematch_clock,
-                                        'clock_after_rematch_30_frames': after,
+                                        'clock_after_rematch_observation': after,
                                         'rematch_resets_clock': True})
                 report['lifecycle']['complete'] = True
         except BaseException as error:
@@ -558,7 +588,8 @@ def main():
     if not valid_manifest_target(manifest) or fingerprint(data) != manifest['output_fingerprint']:
         parser.error('ROM does not match verified target manifest')
     reference = check_reference(args.experiment, args.reference) if args.reference else None
-    report = probe_runtime(data, manifest, args.out, args.mgba, args.lifecycle)
+    report = probe_runtime(data, manifest, args.out, args.mgba, args.lifecycle,
+                           json.loads((args.experiment / 'conversion.json').read_text()))
     if reference:
         (args.out / 'reference-validation.json').write_text(json.dumps(reference, indent=2) + '\n')
     print(f"Native effects, music continuation and queued stop passed; reference notes: {reference['sequence_note_matches'] if reference else 'not checked'}")

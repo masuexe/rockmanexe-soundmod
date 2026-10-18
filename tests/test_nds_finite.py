@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from analyze_song import trace_track
 from nds_music import wait_bytes
 from nds_track_merge import convert_merged_song, validate_finite_notes
-from validate_nds_experiment import check_reference
+from validate_nds_experiment import check_reference, probe_windows
 import test_nds_music as fixtures
 
 
@@ -18,6 +18,43 @@ PROGRAM = b'\xC7\x00\xE1\x78\x00\x81\x02\x3C\x64\x82\x2C\x80\x82\x2C\xFF'
 
 
 class FiniteSongTests(unittest.TestCase):
+    def test_short_finite_probe_observes_live_music_and_retains_loop_defaults(self):
+        self.assertEqual(probe_windows({}), dict(warmup=240, effects=30, lifecycle=120, restart=30))
+        short = {'finite_song': {'track_end_ticks': {'0': 168, '3': 156, '6': 192}},
+                 'tempo_mapping': [{'gba_ticks_per_second': 136.1787012987013}]}
+        w = probe_windows(short)
+        earliest_frames = 156 / 136.1787012987013 * 59.7275
+        self.assertLess(w['warmup'] + w['effects'] + 2, earliest_frames)
+        self.assertLess(w['restart'], w['lifecycle'])
+        self.assertGreater(w['effects'], 0)
+        short['finite_song']['track_end_ticks']['3'] = 1
+        with self.assertRaisesRegex(ValueError, 'too short'):
+            probe_windows(short)
+
+    def test_bandlimited_finite_cache_and_pitch_control_bounds(self):
+        raw = b'\xC7\x00\xE1\x78\x00\x81\x02' + bytes([60, 100, 12, 72, 100, 12, 128, 12, 60, 100, 12, 128, 12, 255])
+        archive = fixtures.SampleConversionTests.archive_for(raw)
+        archive.wave = lambda *_: ([0, 12000, 0, -12000] * 512,
+                                   {'effective_rate_hz': 22050, 'looped': True,
+                                    'loop_start_samples': 512, 'sample_count': 2048})
+        with self.assertRaisesRegex(ValueError, 'finite singleton'):
+            convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True)
+        _, dependency, conversion = convert_merged_song(archive, 0, [(0,)], finite_support=True, bandlimited_pcm=True)
+        self.assertEqual(len(dependency['samples']), 2)
+        self.assertEqual({s['source_key'] for s in conversion['samples']}, {60, 72})
+        self.assertTrue(conversion['note_timing_validation'][0]['complete_finite_track'])
+        self.assertTrue(all(abs(s['resampling']['pitch_error_cents']) < .001 for s in conversion['samples']))
+        # A live bend between note-ons must be inspected too. Downward bend is
+        # conservative for the prepared bandwidth; upward bend is outside scope.
+        for bend in (1, 255):
+            changed = raw[:-1] + bytes([196, bend, 255])
+            archive.sequence = lambda _, changed=changed: (changed, {'bank_id': 0, 'volume': 75})
+            if bend == 1:
+                with self.assertRaisesRegex(ValueError, 'upward bend'):
+                    convert_merged_song(archive, 0, [(0,)], finite_support=True, bandlimited_pcm=True)
+            else:
+                convert_merged_song(archive, 0, [(0,)], finite_support=True, bandlimited_pcm=True)
+
     def test_finite_long_gate_closes_before_same_tick_fine(self):
         _, dependency, conversion = convert_merged_song(
             fixtures.SampleConversionTests.archive_for(PROGRAM), 0, [(0,)], finite_support=True)

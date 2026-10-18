@@ -11,6 +11,7 @@ from dataclasses import replace
 from analyze_song import analyze
 from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
                        convert_envelope, fit_attack_parameter, level, note_bytes, trace_sequence, wait_bytes)
+from nds_resample import MIX_RATE, resample_wave
 from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
@@ -219,13 +220,20 @@ def assess_groups(tracks, groups, finite_support=False):
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
-                        finite_support=False):
+                        finite_support=False, bandlimited_pcm=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if bandlimited_pcm and not finite_support:
+        raise ValueError('Bandlimited PCM currently requires finite singleton mode')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
+    if bandlimited_pcm and any(a.get('state_after', {}).get('bend', 0) > 0 or
+                               any(a.get('state_after', {}).get(k, 0) for k in
+                                   ('transpose', 'mod_depth', 'porta', 'sweep_pitch'))
+                               for t in tracks for a in t['actions']):
+        raise ValueError('Bandlimited PCM excludes upward bend, transpose, modulation and portamento')
     if finite_support and (native_pitch_lfo or envelope_support):
         raise ValueError('Finite experiment currently excludes native LFO and fitted-envelope modes')
     if finite_support and len({a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}) != 1:
@@ -447,19 +455,29 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         if definition.kind != 1 or not 0 <= definition.archive_slot < len(archives):
             raise ValueError('Merged experiment requires valid PCM instruments')
         source_wave = (archives[definition.archive_slot], definition.wave_id)
-        cache_key = (*source_wave, definition.root_key)
+        cache_key = (*source_wave, definition.root_key, note['key']) if bandlimited_pcm else (*source_wave, definition.root_key)
         if cache_key not in wave_cache:
             pcm, metadata = archive.wave(*source_wave)
             frequency = round(metadata['effective_rate_hz'] * 2 ** ((60 - definition.root_key) / 12) * 1024)
             if not 0 < frequency < 2 ** 32:
                 raise ValueError('Converted wave frequency out of range')
             pcm8 = bytes(max(-128, min(127, round(x / 256))) & 255 for x in pcm)
+            target_loop = metadata['loop_start_samples']
+            resampling = None
+            if bandlimited_pcm:
+                pcm8, frequency, target_loop, resampling = resample_wave(
+                    pcm, metadata['effective_rate_hz'], note['key'], definition.root_key,
+                    metadata['looped'], metadata['loop_start_samples'])
+                if sum(s['pcm8_bytes'] for s in sample_reports) + len(pcm8) > 4_000_000:
+                    raise ValueError('Bandlimited song exceeds PCM sample budget')
             raw = struct.pack('<HHIII', 0, 0x4000 if metadata['looped'] else 0,
-                              frequency, metadata['loop_start_samples'], len(pcm8)) + pcm8
+                              frequency, target_loop, len(pcm8)) + pcm8
             wave_cache[cache_key] = allocate(raw)
             sample_reports.append({**metadata, 'root_key': definition.root_key,
                                    'gba_frequency_raw': frequency, 'gba_wave_offset': wave_cache[cache_key],
                                    'pcm8_bytes': len(pcm8)})
+            if bandlimited_pcm:
+                sample_reports[-1].update(source_key=note['key'], resampling=resampling)
         pan = max(0, min(127, definition.pan + note['pan_shift']))
         raw = struct.pack('<BBBBI4B', 0, note['key'], 0, 128 + pan,
                           ROM_BASE + wave_cache[cache_key], *convert_envelope(definition, envelope_support))
@@ -594,6 +612,11 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                               'Relative music priorities mapped below native effect priorities.',
                               'Target PCM voice allocation is separate from sequence track merging.',
                               'Independent source execution and actual GBA playback must still be validated.']}
+    if bandlimited_pcm:
+        report['bandlimited_pcm'] = {'mixing_rate_hz': MIX_RATE,
+                                     'policy': 'Opt-in finite singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning',
+                                     'runtime_mixer_changed': False, 'offline_dependency': 'Python stdlib',
+                                     'sample_budget': 4_000_000}
     if finite_support:
         report['finite_song'] = {'policy': 'Singleton finite tracks; all gates close before or at source END',
                                  'track_end_ticks': {str(t['track']): t['end_ticks'] for t in tracks},

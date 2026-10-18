@@ -361,6 +361,56 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_win2_antialias_preserves_score_and_uses_periodic_per_key_waves(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-win2-antialias')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['bandlimited_pcm']['mixing_rate_hz'], 10512)
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (6, 32))
+        self.assertEqual(len(conversion['note_mapping']), 67)
+        self.assertEqual(conversion['finite_song']['track_end_ticks'],
+                         {'0': 168, '1': 168, '2': 192, '3': 156, '4': 168, '6': 192})
+        self.assertEqual([t['ticks_before_repeat'] for t in dependency['tracks']], [168, 168, 192, 156, 168, 192])
+        for source, target in zip(conversion['samples'], dependency['samples']):
+            r = source['resampling']
+            self.assertLess(abs(r['pitch_error_cents']), .001)
+            self.assertEqual(target['sample_count'], r['output_samples'])
+            self.assertEqual(target['loop_start'], r['output_loop_start'])
+            if source['looped']:
+                self.assertEqual(r['output_samples'] - r['output_loop_start'], r['output_loop_period'])
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
+    def test_win2_finite_preserves_staggered_ends_and_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-win2-finite')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 31)
+        self.assertTrue(manifest['nds_conversion']['finite_song'])
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (6, 9))
+        self.assertEqual(conversion['finite_song']['track_end_ticks'],
+                         {'0': 168, '1': 168, '2': 192, '3': 156, '4': 168, '6': 192})
+        self.assertEqual([t['source_tracks'] for t in conversion['target_schedules']],
+                         [[0], [1], [2], [3], [4], [6]])
+        for track, end in zip(dependency['tracks'], (168, 168, 192, 156, 168, 192)):
+            self.assertEqual((track['termination'], track['ticks_before_repeat']), ('fine', end))
+            self.assertNotIn('GOTO', [e['name'] for e in track['events']])
+            self.assertEqual(track['events'][-1]['name'], 'FINE')
+        self.assertEqual(manifest['output_fingerprint']['sha256'],
+                         'a106e5cf16ee2189699bc8527cf760d636d9f3392b4154fc196268417ae7b203')
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_henkan_finite_preserves_gates_and_per_track_ends(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

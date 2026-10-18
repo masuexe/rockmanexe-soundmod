@@ -136,6 +136,10 @@ def main():
     player = struct.unpack_from('<I', data, player_table + field_a * 12)[0]
     header = ROM_BASE + dependency['header']['file_offset']
     allowed_waves = {ROM_BASE + sample['file_offset'] for sample in dependency['samples']}
+    # A finite cue can finish before the second 60-frame PCM observation.
+    # Observe each frame so changing-output evidence also covers short cues.
+    pcm_interval = 1 if all(t['termination'] == 'fine' for t in dependency['tracks']) else 60
+    report['pcm_snapshot_interval_frames'] = pcm_interval
     previous_clock = 0
     with (work / 'debugger.txt').open('w') as transcript:
         debugger = Debugger([args.mgba, '-d', str(rom)], env, transcript)
@@ -228,7 +232,7 @@ def main():
                         if wave not in allowed_waves:
                             raise AssertionError(f'Undecoded sample {wave:#x} at frame {frame}')
                         seen_waves.add(wave)
-                if frame % 60 == 0:
+                if frame % pcm_interval == 0:
                     pcm = memory(debugger, sound + 0x350, 2 * 1584)
                     if any(pcm):
                         pcm_hashes.add(fingerprint(pcm)['sha256'])

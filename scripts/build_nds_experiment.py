@@ -41,6 +41,8 @@ SONG_FAMILIES = {'room': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
                  'sf1-ura': 'ssr1',
                  'sf1-satellite': 'ssr1',
                  'sf1-henkan-finite': 'ssr1',
+                 'sf1-win2-finite': 'ssr1',
+                 'sf1-win2-antialias': 'ssr1',
                  'sf1-boss-toggle': 'ssr1',
                  'sf2-win': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf2-kaicyou-toggle': 'ssr2',
@@ -91,11 +93,15 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
-    elif song in ('sf1-henkan-finite', 'sf2-henkan-finite'):
-        index, name = 26, 'BGM26HENKAN' if song == 'sf1-henkan-finite' else 'BGM_HENKAN'
+    elif song in ('sf1-henkan-finite', 'sf2-henkan-finite', 'sf1-win2-finite', 'sf1-win2-antialias'):
+        index, name = {'sf1-henkan-finite': (26, 'BGM26HENKAN'),
+                       'sf2-henkan-finite': (26, 'BGM_HENKAN'),
+                       'sf1-win2-finite': (31, 'BGM31WIN2'),
+                       'sf1-win2-antialias': (31, 'BGM31WIN2')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
-            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True)
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True,
+            bandlimited_pcm=song == 'sf1-win2-antialias')
     elif song in ('sf1-last', 'sf1-ura', 'sf1-satellite'):
         index, name = {'sf1-last': (17, 'BGM17LAST'), 'sf1-ura': (18, 'BGM18URA'),
                        'sf1-satellite': (9, 'BGM09SATELLITE')}[song]
@@ -207,6 +213,8 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
             manifest['nds_conversion']['native_pitch_lfo_live_depth_approximation'] = True
         if conversion['native_pitch_lfo'].get('live_toggle_approximation'):
             manifest['nds_conversion']['native_pitch_lfo_live_toggle_approximation'] = True
+    if conversion.get('bandlimited_pcm'):
+        manifest['nds_conversion']['bandlimited_pcm'] = conversion['bandlimited_pcm']
     if conversion.get('finite_song'):
         manifest['nds_conversion']['finite_song'] = True
     if conversion.get('envelope_approximation'):

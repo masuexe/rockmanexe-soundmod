@@ -476,3 +476,21 @@ required; other available pinned variants are verified too. `exe6f.gba` may
 be selected explicitly for a separate Falzar packing audit, but the numbers
 above belong to Gregar. The scanner does not register every passing ID in
 `build_nds_experiment.py --song`, alter manager projects or run emulator tests.
+
+The subsequent [Star Force 1 WIN2 experiment](nds-sf1-win2-research.md)
+validates the exact v10 six-track/nine-sample finite variant against independent
+source logs, full natural playback, staggered FINE/empty-channel observations
+and controlled lifecycle probes. The user subsequently reported a mixed
+ending and substantial original/target difference on 2026-10-18; this variant
+is not manually accepted. The [ending diagnosis](nds-sf1-win2-tail-diagnosis.md)
+provides bounded channel and offline-resampling controls without changing
+archived evidence. Source and target polyphony differ (16 observed reference voices versus ten native
+PCM channels); this does not change archived packing or manual-match counts.
+
+After the user reported clear improvement with the offline-filtered listening
+control, the [WIN2 antialias experiment](nds-sf1-win2-antialias-research.md)
+adds an explicit per-key offline conversion route with periodic loop handling.
+Its v2 ROM is a separate variant outside archived batch routes and counts.
+On 2026-10-18 the user reported no issues after its requested listening/gameplay
+checklist, accepting the exact v2 ROM. The unfiltered variant remains unaccepted. All 22 previously accepted variants and old WIN2
+retain byte-identical ROM/BPS output with the option disabled.
