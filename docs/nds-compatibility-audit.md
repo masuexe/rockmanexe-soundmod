@@ -512,3 +512,12 @@ On 2026-10-18 the user reported no issues after its requested three-minute
 battle/listening checklist, accepting this exact new variant. Automated native
 coverage remains two complete loops. Archived scan results and previous
 accepted variants remain unchanged.
+
+The subsequent [LAST antialias experiment](nds-sf1-last-antialias-research.md)
+extends the opt-in offline step limit through 32 for extreme high keys while
+retaining long-note aliases and boundary EOT. Original-song native playback
+is bounded before the first GOTO; a separate synthetic probe tests the actual
+converted note ending at a loop jump. On 2026-10-18 the user reported no
+issues after its requested four-minute battle/listening checklist, accepting
+this exact new ROM. This does not extend automated natural coverage or alter
+archived scan evidence.

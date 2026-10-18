@@ -93,3 +93,10 @@ python3 scripts/validate_nds_experiment.py out/nds-last-example \
 ```
 
 Output directories must be new. No manager integration is enabled.
+
+The later [LAST antialias variant](nds-sf1-last-antialias-research.md) preserves
+this sequence and its boundary EOT with prepared per-key waves. It has its own
+fingerprint, bounded natural playback and focused boundary probe; the accepted
+unfiltered ROM above remains unchanged. On 2026-10-18 the user separately
+reported no issues after the antialias variant’s requested four-minute
+battle/listening checklist; its exact-ROM acceptance is recorded separately.

@@ -23,7 +23,7 @@ def resample_wave(pcm, source_rate, key, root_key, looped=False, loop_start=0,
         raise ValueError('Invalid offline resampling input')
     pitched_rate = source_rate * 2 ** ((key - root_key) / 12)
     step = pitched_rate / mixing_rate
-    if not 1 / 16 <= step <= 16:
+    if not 1 / 16 <= step <= 32:
         raise ValueError('Offline resampling ratio exceeds bounded range')
     period = len(pcm) - loop_start
     output_period = round(period / step) if looped else None

@@ -420,6 +420,39 @@ SF1 = Path('/home/harp/projects/nds/roms/ssr1d.nds')
 
 @unittest.skipUnless(SF1.exists() and BASE.exists(), 'local Star Force 1/EXE6 inputs unavailable')
 class LocalStarForce1Tests(unittest.TestCase):
+    def test_last_antialias_keeps_long_note_alias_pitch_and_boundary_eot(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, blob, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-last-antialias')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 17)
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (8, 158))
+        self.assertEqual(len(conversion['note_mapping']), 1972)
+        self.assertEqual((conversion['merged_loop_start_ticks'], conversion['merged_loop_ticks']), (3072, 7104))
+        self.assertEqual(conversion['long_note_loop_carries'], [])
+        boundary = next(n for n in conversion['note_mapping'] if n['target_track'] == 7 and n['tick'] == 9792)
+        self.assertEqual((boundary['source_key'], boundary['gba_key'], boundary['duration']), (59, 127, 384))
+        track = dependency['tracks'][7]
+        entry = track['events'][track['loop_start_event']]
+        jump = track['events'][-1]
+        self.assertEqual((entry['name'], entry['key'], entry['ticks']), ('EOT', 127, 3072))
+        self.assertEqual((jump['name'], jump['ticks']), ('GOTO', 10176))
+        self.assertEqual(jump['target']['file_offset'], entry['file_offset'])
+        bank = dependency['header']['tone_bank']['file_offset']
+        for n in conversion['note_mapping']:
+            if not n['long_note']:
+                continue
+            child = struct.unpack_from('<I', blob, bank + n['gba_voice'] * 12 + 4)[0] - 0x08000000
+            self.assertEqual(blob[child + n['gba_key'] * 12 + 1], n['source_key'])
+        self.assertTrue(any(s['resampling']['source_pitched_rate_hz'] / 10512 > 16 for s in conversion['samples']))
+        self.assertTrue(all(abs(s['resampling']['pitch_error_cents']) < .001 for s in conversion['samples']))
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_win2_antialias_preserves_score_and_uses_periodic_per_key_waves(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

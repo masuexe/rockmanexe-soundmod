@@ -58,6 +58,18 @@ class OfflineResampleTests(unittest.TestCase):
         self.assertGreater(len(data), math.ceil(128 * 10512 / 22050))
         self.assertEqual(set(signed(data[-8:])), {0})
 
+    def test_high_pitch_ratio_24_filters_aliases_and_keeps_periodic_dc(self):
+        # LAST reaches a source step near 23; use 24 to exercise the extended
+        # finite FIR support independently of actual ROM sample contents.
+        rate = 10512 * 24
+        data, _, start, report = resample_wave([8192] * 6144, rate, 60, 60, True, 1536)
+        self.assertEqual(set(signed(data[start:])), {32})
+        self.assertEqual(report['output_loop_period'], 192)
+        self.assertLess(abs(report['pitch_error_cents']), .001)
+        high = [round(12000 * math.sin(2 * math.pi * i / 12)) for i in range(6144)]
+        out = signed(resample_wave(high, rate, 60, 60, True, 1536)[0])
+        self.assertLess(rms(out[start:]), .6)
+
     def test_invalid_inputs_and_resource_bounds_fail_explicitly(self):
         for kwargs in ({'source_rate': float('nan')}, {'key': 128}, {'loop_start': 64},
                        {'mixing_rate': 0}, {'source_rate': 1_000_000}):
