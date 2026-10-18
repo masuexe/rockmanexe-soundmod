@@ -1,6 +1,11 @@
 # Star Force 1/2/3 compatibility audit
 
-The updated batch audit covers every SSEQ slot in the three pinned Japanese
+The latest [v11 antialias-variant audit](nds-antialias-compatibility-audit.md)
+adds separate filtered versions while preserving the primary routes described
+below. Its report is `out/nds-research/compatibility-audit-v11/` (schema 9).
+The following primary-route history and v10 snapshot remain distinct.
+
+The v10 batch audit snapshot covers every SSEQ slot in the three pinned Japanese
 Star Force archives. Fifty-four candidates pass conversion, independent MPlay
 reparsing, shared EXE6 packing and BPS reconstruction. The exclusive success
 categories are 26 standard, four LFO-only, two envelope-only, three envelope
