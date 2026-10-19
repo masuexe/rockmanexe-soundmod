@@ -1,8 +1,9 @@
 # Star Force 1/2/3 compatibility audit
 
-The latest [v11 antialias-variant audit](nds-antialias-compatibility-audit.md)
-adds separate filtered versions while preserving the primary routes described
-below. Its report is `out/nds-research/compatibility-audit-v11/` (schema 9).
+The latest [v12 antialias-variant audit](nds-antialias-compatibility-audit-v12.md)
+refreshes filtered results and exact-version acceptance while preserving the
+primary routes described below. Its report is
+`out/nds-research/compatibility-audit-v12/` (schema 9).
 The following primary-route history and v10 snapshot remain distinct.
 
 The v10 batch audit snapshot covers every SSEQ slot in the three pinned Japanese

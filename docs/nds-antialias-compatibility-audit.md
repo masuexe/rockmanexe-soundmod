@@ -1,5 +1,10 @@
 # Antialias variants in the compatibility audit
 
+The latest [v12 report](nds-antialias-compatibility-audit-v12.md) incorporates
+the conductor fix and subsequent exact-version acceptance: 26 filtered packed
+variants, eight exact accepted matches and eighteen pending. The v11 snapshot
+and follow-up history below remain separate.
+
 The v11 report is in `out/nds-research/compatibility-audit-v11/` (schema 9).
 It scans the same 132 SSEQ slots from the three pinned Star Force archives,
 with two separate results per slot: the established primary route and an
