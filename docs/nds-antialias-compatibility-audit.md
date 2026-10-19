@@ -125,3 +125,7 @@ change the native mixer.
 ## Follow-up: Star Force 2 WIN
 
 The [WIN antialias experiment](nds-sf2-win-antialias-research.md) now provides a standalone ROM/BPS matching the archived `ssr2:30` candidate exactly. Source checks, two complete natural loops with all 89 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Filtered experiments now have user-reported acceptance across all three source games. The archived four accepted / 21 pending counts remain the historical scan snapshot.
+
+## Follow-up: Star Force 1 KINCHO
+
+The [KINCHO antialias experiment](nds-sf1-kincho-antialias-research.md) provides a standalone ROM/BPS matching archived `ssr1:23`. Source checks, one complete natural loop with all 86 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Automated native coverage remains one complete loop. Archived scan counts remain unchanged.
