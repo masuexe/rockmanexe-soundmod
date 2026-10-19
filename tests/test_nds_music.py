@@ -949,6 +949,35 @@ class LocalStarForce2Tests(unittest.TestCase):
             expected[start:end] = output[start:end]
         self.assertEqual(output[:len(base)], expected)
 
+    def test_dempajiken_filtered_envelope_retains_carried_tie_and_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, c, dependency, _, _, _ = build_experiment(
+            SF2.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf2-dempajiken-antialias-envelope')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 11)
+        self.assertTrue(manifest['nds_conversion']['envelope_approximation'])
+        self.assertTrue(manifest['nds_conversion']['bandlimited_pcm']['fitted_attack_envelopes'])
+        self.assertNotIn('native_pitch_lfo', c)
+        self.assertEqual((c['track_count'], len(dependency['samples']), len(c['note_mapping'])), (8, 91, 826))
+        self.assertEqual((c['merged_loop_start_ticks'], c['merged_loop_ticks']), (1344, 2304))
+        self.assertEqual(c['long_note_loop_carries'], [
+            {'target_track': 2, 'source_track': 2, 'source_key': 86, 'gba_key': 127,
+             'note_start_relative_ticks': -120, 'eot_relative_ticks': 119}])
+        self.assertEqual(c['note_timing_validation'][2]['gate_checked_until_ticks'], 6079)
+        self.assertEqual({a['ds_attack']: a['gba_attack'] for a in c['envelope_approximation']['attack_fits']},
+                         {100: 74, 127: 255})
+        self.assertEqual(min(n['tick'] for n in c['note_mapping'] if n['source_envelope']['attack'] == 100), 1536)
+        self.assertTrue(any(s['source_key'] == 86 for s in c['samples']))
+        self.assertTrue(all(abs(s['resampling']['pitch_error_cents']) < .001 for s in c['samples']))
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_dempajiken_combines_envelope_and_loop_carry(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
