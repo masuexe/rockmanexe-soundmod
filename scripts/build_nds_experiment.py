@@ -33,7 +33,7 @@ SOURCE_ARCHIVES = {
              'label': 'Star Force 2'},
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
-SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3',
+SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3', 'kando-antialias': 'ssr3',
                  'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
@@ -106,14 +106,14 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True,
             bandlimited_pcm=song in ('sf1-win2-antialias', 'sf3-win2-antialias'))
-    elif song in ('sf1-last', 'sf1-last-antialias', 'sf1-ura', 'sf1-satellite', 'room-antialias', 'sf2-win-antialias', 'sf1-kincho-antialias'):
+    elif song in ('sf1-last', 'sf1-last-antialias', 'sf1-ura', 'sf1-satellite', 'room-antialias', 'sf2-win-antialias', 'sf1-kincho-antialias', 'kando-antialias'):
         index, name = {'sf1-last': (17, 'BGM17LAST'), 'sf1-last-antialias': (17, 'BGM17LAST'), 'sf1-ura': (18, 'BGM18URA'),
                        'sf1-satellite': (9, 'BGM09SATELLITE'), 'room-antialias': (2, 'BGM_ROOM'), 'sf2-win-antialias': (30, 'BGM_WIN'),
-                       'sf1-kincho-antialias': (23, 'BGM23KINCHO')}[song]
+                       'sf1-kincho-antialias': (23, 'BGM23KINCHO'), 'kando-antialias': (31, 'BGM_KANDO')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
-            bandlimited_pcm=song in ('room-antialias', 'sf1-last-antialias', 'sf2-win-antialias', 'sf1-kincho-antialias'))
+            bandlimited_pcm=song in ('room-antialias', 'sf1-last-antialias', 'sf2-win-antialias', 'sf1-kincho-antialias', 'kando-antialias'))
     elif song in ('sf1-fmplanet-delay', 'sf1-hometown-depth', 'sf1-gowaiincho-delay', 'sf1-boss-toggle', 'sf1-planetarium-delay'):
         index, name = {'sf1-fmplanet-delay': (2, 'BGM02FMPLANET'),
                        'sf1-hometown-depth': (3, 'BGM03HOMETOWN'),

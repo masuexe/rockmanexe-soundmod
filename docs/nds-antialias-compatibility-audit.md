@@ -129,3 +129,7 @@ The [WIN antialias experiment](nds-sf2-win-antialias-research.md) now provides a
 ## Follow-up: Star Force 1 KINCHO
 
 The [KINCHO antialias experiment](nds-sf1-kincho-antialias-research.md) provides a standalone ROM/BPS matching archived `ssr1:23`. Source checks, one complete natural loop with all 86 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Automated native coverage remains one complete loop. Archived scan counts remain unchanged.
+
+## Follow-up: Star Force 3 KANDO
+
+The [KANDO antialias experiment](nds-kando-antialias-research.md) provides a standalone ROM/BPS matching archived `ssr3:31`. Source checks, one complete natural loop with all 84 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Automated native coverage remains one complete loop. All three shortlisted follow-up candidates (SF2 WIN, SF1 KINCHO and SF3 KANDO) now have exact-version user-reported acceptance; archived scan counts remain unchanged.

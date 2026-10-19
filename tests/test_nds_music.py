@@ -316,6 +316,33 @@ class LocalNdsExperimentTests(unittest.TestCase):
                     expected[start:end] = output[start:end]
                 self.assertEqual(output[:len(base)], expected)
 
+    def test_kando_antialias_keeps_seven_tracks_loop_timing_and_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            NDS.read_bytes(), base, events=('1', '21', 'scene:communication'), song='kando-antialias')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 31)
+        self.assertNotIn('finite_song', conversion)
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (7, 84))
+        self.assertEqual((conversion['merged_loop_start_ticks'], conversion['merged_loop_ticks']), (1536, 3072))
+        self.assertTrue(all((t['termination'], t['loop_start_ticks'], t['loop_ticks']) ==
+                            ('repeated_state', 1536, 3072) for t in dependency['tracks']))
+        self.assertEqual(conversion['long_note_loop_carries'], [])
+        self.assertTrue(all(t['complete_loop_cycles'] == 2 for t in conversion['note_timing_validation']))
+        for prepared, native in zip(conversion['samples'], dependency['samples']):
+            r = prepared['resampling']
+            self.assertLess(abs(r['pitch_error_cents']), .001)
+            self.assertEqual((native['sample_count'], native['loop_start']),
+                             (r['output_samples'], r['output_loop_start']))
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_kando_keeps_seven_tracks_and_preserves_original_data(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
