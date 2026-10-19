@@ -535,3 +535,10 @@ release snapshots, with six tracks, 67 notes and 32 filtered waves. On
 battle effects and three battle/map/restart checks, accepting this exact ROM.
 Its 260 tests and bounded source/native/helper evidence remain separate from
 archived v13 routes and counts; batch integration is the next proposed step.
+
+The subsequent [SF1 HOKORA source-loop analysis](nds-sf1-hokora-loop-analysis.md)
+corrects empty-stack LOOPEND fallthrough and independently verifies its
+one-shot seventh track. Conversion now reaches the existing all-looping-track
+requirement; supporting mixed finite/looping tracks and aligned 1536/3072-tick
+periods remains a separate capability. No new native ROM or manual acceptance
+is produced, and v14's archived statuses and counts remain unchanged.

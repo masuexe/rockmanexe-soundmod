@@ -329,16 +329,22 @@ def trace_sequence(data, max_events=100000, analysis_only=False):
             elif name == 'jump':
                 pc = event['target']
             elif name == 'loop_end':
-                if not stack or stack[-1][0] != 'loop':
-                    raise ValueError('SSEQ loop end without start')
-                _, start, count = stack[-1]
-                if count == 0:
-                    pc = start
-                elif count > 1:
-                    stack[-1] = ('loop', start, count - 1)
-                    pc = start
+                if not stack:
+                    # SSEQPlayer leaves the cursor after FC when no loop frame
+                    # exists. Keep the executed command in the trace, including
+                    # its fallthrough decision; do not invent a loop boundary.
+                    action['loop_end_fallthrough'] = 'empty_stack'
                 else:
-                    stack.pop()
+                    if stack[-1][0] != 'loop':
+                        raise ValueError('SSEQ loop end without start')
+                    _, start, count = stack[-1]
+                    if count == 0:
+                        pc = start
+                    elif count > 1:
+                        stack[-1] = ('loop', start, count - 1)
+                        pc = start
+                    else:
+                        stack.pop()
             elif name == 'control':
                 value = event['value']
                 fields = {0xC0: 'pan', 0xC1: 'volume', 0xC3: 'transpose', 0xC4: 'bend',

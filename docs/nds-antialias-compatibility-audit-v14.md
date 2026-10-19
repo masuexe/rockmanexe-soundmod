@@ -104,3 +104,8 @@ python3 scripts/audit_nds_compatibility.py \
 The [v13 audit](nds-antialias-compatibility-audit-v13.md) remains the separate
 pre-release-snapshot history. The [standalone WIN2 research](nds-sf2-win2-release-antialias-research.md)
 retains its exact-version acceptance and original bounded test evidence.
+
+The subsequent [HOKORA analysis](nds-sf1-hokora-loop-analysis.md) resolves
+the source-trace error with independent empty-stack LOOPEND evidence. It
+reveals mixed finite/looping tracks and unequal periods still outside the
+converter; v14 remains the original pre-correction snapshot.
