@@ -1,9 +1,9 @@
 # Star Force 1/2/3 compatibility audit
 
-The latest [v13 antialias-variant audit](nds-antialias-compatibility-audit-v13.md)
-adds explicit fitted-attack filtered routing while preserving the primary
-routes described below. Its report is
-`out/nds-research/compatibility-audit-v13/` (schema 10).
+The latest [v14 antialias-variant audit](nds-antialias-compatibility-audit-v14.md)
+adds guarded finite D3 release retries: 55 primary source songs and 29 filtered
+variants pack. All prior packed builds remain identical. Its report is
+`out/nds-research/compatibility-audit-v14/` (schema 11).
 The following primary-route history and v10 snapshot remain distinct.
 
 The v10 batch audit snapshot covers every SSEQ slot in the three pinned Japanese

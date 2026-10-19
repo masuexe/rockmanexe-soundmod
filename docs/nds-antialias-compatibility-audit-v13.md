@@ -1,5 +1,9 @@
 # Star Force compatibility audit v13
 
+The latest [v14 audit](nds-antialias-compatibility-audit-v14.md) integrates
+finite D3 release snapshots and the accepted WIN2 artifact. The v13 snapshot
+and its original next-research proposal below remain separate.
+
 The report is `out/nds-research/compatibility-audit-v13/` (schema 10).
 It rescans all 132 pinned Japanese Star Force 1/2/3 SSEQ slots and integrates
 the accepted looping filtered-envelope combination into the audit. Archived

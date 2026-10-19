@@ -93,5 +93,7 @@ python3 scripts/build_nds_experiment.py \
 
 Use a fresh output directory for repeated builds or validation. Full commands,
 source fingerprints and bounded native results remain beside the artifact.
-The next step is to integrate this accepted guarded
-finite-release route into a new compatibility audit, preserving v13 as history.
+The [v14 audit](nds-antialias-compatibility-audit-v14.md) now integrates this
+accepted guarded finite-release route. The filtered batch ROM/BPS match this
+accepted artifact; the separate unfiltered primary build remains unaccepted.
+The v13 snapshot remains history.

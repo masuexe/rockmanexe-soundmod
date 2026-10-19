@@ -5,7 +5,7 @@ import sys,tempfile,unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from audit_nds_compatibility import scan_antialias_variant,summarize,write_reports,manual_evidence
+from audit_nds_compatibility import scan_antialias_variant,scan_sequence,summarize,write_reports,manual_evidence
 from scan_audio import fingerprint
 
 
@@ -123,6 +123,110 @@ class AntialiasAuditTests(unittest.TestCase):
             self.assertEqual(result['status'],status)
             self.assertEqual(len(result['attempts']),2)
             self.assertFalse(result['manual_matches_packed_variant'])
+
+    def test_finite_d3_failure_retries_release_snapshots_without_fitted_attacks(self):
+        row,c,archive,m=fixture();before=copy.deepcopy(row)
+        c['finite_release_snapshots']={'source_overrides':[{'source_track':0,'tick':0,'release':120}]}
+        def convert(*args,**kwargs):
+            if not kwargs['finite_release_support']:
+                raise ValueError('Unsupported merged-conversion effect 0xd3')
+            return b'blob',{'samples':[{}]},c
+        with patch('audit_nds_compatibility.trace_sequence',return_value=[{'track':0,'termination':'end'}]), \
+             patch('audit_nds_compatibility.convert_merged_song',side_effect=convert) as converter, \
+             patch('audit_nds_compatibility.pack_converted_experiment',return_value=(b'rom',b'bps',m)):
+            result=scan(row,archive)
+        self.assertEqual(row,before)
+        self.assertEqual(result['route'],'finite_singleton_antialias_release')
+        self.assertEqual([a['finite_release_snapshots'] for a in result['attempts']],[False,True])
+        self.assertTrue(all(call.kwargs['finite_support'] and not call.kwargs['envelope_support']
+                            for call in converter.call_args_list))
+        self.assertEqual(result['finite_release_snapshots'],c['finite_release_snapshots'])
+        self.assertTrue(result['manual_matches_packed_variant'])
+        self.assertFalse(result['runtime_tested_by_audit'])
+
+    def test_release_retry_excludes_looping_unrelated_and_model_errors(self):
+        row,c,archive,m=fixture()
+        for termination,error in [('loop',ValueError('Unsupported merged-conversion effect 0xd3')),
+                                  ('end',ValueError('Unsupported merged-conversion effect 0xd0')),
+                                  ('end',AssertionError('Unsupported merged-conversion effect 0xd3'))]:
+            with self.subTest(termination=termination,error=error), \
+                 patch('audit_nds_compatibility.trace_sequence',return_value=[{'track':0,'termination':termination}]), \
+                 patch('audit_nds_compatibility.convert_merged_song',side_effect=error) as converter:
+                result=scan(row,archive)
+            self.assertEqual(len(result['attempts']),1)
+            self.assertFalse(converter.call_args.kwargs['finite_release_support'])
+            self.assertNotEqual(result['status'],'packed')
+
+    def test_release_retries_preserve_headroom_guards_models_and_pack_errors(self):
+        row,c,archive,m=fixture();m['output_fingerprint']['sha256']='unaccepted'
+        for error,status in [(None,'packed'),(ValueError('must precede the first note'),'conversion_blocked'),
+                             (AssertionError('gates differ'),'converter_model_blocked'),
+                             (ValueError('packing'), 'packing_blocked')]:
+            def convert(*args,**kwargs):
+                if not kwargs['finite_release_support']:
+                    raise ValueError('Unsupported merged-conversion effect 0xd3')
+                if args[4]:raise ValueError('Song gain exceeds headroom')
+                if error is not None and str(error)!='packing':raise error
+                return b'blob',{'samples':[{}]},c
+            with self.subTest(status=status), \
+                 patch('audit_nds_compatibility.trace_sequence',return_value=[{'track':0,'termination':'end'}]), \
+                 patch('audit_nds_compatibility.convert_merged_song',side_effect=convert), \
+                 patch('audit_nds_compatibility.pack_converted_experiment',
+                       side_effect=error if status=='packing_blocked' else None,
+                       return_value=(b'rom',b'bps',m)):
+                result=scan(row,archive)
+            self.assertEqual(result['status'],status)
+            self.assertEqual([(a['finite_release_snapshots'],a['gain_db']) for a in result['attempts']],
+                             [(False,3.5),(True,3.5),(True,0)])
+            self.assertFalse(result['manual_matches_packed_variant'])
+
+    def test_primary_release_route_follows_only_explicit_plain_finite_d3_failure(self):
+        row,c,archive,m=fixture()
+        f={'track_count':1,'executed_note_events_in_trace':1,'nonzero_mod_depth_executed':False,
+           'envelope_override_controls':['0xD3']}
+        c['finite_release_snapshots']={'source_overrides':[{'source_track':0,'tick':0,'release':120}]}
+        slot={'index':1,'name':'BGM_TEST','present':True}
+        for finite_error in ('Unsupported merged-conversion effect 0xd3','Non-instant DS attack requires envelope fitting'):
+            def convert(*args,**kwargs):
+                if kwargs.get('finite_release_support'):return b'blob',{'samples':[{}]},c
+                if kwargs.get('finite_support'):raise ValueError(finite_error)
+                raise ValueError('looping source tracks required')
+            with self.subTest(error=finite_error), \
+                 patch('audit_nds_compatibility.features',return_value=f), \
+                 patch('audit_nds_compatibility.trace_sequence',return_value=[{'track':0,'termination':'end'}]), \
+                 patch('audit_nds_compatibility.convert_song',side_effect=ValueError('direct unsupported')), \
+                 patch('audit_nds_compatibility.convert_merged_song',side_effect=convert), \
+                 patch('audit_nds_compatibility.pack_converted_experiment',return_value=(b'rom',b'bps',m)):
+                result=scan_sequence(archive,slot,'ssr1',b'',b'',b'','ssr1d',8)
+            if '0xd3' in finite_error:
+                self.assertEqual(result['status'],'packed_finite_release_snapshots')
+                self.assertEqual(result['attempts'][-2]['route'],'finite_singleton_long')
+                self.assertEqual(result['attempts'][-1]['route'],'finite_singleton_release')
+                self.assertEqual(result['finite_release_snapshots'],c['finite_release_snapshots'])
+                self.assertFalse(result['manual_matches_packed_variant'])
+            else:
+                self.assertNotEqual(result['status'],'packed_finite_release_snapshots')
+                self.assertFalse(any(a['route']=='finite_singleton_release' for a in result['attempts']))
+
+    def test_release_mode_summary_csv_and_html_remain_distinct_from_fitted_attacks(self):
+        row,c,archive,m=fixture()
+        release={'source_overrides':[{'source_track':0,'tick':0,'release':120}]}
+        row['finite_release_snapshots']=release
+        row['antialias']={'status':'packed','manual_matches_packed_variant':True,'attempts':[],
+                          'route':'finite_singleton_antialias_release','gain_db':3.5,'target_sample_count':2,
+                          'finite_release_snapshots':release}
+        total=summarize([row])
+        self.assertEqual(total['antialias']['packed_finite_release_variants'],1)
+        self.assertEqual(total['antialias']['packed_finite_release_exact_manual_matches'],1)
+        self.assertEqual(total['antialias']['packed_fitted_envelope_variants'],0)
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d);write_reports(path,{'rows':[row],'summary':total})
+            item=next(csv.DictReader((path/'report.csv').read_text().splitlines()))
+            self.assertEqual(item['finite_release_snapshots'],'True')
+            self.assertEqual(item['antialias_finite_release_snapshots'],'True')
+            self.assertEqual(json.loads(item['antialias_finite_release_overrides']),release['source_overrides'])
+            self.assertEqual(item['antialias_envelope_approximation'],'False')
+            self.assertIn('有限收音快照通过',(path/'index.html').read_text())
 
     def test_skipped_or_capacity_blocked_variants_do_not_convert(self):
         for status in ('empty_slot','silent_sequence','analysis_blocked','packed_standard'):
