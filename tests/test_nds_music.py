@@ -289,6 +289,36 @@ class LocalNdsExperimentTests(unittest.TestCase):
                     expected[start:end] = output[start:end]
                 self.assertEqual(output[:len(base)], expected)
 
+    def test_hokora_filtered_envelope_keeps_attack_fits_tuning_and_native_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, c, dependency, _, _, _ = build_experiment(
+            NDS.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf3-hokora-antialias-envelope')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 10)
+        self.assertTrue(manifest['nds_conversion']['envelope_approximation'])
+        self.assertTrue(manifest['nds_conversion']['bandlimited_pcm']['fitted_attack_envelopes'])
+        self.assertNotIn('native_pitch_lfo', c)
+        self.assertNotIn('finite_song', c)
+        self.assertEqual((c['track_count'], len(dependency['samples']), len(c['note_mapping'])), (8, 48, 1064))
+        self.assertEqual((c['merged_loop_start_ticks'], c['merged_loop_ticks']), (768, 3072))
+        self.assertEqual({a['ds_attack']: a['gba_attack'] for a in c['envelope_approximation']['attack_fits']},
+                         {100: 74, 127: 255})
+        self.assertEqual(len(c['long_note_aliases']), 2)
+        self.assertEqual(c['long_note_loop_carries'], [])
+        for prepared, native in zip(c['samples'], dependency['samples']):
+            r = prepared['resampling']
+            self.assertLess(abs(r['pitch_error_cents']), .001)
+            self.assertEqual((native['sample_count'], native['loop_start']),
+                             (r['output_samples'], r['output_loop_start']))
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_envelope_experiments_preserve_native_data_and_explicit_policy(self):
         source, base = NDS.read_bytes(), BASE.read_bytes()
         for song, index, samples in [('sf3-hokora-envelope', 10, 18), ('sf3-friend-envelope', 29, 23)]:

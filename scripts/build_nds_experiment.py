@@ -49,7 +49,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf2-dempajiken-envelope': 'ssr2',
                  'sf2-henkan-finite': 'ssr2',
                  'sf3-win2-finite': 'ssr3', 'sf3-win2-antialias': 'ssr3',
-                 'sf3-hokora-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
+                 'sf3-hokora-envelope': 'ssr3', 'sf3-hokora-antialias-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
 
 def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=3.5, song='room'):
@@ -134,12 +134,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
             native_pitch_lfo=True, native_pitch_lfo_delay=True)
-    elif song in ('sf3-hokora-envelope', 'sf3-friend-envelope'):
-        index, name = (10, 'BGM_HOKORA') if song == 'sf3-hokora-envelope' else (29, 'BGM_FRIEND')
+    elif song in ('sf3-hokora-envelope', 'sf3-hokora-antialias-envelope', 'sf3-friend-envelope'):
+        index, name = (10, 'BGM_HOKORA') if song != 'sf3-friend-envelope' else (29, 'BGM_FRIEND')
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
-            native_pitch_lfo=song == 'sf3-friend-envelope', envelope_support=True)
+            native_pitch_lfo=song == 'sf3-friend-envelope', envelope_support=True,
+            bandlimited_pcm=song == 'sf3-hokora-antialias-envelope')
     elif song == 'sf2-dempajiken-envelope':
         index, name = 11, 'BGM_DEMPAJIKEN'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)

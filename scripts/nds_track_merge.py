@@ -227,8 +227,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Merged NDS sequence exceeds target track capacity')
     if bandlimited_pcm and any(len(group) != 1 for group in groups):
         raise ValueError('Bandlimited PCM requires singleton target tracks')
-    if bandlimited_pcm and (native_pitch_lfo or envelope_support):
-        raise ValueError('Bandlimited PCM excludes native LFO and fitted-envelope modes')
+    if bandlimited_pcm and native_pitch_lfo:
+        raise ValueError('Bandlimited PCM excludes native LFO modes')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
     if bandlimited_pcm and any(a.get('state_after', {}).get('bend', 0) > 0 or
@@ -623,6 +623,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                                 'Opt-in looping singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'),
                                      'runtime_mixer_changed': False, 'offline_dependency': 'Python stdlib',
                                      'sample_budget': 4_000_000}
+    if bandlimited_pcm and envelope_support:
+        report['bandlimited_pcm']['fitted_attack_envelopes'] = True
     if finite_support:
         report['finite_song'] = {'policy': 'Singleton finite tracks; all gates close before or at source END',
                                  'track_end_ticks': {str(t['track']): t['end_ticks'] for t in tracks},

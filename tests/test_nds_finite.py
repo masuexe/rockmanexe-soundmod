@@ -39,9 +39,8 @@ class FiniteSongTests(unittest.TestCase):
                                     'loop_start_samples': 512, 'sample_count': 2048})
         with self.assertRaisesRegex(ValueError, 'singleton'):
             convert_merged_song(archive, 0, [(0, 1)], bandlimited_pcm=True)
-        for option in ('native_pitch_lfo', 'envelope_support'):
-            with self.subTest(option=option), self.assertRaisesRegex(ValueError, 'excludes'):
-                convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True, **{option: True})
+        with self.assertRaisesRegex(ValueError, 'excludes native LFO'):
+            convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True, native_pitch_lfo=True)
         _, dependency, report = convert_merged_song(archive, 0, [(0,)], bandlimited_pcm=True)
         self.assertNotIn('finite_song', report)
         self.assertEqual(report['merged_loop_ticks'], 312)

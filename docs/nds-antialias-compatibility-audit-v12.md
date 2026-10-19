@@ -92,3 +92,7 @@ python3 scripts/audit_nds_compatibility.py \
 
 The [v11 history](nds-antialias-compatibility-audit.md) preserves its original
 counts separately from subsequent song-specific acceptance.
+
+## Subsequent combination experiment
+
+The [HOKORA filtered-envelope experiment](nds-sf3-hokora-antialias-envelope-research.md) now enables this combination through a separate opt-in research build. Source, packed-tone, one natural loop, bounded native envelope and controlled lifecycle checks pass. On 2026-10-19 the user reported no issues after the requested listening/gameplay checklist, accepting this exact combined-mode ROM. Automated coverage remains one natural track loop and a separate 1,800-frame envelope window. The archived v12 report and counts remain unchanged, since its filtered route does not request fitted envelopes.
