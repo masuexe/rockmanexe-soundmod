@@ -94,6 +94,7 @@ def main():
         ('this->expr = this->overriding.val(pData, read8);', 0xD5, 'this->expr'),
         ('this->modDelay = this->overriding.val(pData, read16);', 0xE0, 'this->modDelay'),
         ('this->modDepth = this->overriding.val(pData, read8);', 0xCA, 'this->modDepth'),
+        ('this->ply->tempo = read16(pData);', 0xE1, 'this->ply->tempo'),
         *((f'this->{field} = this->overriding.val(pData, read8);', 0xD0 + i, f'this->{field}')
           for i, field in enumerate(('a', 'd', 's', 'r'))),
     ]:

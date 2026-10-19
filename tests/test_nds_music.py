@@ -784,6 +784,31 @@ class LocalStarForce1Tests(unittest.TestCase):
             expected[start:end] = output[start:end]
         self.assertEqual(output[:len(base)], expected)
 
+    def test_setsunai_antialias_keeps_note_free_conductor_and_original_data(self):
+        base = BASE.read_bytes()
+        output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(
+            SF1.read_bytes(), base, events=('1', '21', 'scene:communication'), song='sf1-setsunai-antialias')
+        self.assertEqual(apply_bps(base, patch)[0], output)
+        self.assertEqual(manifest['nds_conversion']['sequence_index'], 25)
+        self.assertEqual((conversion['track_count'], len(dependency['samples'])), (7, 72))
+        self.assertEqual((conversion['merged_loop_start_ticks'], conversion['merged_loop_ticks']), (1224, 2112))
+        self.assertEqual(len(conversion['note_mapping']), 524)
+        self.assertFalse(any(a['name'] == 'note' for a in conversion['tracks'][0]['actions']))
+        self.assertFalse(any(e['name'] in ('NOTE', 'TIE', 'EOT') for e in dependency['tracks'][0]['events']))
+        self.assertEqual([e['value'] for e in dependency['tracks'][0]['events'] if e['name'] == 'TEMPO'], [98])
+        self.assertEqual(conversion['note_timing_validation'][0]['note_events_compared'], 0)
+        self.assertEqual(conversion['note_timing_validation'][0]['complete_loop_cycles'], 2)
+        self.assertTrue(all(t['termination'] == 'repeated_state' and t['loop_ticks'] == 2112
+                            for t in dependency['tracks']))
+        self.assertEqual({r['trigger_id']: r['ids'] for r in manifest['hook']['rules']},
+                         {1: [474], 21: [474], 65534: [474]})
+        table = manifest['target_table_file_offset']
+        self.assertEqual(output[table:table + 474 * 8], base[0x164E0C:0x164E0C + 474 * 8])
+        expected = bytearray(base)
+        for start, end in manifest['declared_prefix_ranges']:
+            expected[start:end] = output[start:end]
+        self.assertEqual(output[:len(base)], expected)
+
     def test_kincho_antialias_keeps_eight_tracks_loop_timing_and_original_data(self):
         base = BASE.read_bytes()
         output, patch, manifest, conversion, dependency, _, _, _ = build_experiment(

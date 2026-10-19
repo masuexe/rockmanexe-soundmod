@@ -43,8 +43,9 @@ Of 122 nonempty/nonsilent candidates, 97 do not pass the antialias route:
 - Two require non-instant attack fitting: SF2 DEMPAJIKEN and SF3 HOKORA.
 - SF2 WIN2 uses unsupported D3 release overrides.
 - SF1 SETSUNAI has a note-free conductor track; the singleton converter
-  currently raises `max() iterable argument is empty` when processing it.
-  This is a converter limitation to investigate, not an invalid source song.
+  raised `max() iterable argument is empty` in this archived scan. The later
+  [SETSUNAI experiment](nds-sf1-setsunai-antialias-research.md) fixes this
+  limitation; the original scan result is preserved.
 - SF1 HOKORA retains its source sequence-analysis failure.
 
 Current prepared PCM budgets range from 46,356 to 1,208,770 bytes; none of
@@ -133,3 +134,7 @@ The [KINCHO antialias experiment](nds-sf1-kincho-antialias-research.md) provides
 ## Follow-up: Star Force 3 KANDO
 
 The [KANDO antialias experiment](nds-kando-antialias-research.md) provides a standalone ROM/BPS matching archived `ssr3:31`. Source checks, one complete natural loop with all 84 samples, and controlled effect/lifecycle checks pass. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact ROM. Automated native coverage remains one complete loop. All three shortlisted follow-up candidates (SF2 WIN, SF1 KINCHO and SF3 KANDO) now have exact-version user-reported acceptance; archived scan counts remain unchanged.
+
+## Follow-up: Star Force 1 SETSUNAI
+
+The [SETSUNAI experiment](nds-sf1-setsunai-antialias-research.md) fixes note-free conductor conversion and independently validates its tempo. The filtered candidate retains all seven tracks and prepares 72 waves; one complete natural loop and controlled lifecycle checks pass. Its unfiltered control matches the archived primary ROM/BPS. This expands the filtered route for an already packable song. On 2026-10-18 the user reported no issues after the requested listening/gameplay checklist, accepting this exact filtered ROM. Automated native coverage remains one complete loop; the unfiltered control remains unaccepted and archived v11 counts are unchanged.

@@ -189,8 +189,11 @@ def check_reference(experiment, reference):
                               'exact_pcm16_match': True})
     with (reference / 'notes.csv').open() as stream:
         notes = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
-    if not notes or {n['track'] for n in notes} != {t['track'] for t in conversion['tracks']}:
-        raise AssertionError('Independent DS reference does not cover all tracks')
+    sounding = {t['track'] for t in conversion['tracks']
+                if any(a['name'] == 'note' for a in t['actions'])}
+    if not notes or {n['track'] for n in notes} != sounding:
+        raise AssertionError('Independent DS reference does not cover all sounding tracks')
+    note_free = []
     counts = {}
     finite = bool(conversion.get('finite_song'))
     if finite:
@@ -201,7 +204,6 @@ def check_reference(experiment, reference):
     for track in conversion['tracks']:
         actual = [(n['tick'], n['instrument'], n['key'], n['velocity'], n['duration'])
                   for n in notes if n['track'] == track['track']]
-        last = actual[-1][0]
         basis = [(a['ticks'], a['instrument'], a['key'], a['velocity'], a['duration'])
                  for a in track['actions'] if a['name'] == 'note']
         if finite:
@@ -209,6 +211,18 @@ def check_reference(experiment, reference):
                 raise AssertionError(f'Independent finite DS note execution differs on track {track["track"]}')
             counts[str(track['track'])] = len(actual)
             continue
+        if not basis:
+            metadata = json.loads((reference / 'reference.json').read_text())
+            rates = [t['nds_ticks_per_second'] for t in conversion['tempo_mapping']]
+            horizon = track['end_ticks'] + track['loop_ticks']
+            if (track['termination'] != 'loop' or not rates
+                    or metadata['seconds'] * min(rates) < horizon):
+                raise AssertionError('Note-free reference must cover two complete loops')
+            counts[str(track['track'])] = 0
+            note_free.append({'source_track': track['track'], 'note_events': 0,
+                              'required_coverage_ticks': horizon})
+            continue
+        last = actual[-1][0]
         if track['termination'] != 'loop' or last < track['end_ticks'] + track['loop_ticks']:
             raise AssertionError('Reference must cover two complete loops')
         expected = basis[:]
@@ -229,22 +243,27 @@ def check_reference(experiment, reference):
     pre_note = [r for r in conversion.get('native_pitch_lfo', {}).get('delay_approximation', {}).get('initializations', [])
                 if r['activation_tick'] < r['first_note_tick']]
     check_depth = live_depth or pre_note or live_toggle
-    if check_depth and not (reference / 'controls.csv').is_file():
-        raise AssertionError('Depth conversion needs independent control observations')
+    if (check_depth or note_free) and not (reference / 'controls.csv').is_file():
+        raise AssertionError('Depth or note-free conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
-            for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if check_depth else ()):
+            silent = track['track'] not in sounding
+            for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if check_depth else ()) + ((0xE1,) if silent else ()):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
-                    if finite and any(a['opcode'] == opcode for a in track['actions']):
-                        raise AssertionError('Independent finite DS controls are missing')
+                    if (finite or silent) and any(a['opcode'] == opcode for a in track['actions']):
+                        raise AssertionError('Independent finite/note-free DS controls are missing')
                     if opcode == 0xCA and any(a['opcode'] == opcode for a in track['actions']):
                         raise AssertionError('Independent DS depth controls are missing')
                     continue
                 last = actual[-1][0]
+                if silent:
+                    # Duration metadata already establishes this window. A
+                    # truncated control log must not pass by shrinking it.
+                    last = max(last, track['end_ticks'] + track['loop_ticks'] - 1)
                 def value(action):
                     raw = action['value']
                     return raw - 256 if opcode == 0xC4 and raw >= 128 else raw
@@ -259,8 +278,10 @@ def check_reference(experiment, reference):
                     raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
                 if opcode == 0xCA:
                     depth_control_matches += len(actual)
-                else:
+                elif opcode != 0xE1:
                     control_matches += len(actual)
+                else:
+                    next(r for r in note_free if r['source_track'] == track['track'])['tempo_matches'] = len(actual)
         for setup in pre_note:
             first = min(n['tick'] for n in notes if n['track'] == setup['source_track'])
             source_track = next(t for t in conversion['tracks'] if t['track'] == setup['source_track'])
@@ -293,6 +314,7 @@ def check_reference(experiment, reference):
     return {'capture': 'software DS reference, not hardware/emulator recording',
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
+            **({'note_free_track_checks': note_free} if note_free else {}),
             'finite_complete_note_schedule_checked': finite,
             'offline_resampling': ({'target_sample_count': len(conversion['samples']),
                                     'scope': 'PCM16 comparisons check original source decoding; offline filtering is separate',

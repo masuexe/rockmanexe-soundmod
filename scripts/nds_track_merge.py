@@ -353,8 +353,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     gain = 10 ** (song_gain_db / 20)
     group_volume = {}
     for i, group in enumerate(groups):
-        group_volume[i] = max(a['state_after']['volume'] for n in group
-                              for a in expanded[n] if a['name'] == 'note')
+        # A note-free conductor still carries tempo/controls and its loop.
+        # DS starts at volume 127; explicit controls below remain authoritative.
+        group_volume[i] = max((a['state_after']['volume'] for n in group
+                               for a in expanded[n] if a['name'] == 'note'), default=127)
     source_notes = []
     for n, actions in expanded.items():
         for action in actions:
