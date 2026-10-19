@@ -220,7 +220,7 @@ def assess_groups(tracks, groups, finite_support=False):
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
-                        finite_support=False, bandlimited_pcm=False):
+                        finite_support=False, bandlimited_pcm=False, finite_release_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -236,10 +236,21 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                    ('transpose', 'mod_depth', 'porta', 'sweep_pitch'))
                                for t in tracks for a in t['actions']):
         raise ValueError('Bandlimited PCM excludes upward bend, transpose, modulation and portamento')
+    if finite_release_support and (not finite_support or envelope_support or native_pitch_lfo):
+        raise ValueError('Finite release snapshots require finite mode without LFO or fitted attacks')
+    envelope_snapshots = envelope_support or finite_release_support
     if finite_support and (native_pitch_lfo or envelope_support):
         raise ValueError('Finite experiment currently excludes native LFO and fitted-envelope modes')
     if finite_support and len({a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}) != 1:
         raise ValueError('Finite experiment currently requires a fixed source tempo')
+    if finite_release_support:
+        for track in tracks:
+            seen_note = False
+            for action in track['actions']:
+                if action['name'] == 'note':
+                    seen_note = True
+                if action['opcode'] == 0xD3 and seen_note:
+                    raise ValueError('Finite release override must precede the first note on its track')
     if native_pitch_lfo_delay and not native_pitch_lfo:
         raise ValueError('Delay approximation requires native pitch LFO mode')
     if native_pitch_lfo_live_depth and not (native_pitch_lfo and native_pitch_lfo_delay):
@@ -303,7 +314,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                     depth_changes.append({'source_track': track['track'], 'ticks': a['ticks'],
                                           'before': previous_depth, 'after': current[2]})
                 previous_depth = current[2]
-    if envelope_support and any(len(group) != 1 for group in groups):
+    if envelope_snapshots and any(len(group) != 1 for group in groups):
         raise ValueError('Envelope experiment requires singleton target tracks')
     # Audit mode records effects broadly; this compiler accepts only the
     # specifically implemented controls, never silently drops active effects.
@@ -311,6 +322,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                  0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xD4, 0xD5, 0xE0, 0xE1}
     if envelope_support:
         permitted.update((0xD0, 0xD1, 0xD2, 0xD3))
+    if finite_release_support:
+        permitted.add(0xD3)
     for track in tracks:
         for action in track['actions']:
             if action['name'] == 'control':
@@ -402,7 +415,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         group = note['target_track']
         pan_shift = note['state_after']['pan'] - 64 if len(groups[group]) > 1 else 0
         context = (note['instrument'], pan_shift)
-        if envelope_support:
+        if envelope_snapshots:
             definition = archive.note_definition(bank, note['instrument'], note['key'])
             envelope = {field: note['state_after'][field] if note['state_after'][field] is not None
                         else getattr(definition, field) for field in ('attack', 'decay', 'sustain', 'release')}
@@ -438,7 +451,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                          'target_track': group, 'gba_voice': note['gba_voice'],
                          'gba_key': played_key, 'gba_velocity': velocity,
                          'long_note': note['duration'] > 223})
-        if envelope_support:
+        if envelope_snapshots:
             mappings[-1]['source_envelope'] = note['source_envelope']
     if len(voice_definitions) > 128:
         raise ValueError('Merged voice contexts exceed GBA bank capacity')
@@ -454,7 +467,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     tone_map, wave_cache, sample_reports = {}, {}, []
     for note in source_notes:
         definition = archive.note_definition(bank, note['instrument'], note['key'])
-        if envelope_support:
+        if envelope_snapshots:
             definition = replace(definition, **note['source_envelope'])
         if definition.kind != 1 or not 0 <= definition.archive_slot < len(archives):
             raise ValueError('Merged experiment requires valid PCM instruments')
@@ -499,7 +512,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                          0x80, 0, 0, 0, ROM_BASE + children, 0, 0, 0, 0)
         instrument_reports.append({'instrument_id': voice, 'source_instrument': context[0],
                                    'pan_shift': context[1], 'keys': keys, 'gba_children_offset': children})
-        if envelope_support:
+        if envelope_snapshots:
             instrument_reports[-1]['source_envelope'] = dict(zip(('attack', 'decay', 'sustain', 'release'), context[2:]))
             instrument_reports[-1]['gba_envelope'] = list(tone_map[voice, keys[0]][8:12])
     track_offsets, schedules, tempo_reports = [], [], []
@@ -629,6 +642,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         report['finite_song'] = {'policy': 'Singleton finite tracks; all gates close before or at source END',
                                  'track_end_ticks': {str(t['track']): t['end_ticks'] for t in tracks},
                                  'explicit_long_note_eot': True, 'native_lfo_or_fitted_envelope': False}
+    if finite_release_support:
+        report['finite_release_snapshots'] = {
+            'policy': 'D3 initialized before the first note on each finite track; instant attacks only',
+            'overrides_affect_existing_voices': False,
+            'attack_fitting': False,
+            'source_overrides': [{'source_track': t['track'], 'tick': a['ticks'], 'release': a['value']}
+                                 for t in tracks for a in t['actions'] if a['opcode'] == 0xD3],
+            'limitations': ['Decay, sustain and release retain existing GBA quantization and frame-rate approximation.']}
     if native_pitch_lfo:
         report['native_pitch_lfo'] = {'approximation': True, 'configs': list(lfo_configs.values()),
                                     'method': 'MPlay triangle pitch LFO; reset on every note with one-tick onset delay',

@@ -58,7 +58,8 @@ def probe(experiment, directory, frames=1800, mgba='/usr/games/mgba'):
     manifest = json.loads((experiment / 'build.json').read_text())
     data = (experiment / 'unified.gba').read_bytes()
     if (not valid_manifest_target(manifest) or fingerprint(data) != manifest['output_fingerprint']
-            or not manifest.get('nds_conversion', {}).get('envelope_approximation')):
+            or not (manifest.get('nds_conversion', {}).get('envelope_approximation')
+                    or manifest.get('nds_conversion', {}).get('finite_release_snapshots'))):
         raise ValueError('Requires a matching envelope experiment ROM/manifest')
     conversion = json.loads((experiment / 'conversion.json').read_text())
     song = next(r['ids'][0] for r in manifest['hook']['rules'] if r['trigger_id'] == 1)

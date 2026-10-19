@@ -44,7 +44,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-win2-finite': 'ssr1',
                  'sf1-win2-antialias': 'ssr1',
                  'sf1-boss-toggle': 'ssr1',
-                 'sf2-win': 'ssr2', 'sf2-win-antialias': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
+                 'sf2-win2-release-antialias': 'ssr2', 'sf2-win': 'ssr2', 'sf2-win-antialias': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf2-kaicyou-toggle': 'ssr2',
                  'sf2-dempajiken-envelope': 'ssr2', 'sf2-dempajiken-antialias-envelope': 'ssr2',
                  'sf2-henkan-finite': 'ssr2',
@@ -95,17 +95,19 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, native_pitch_lfo=True)
     elif song in ('sf1-henkan-finite', 'sf2-henkan-finite', 'sf1-win2-finite', 'sf1-win2-antialias',
-                  'sf3-win2-finite', 'sf3-win2-antialias'):
+                  'sf3-win2-finite', 'sf3-win2-antialias', 'sf2-win2-release-antialias'):
         index, name = {'sf1-henkan-finite': (26, 'BGM26HENKAN'),
                        'sf2-henkan-finite': (26, 'BGM_HENKAN'),
                        'sf1-win2-finite': (31, 'BGM31WIN2'),
                        'sf1-win2-antialias': (31, 'BGM31WIN2'),
+                       'sf2-win2-release-antialias': (31, 'BGM_WIN2'),
                        'sf3-win2-finite': (39, 'BGM_WIN2'),
                        'sf3-win2-antialias': (39, 'BGM_WIN2')}[song]
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
         blob, dependency, conversion = convert_merged_song(
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db, finite_support=True,
-            bandlimited_pcm=song in ('sf1-win2-antialias', 'sf3-win2-antialias'))
+            bandlimited_pcm=song in ('sf1-win2-antialias', 'sf3-win2-antialias', 'sf2-win2-release-antialias'),
+            finite_release_support=song == 'sf2-win2-release-antialias')
     elif song in ('sf1-last', 'sf1-last-antialias', 'sf1-ura', 'sf1-satellite', 'room-antialias', 'sf2-win-antialias', 'sf1-kincho-antialias', 'kando-antialias', 'sf1-setsunai-antialias'):
         index, name = {'sf1-last': (17, 'BGM17LAST'), 'sf1-last-antialias': (17, 'BGM17LAST'), 'sf1-ura': (18, 'BGM18URA'),
                        'sf1-satellite': (9, 'BGM09SATELLITE'), 'room-antialias': (2, 'BGM_ROOM'), 'sf2-win-antialias': (30, 'BGM_WIN'),
@@ -225,6 +227,8 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
         manifest['nds_conversion']['bandlimited_pcm'] = conversion['bandlimited_pcm']
     if conversion.get('finite_song'):
         manifest['nds_conversion']['finite_song'] = True
+    if conversion.get('finite_release_snapshots'):
+        manifest['nds_conversion']['finite_release_snapshots'] = True
     if conversion.get('envelope_approximation'):
         manifest['nds_conversion']['envelope_approximation'] = True
     return output, patch, manifest, conversion, dependency, blob, catalog, raw_sdat

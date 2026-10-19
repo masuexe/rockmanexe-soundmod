@@ -35,9 +35,11 @@ def check_envelope_reference(conversion, archive, reference):
             raise AssertionError('DS envelope reference does not cover all tracks')
         last = rows[-1]['tick']
         basis = [a for a in track['actions'] if a['name'] == 'note']
-        body = [a for a in track['actions'][track['loop_action']:] if a['name'] == 'note']
-        expanded = basis + [{**a, 'ticks': a['ticks'] + turn * track['loop_ticks']}
-                            for turn in range(1, 1 + last // track['loop_ticks']) for a in body]
+        expanded = basis
+        if track['termination'] != 'end':
+            body = [a for a in track['actions'][track['loop_action']:] if a['name'] == 'note']
+            expanded = basis + [{**a, 'ticks': a['ticks'] + turn * track['loop_ticks']}
+                                for turn in range(1, 1 + last // track['loop_ticks']) for a in body]
         expected = []
         for a in expanded:
             if a['ticks'] > last:
@@ -308,7 +310,7 @@ def check_reference(experiment, reference):
     if conversion.get('native_pitch_lfo') and not modulation_matches:
         raise AssertionError('No active DS modulation observed')
     envelope = (check_envelope_reference(conversion, archive, reference)
-                if conversion.get('envelope_approximation') else None)
+                if conversion.get('envelope_approximation') or conversion.get('finite_release_snapshots') else None)
     delay = (check_delay_reference(conversion, reference)
              if conversion.get('native_pitch_lfo', {}).get('delay_approximation') else None)
     return {'capture': 'software DS reference, not hardware/emulator recording',

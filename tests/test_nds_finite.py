@@ -1,5 +1,6 @@
 """Finite singleton long gates, explicit END and reference completeness."""
 import json
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
@@ -10,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from analyze_song import trace_track
 from nds_music import wait_bytes
 from nds_track_merge import convert_merged_song, validate_finite_notes
-from validate_nds_experiment import check_reference, probe_windows
+from validate_nds_experiment import check_envelope_reference, check_reference, probe_windows
 import test_nds_music as fixtures
 
 
@@ -110,6 +111,68 @@ class FiniteSongTests(unittest.TestCase):
         for option in ('native_pitch_lfo', 'envelope_support'):
             with self.subTest(option=option), self.assertRaisesRegex(ValueError, 'excludes'):
                 convert_merged_song(archive, 0, [(0,)], finite_support=True, **{option: True})
+
+    def test_release_initialization_changes_tone_without_attack_fitting(self):
+        from test_nds_filtered_envelope import tone
+        from nds_music import convert_envelope
+        raw = PROGRAM[:7] + b'\xD3\x78' + PROGRAM[7:]
+        archive = fixtures.SampleConversionTests.archive_for(raw)
+        archive.wave = lambda *_: ([0, 12000, 0, -12000] * 512,
+                                   {'effective_rate_hz': 22050, 'looped': True,
+                                    'loop_start_samples': 512, 'sample_count': 2048})
+        with self.assertRaisesRegex(ValueError, '0xd3'):
+            convert_merged_song(archive, 0, [(0,)], finite_support=True)
+        blob, dep, report = convert_merged_song(archive, 0, [(0,)], finite_support=True,
+                                               finite_release_support=True, bandlimited_pcm=True)
+        n = report['note_mapping'][0]
+        self.assertEqual(n['source_envelope']['release'], 120)
+        original = archive.note_definition(None, 2, 60)
+        adsr = tuple(tone(blob, dep, n)[8:12])
+        self.assertEqual(adsr, convert_envelope(replace(original, release=120)))
+        self.assertNotEqual(adsr[-1], convert_envelope(original)[-1])
+        self.assertEqual(adsr[0], 255)
+        self.assertNotIn('envelope_approximation', report)
+        self.assertNotIn('fitted_attack_envelopes', report['bandlimited_pcm'])
+        self.assertFalse(report['finite_release_snapshots']['attack_fitting'])
+        self.assertTrue(report['note_timing_validation'][0]['complete_finite_track'])
+
+    def test_release_mode_rejects_live_updates_other_adsr_and_noninstant_attack(self):
+        archive = fixtures.SampleConversionTests.archive_for(PROGRAM)
+        for flags in ({}, {'finite_support': True, 'envelope_support': True},
+                      {'finite_support': True, 'native_pitch_lfo': True}):
+            with self.subTest(flags=flags), self.assertRaisesRegex(ValueError, 'require finite mode'):
+                convert_merged_song(archive, 0, [(0,)], finite_release_support=True, **flags)
+        for raw, message in [(PROGRAM[:-1] + b'\xD3\x78\xFF', 'precede the first note'),
+                             (PROGRAM[:7] + b'\xD0\x7F' + PROGRAM[7:], '0xd0'),
+                             (PROGRAM[:7] + b'\xD3\x80' + PROGRAM[7:], '0..127')]:
+            with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, message):
+                convert_merged_song(fixtures.SampleConversionTests.archive_for(raw), 0, [(0,)],
+                                    finite_support=True, finite_release_support=True)
+        archive.note_definition = lambda *_: replace(fixtures.SampleConversionTests.archive_for(PROGRAM)
+                                                     .note_definition(None, 2, 60), attack=100)
+        with self.assertRaisesRegex(ValueError, 'requires envelope fitting'):
+            convert_merged_song(archive, 0, [(0,)], finite_support=True, finite_release_support=True)
+
+    def test_independent_finite_envelope_reference_preserves_release_override(self):
+        raw = PROGRAM[:7] + b'\xD3\x78' + PROGRAM[7:]
+        archive = fixtures.SampleConversionTests.archive_for(raw)
+        _, _, conversion = convert_merged_song(archive, 0, [(0,)], finite_support=True,
+                                               finite_release_support=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = 'tick,track,instrument,key,velocity,duration,attack,decay,sustain,release\n'
+            note = '0,0,2,60,100,300,127,127,127,120\n'
+            (root / 'note-envelopes.csv').write_text(header + note)
+            (root / 'envelopes.csv').write_text(
+                'before_state,before_ampl,attack_coefficient,decay_rate,sustain,release_rate,ampl,state\n'
+                '1,-92544,0,1,127,1,0,3\n')
+            result = check_envelope_reference(conversion, archive, root)
+            self.assertEqual(result['note_on_snapshots'], 1)
+            self.assertEqual(result['per_voice_timer_updates'], 1)
+            for changed in (note.replace(',120', ',127'), note + note):
+                (root / 'note-envelopes.csv').write_text(header + changed)
+                with self.assertRaisesRegex(AssertionError, 'note-on envelope differs'):
+                    check_envelope_reference(conversion, archive, root)
 
     def test_reference_requires_exact_finite_notes_and_tail_duration(self):
         _, _, conversion = convert_merged_song(

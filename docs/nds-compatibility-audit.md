@@ -527,3 +527,11 @@ converted note ending at a loop jump. On 2026-10-18 the user reported no
 issues after its requested four-minute battle/listening checklist, accepting
 this exact new ROM. This does not extend automated natural coverage or alter
 archived scan evidence.
+
+The standalone [SF2 WIN2 finite-release experiment](nds-sf2-win2-release-antialias-research.md)
+now converts the previously D3-blocked sequence through explicit pre-note
+release snapshots, with six tracks, 67 notes and 32 filtered waves. On
+2026-10-19 the user reported no issues after its short-cue ending/silence,
+battle effects and three battle/map/restart checks, accepting this exact ROM.
+Its 260 tests and bounded source/native/helper evidence remain separate from
+archived v13 routes and counts; batch integration is the next proposed step.
