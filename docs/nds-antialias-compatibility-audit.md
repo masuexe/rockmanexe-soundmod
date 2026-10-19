@@ -1,8 +1,8 @@
 # Antialias variants in the compatibility audit
 
-The latest [v12 report](nds-antialias-compatibility-audit-v12.md) incorporates
-the conductor fix and subsequent exact-version acceptance: 26 filtered packed
-variants, eight exact accepted matches and eighteen pending. The v11 snapshot
+The latest [v13 report](nds-antialias-compatibility-audit-v13.md) incorporates
+explicit filtered-envelope routing: 28 filtered packed variants, ten exact
+accepted matches and eighteen pending. The v11 snapshot
 and follow-up history below remain separate.
 
 The v11 report is in `out/nds-research/compatibility-audit-v11/` (schema 9).

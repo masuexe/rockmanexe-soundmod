@@ -1,5 +1,9 @@
 # Star Force compatibility audit v12
 
+The latest [v13 audit](nds-antialias-compatibility-audit-v13.md) now integrates
+explicit fitted-attack filtered routing and both accepted combined ROMs.
+The v12 snapshot and subsequent standalone history below remain separate.
+
 The report is `out/nds-research/compatibility-audit-v12/` (schema 9).
 It rescans all 132 SSEQ slots in the pinned Japanese Star Force 1/2/3 archives,
 using the current converter and exact-version manual evidence after the
