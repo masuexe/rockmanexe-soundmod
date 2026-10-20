@@ -594,3 +594,13 @@ rebuilds. On 2026-10-20 the user reported this exact ROM passed its requested
 extended listening, effects and three-encounter checklist. No timed trace,
 two-peer/rematch result or comparative preference is inferred. The scanner does
 not yet enable this extension; archived v16 remains 58 primary/29 filtered versions.
+
+The subsequent [v17 audit](nds-compatibility-audit-v17.md) integrates the accepted
+mixed/live-depth extension after the existing mixed fixed-parameter failure.
+SF2 LOSE adds one primary song (59 total), exactly matching its accepted ROM/BPS.
+All 58 old primary and 29 filtered pairs remain identical; 311 tests and
+report/filter/archive checks pass. There are 25 exact accepted primary versions
+and 30 unique accepted sequences across both routes. Filtered totals stay
+29 packed/eleven accepted/eighteen pending. It adds no runtime or manual
+acceptance; archived v16 remains separate. SF2 VS's late first activation plus
+positive depth updates is the next fixed-tempo capability candidate.

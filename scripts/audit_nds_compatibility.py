@@ -28,6 +28,8 @@ STATUS_LABELS = {
     'packed_finite_release_snapshots': '非循环收音快照路径打包通过',
     'packed_mixed_standard': '一次性与循环轨道混合打包通过',
     'packed_mixed_delayed_lfo_approximation': '混合轨道＋延迟颤音近似打包通过',
+    'packed_mixed_live_depth_minimum_lfo_approximation': '混合轨道＋实时深度＋弱颤音量化打包通过',
+    'packed_mixed_envelope_live_depth_minimum_lfo_approximation': '混合轨道＋包络＋实时深度＋弱颤音量化打包通过',
     'packed_mixed_min_depth_lfo_approximation': '混合轨道＋弱颤音量化打包通过',
     'packed_envelope_approximation': '包络近似打包通过',
     'packed_envelope_lfo_approximation': '包络＋颤音近似打包通过',
@@ -217,18 +219,20 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
     pack_errors = False
     for route in routes:
         mixed = route.startswith('mixed_')
-        minimum_depth = route in ('mixed_min_depth_pitch_lfo_approximation',
+        mixed_live = route in ('mixed_live_depth_minimum_pitch_lfo_approximation',
+                               'mixed_envelope_live_depth_minimum_pitch_lfo_approximation')
+        minimum_depth = mixed_live or route in ('mixed_min_depth_pitch_lfo_approximation',
                                   'live_depth_minimum_pitch_lfo_approximation',
                                   'envelope_live_depth_minimum_pitch_lfo_approximation')
         release = route == 'finite_singleton_release'
         finite = release or route == 'finite_singleton_long'
         live_toggle = route in ('live_toggle_pitch_lfo_approximation', 'envelope_live_toggle_pitch_lfo_approximation')
-        live_depth = route in ('live_depth_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation',
+        live_depth = mixed_live or route in ('live_depth_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation',
                                'live_depth_minimum_pitch_lfo_approximation', 'envelope_live_depth_minimum_pitch_lfo_approximation')
         delayed = live_depth or live_toggle or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation',
                                                        'mixed_fixed_delay_pitch_lfo_approximation', 'mixed_min_depth_pitch_lfo_approximation')
         pitch_lfo = delayed or route in ('native_pitch_lfo_approximation', 'envelope_pitch_lfo_approximation')
-        envelope = route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation',
+        envelope = route == 'mixed_envelope_live_depth_minimum_pitch_lfo_approximation' or route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation',
                              'envelope_fixed_delay_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation',
                              'envelope_live_toggle_pitch_lfo_approximation', 'envelope_live_depth_minimum_pitch_lfo_approximation')
         approximations = {'native_pitch_lfo': pitch_lfo, 'envelope': envelope,
@@ -244,6 +248,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['finite_release_support'] = True
             if mixed:
                 attempt.update(mixed_loop_support=True, native_pitch_lfo_min_depth=minimum_depth)
+            if mixed_live:
+                attempt['mixed_live_depth_support'] = True
             elif minimum_depth:
                 attempt['native_pitch_lfo_min_depth'] = True
             try:
@@ -260,6 +266,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                         options['finite_release_support'] = True
                     if mixed:
                         options.update(mixed_loop_support=True, native_pitch_lfo_min_depth=minimum_depth)
+                    if mixed_live:
+                        options['mixed_live_depth_support'] = True
                     elif minimum_depth:
                         options['native_pitch_lfo_min_depth'] = True
                     blob, dependency, conversion = convert_merged_song(
@@ -276,6 +284,14 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                     retry = ('envelope_' if envelope else '') + 'live_depth_minimum_pitch_lfo_approximation'
                     if retry not in routes:
                         routes.append(retry)
+                if (route == 'mixed_fixed_delay_pitch_lfo_approximation' and type(error) is ValueError
+                        and str(error) == 'Delayed LFO requires fixed per-track modulation after initial activation'
+                        and row['features'].get('positive_mod_depth_changes')
+                        and {t.get('termination') for t in tracks} == {'end', 'loop'}):
+                    for retry in ('mixed_live_depth_minimum_pitch_lfo_approximation',) + (
+                            ('mixed_envelope_live_depth_minimum_pitch_lfo_approximation',) if envelope_needed else ()):
+                        if retry not in routes:
+                            routes.append(retry)
                 if (route == 'mixed_fixed_delay_pitch_lfo_approximation' and type(error) is ValueError
                         and str(error) == 'DS LFO cannot be represented by the bounded native approximation'
                         and 'mixed_min_depth_pitch_lfo_approximation' not in routes):
@@ -296,7 +312,9 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_envelope_live_depth_minimum_lfo_approximation' if minimum_depth and live_depth and envelope else
+            status = ('packed_mixed_envelope_live_depth_minimum_lfo_approximation' if mixed_live and envelope else
+                      'packed_mixed_live_depth_minimum_lfo_approximation' if mixed_live else
+                      'packed_envelope_live_depth_minimum_lfo_approximation' if minimum_depth and live_depth and envelope else
                       'packed_live_depth_minimum_lfo_approximation' if minimum_depth and live_depth else
                       'packed_mixed_min_depth_lfo_approximation' if minimum_depth else
                       'packed_mixed_delayed_lfo_approximation' if mixed and pitch_lfo else
@@ -326,6 +344,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             row['finite_song'] = conversion.get('finite_song')
             if mixed:
                 row['mixed_loop_song'] = conversion['mixed_loop_song']
+            if mixed_live:
+                row['mixed_live_depth_extension'] = conversion['mixed_live_depth_extension']
             if release:
                 row['finite_release_snapshots'] = conversion['finite_release_snapshots']
             if envelope:
@@ -544,7 +564,9 @@ def write_reports(directory, report):
         envelope_live_toggle = values.get('packed_envelope_live_toggle_lfo_approximation', 0)
         mixed = values.get('packed_mixed_standard', 0)
         mixed_delay = values.get('packed_mixed_delayed_lfo_approximation', 0)
-        mixed_minimum = values.get('packed_mixed_min_depth_lfo_approximation', 0)
+        mixed_minimum = sum(values.get(k, 0) for k in (
+            'packed_mixed_min_depth_lfo_approximation', 'packed_mixed_live_depth_minimum_lfo_approximation',
+            'packed_mixed_envelope_live_depth_minimum_lfo_approximation'))
         summary.append(f'| {family} | {slots} | {candidates} | {standard} | {lfo} | {envelope} | {combined} | '
                        f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | {live_toggle} | {envelope_live_toggle} | {finite} | '
                        f'{mixed} | {mixed_delay} | {mixed_minimum} | '
@@ -556,11 +578,12 @@ def write_reports(directory, report):
                     '固定延迟路径接受首次音符之前或同一时刻完成初始化、此后参数固定的延迟颤音；共享相位和延迟会受同轨新音符重置影响。',
                     '实时深度路径仅允许启用后的正深度变化，速度、类型、范围与延迟仍须固定；关闭颤音、后期启用与其他参数变化仍拒绝。',
                     '循环独立轨道的实时深度路径明确失败于原生参数表示时，可在其余旧路径之后尝试弱颤音量化，包络拟合仍须单独启用。摘要的实时深度两列包含这些独立标记的子路径，不重复计数；MOD=1 的全相位 10 音分和独立一秒 RMS 5 音分上限只约束弱深度量化。',
+                    '混合轨道明确失败于固定颤音参数且有正深度变化时，可另行尝试实时深度与弱深度量化组合；包络拟合单独启用，共同入口最多后移一个完整周期，有限轨道仍只播放一次。混合弱量化列包含这两个独立标记的子路径。',
                     '启闭路径允许深度零与单个固定正深度之间切换，其余参数固定。GBA 关闭时清零共享相位，DS 保留各声道相位，仍有近似差异。所有分类互斥，组合路径不重复计数。',
                     '长音跨循环仅接受入口与出口匹配的延续区间，不在跳转处重新起音；独立解码继续追踪窗口末尾音符的停音。扫描未执行原生全循环播放。',
                     '不同原始音高共用同一乐器别名时，使用独立音色表项消除冲突；优先复用兼容音色表，仍限制在 128 个乐器表项内。',
                     '非循环路径仅接受全部轨道自然结束、固定速度的独立轨道；长音先显式停音，再按各轨原定时间结束。D3 失败后可尝试首音之前初始化的收音快照，拒绝音符之后更新、其他 ADSR 覆盖及非瞬时起音。仍拒绝主动颤音、渐强包络拟合及结束后仍未完结的音符。',
-                    '混合路径在旧路径失败后尝试，要求固定速度、独立轨道、同时含一次性与循环轨道；一次性轨道在共享循环入口之前结束且音符门限已关闭。公共周期最多 16384 tick，每轨最多展开 8 倍；不组合滤波、起音拟合或收音覆盖。',
+                    '原有混合路径在旧路径失败后尝试，要求固定速度、独立轨道、同时含一次性与循环轨道；一次性轨道在原始共享循环入口之前结束且音符门限已关闭。公共周期最多 16384 tick，每轨最多展开 8 倍；该路径不组合滤波、起音拟合或收音覆盖。另行标记的混合实时深度扩展遵循上文的后移入口和显式拟合策略。',
                     '混合固定延迟颤音仅在明确的原生参数表示失败后重试弱深度量化：非零深度映射至 MOD=1，保留源控制，并要求全相位音高差不超过 10 音分、独立一秒 RMS 不超过 5 音分。模型失败与其他错误不会触发此重试。'])
     aa = report['summary'].get('antialias', {})
     if aa.get('scanned_slots'):
@@ -593,7 +616,7 @@ def write_reports(directory, report):
               'finite_release_snapshots', 'finite_release_overrides', 'manual_matches_packed_variant', 'errors',
               'mixed_loop_song', 'mixed_finite_track_end_ticks', 'mixed_source_loop_periods',
               'mixed_common_loop_start_ticks', 'mixed_common_loop_ticks', 'minimum_depth_lfo_quantization',
-              'minimum_depth_lfo_policy',
+              'minimum_depth_lfo_policy', 'mixed_live_depth_extension',
               'antialias_status', 'antialias_route', 'antialias_gain_db', 'antialias_samples',
               'antialias_pcm8_bytes', 'antialias_appended_bytes_delta', 'antialias_manual_exact_match',
               'antialias_envelope_approximation', 'antialias_attack_fits', 'antialias_finite_release_snapshots',
@@ -632,6 +655,7 @@ def write_reports(directory, report):
                              'mixed_common_loop_start_ticks': row.get('mixed_loop_song', {}).get('common_loop_start_ticks'),
                              'mixed_common_loop_ticks': row.get('mixed_loop_song', {}).get('common_loop_ticks'),
                              'minimum_depth_lfo_quantization': bool(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization')),
+                             'mixed_live_depth_extension': json.dumps(row.get('mixed_live_depth_extension', {})),
                              'minimum_depth_lfo_policy': json.dumps(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization', {})),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False),
@@ -650,7 +674,7 @@ def write_reports(directory, report):
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
 <h1>NDS → EXE6 曲目兼容性扫描</h1><p>非循环路径接受固定速度、全部轨道自然结束的独立轨道，长音显式停音后按各轨原定时间结束。常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
-<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限，不组合抗混叠、起音拟合或收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>混合／弱颤音<select id="structure"><option value="">全部</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
+<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限；混合实时深度扩展另行明确启用起音拟合，入口最多后移一个完整周期。仍拒绝抗混叠和收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>混合／弱颤音<select id="structure"><option value="">全部</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>主路径人工记录</th><th>抗混叠版本</th><th>抗混叠人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
 const {report,labels,antialiasLabels}=JSON.parse(document.querySelector('#data').textContent);const get=id=>document.getElementById(id);
@@ -688,7 +712,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 13, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 14, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'live_minimum_depth_route_policy': {
                   'retry_after_explicit_live_depth_representation_failure_only': True,
                   'all_source_tracks_loop': True, 'singleton_tracks_only': True, 'fixed_tempo': True,
@@ -696,6 +720,15 @@ def main():
                   'mixed_finite_filtered_toggle_modes': False, 'existing_activation_and_fixed_parameter_guards': True,
                   'native_minimum_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
                   'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
+              'mixed_live_depth_route_policy': {
+                  'retry_after_explicit_mixed_fixed_parameter_failure_only': True,
+                  'requires_positive_depth_changes_and_mixed_tracks': True,
+                  'singleton_tracks_only': True, 'fixed_tempo': True,
+                  'max_later_entry_common_cycles': 1, 'finite_gates_closed_by_end': True,
+                  'finite_tracks_repeated': False, 'minimum_depth_explicit': True,
+                  'fitted_envelope_is_separate_explicit_mode': True,
+                  'filtering_release_overrides_live_toggle': False,
+                  'batch_native_runtime_validation': False},
               'mixed_route_policy': {'tried_after_existing_routes': True, 'singleton_tracks_only': True,
                   'requires_both_finite_and_looping_tracks': True, 'fixed_tempo': True,
                   'finite_end_not_after_original_shared_loop_entry': True,
