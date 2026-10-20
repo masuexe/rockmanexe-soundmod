@@ -542,3 +542,12 @@ one-shot seventh track. Conversion now reaches the existing all-looping-track
 requirement; supporting mixed finite/looping tracks and aligned 1536/3072-tick
 periods remains a separate capability. No new native ROM or manual acceptance
 is produced, and v14's archived statuses and counts remain unchanged.
+
+The standalone [SF1 HOKORA mixed-delay experiment](nds-sf1-hokora-mixed-delay-research.md)
+now supports its finite seventh track and bounded common-loop expansion,
+with a separately guarded minimum-depth pitch-LFO approximation. All 278 tests
+pass and two natural common cycles are verified with real frontend input.
+On 2026-10-20 the user reported that this exact ROM passed the requested extended
+battle listening, effects coexistence and three-encounter lifecycle checks. No
+timed recording or completion trace was supplied; linked play and rematch were
+not separately reported. Archived v14 remains unchanged.

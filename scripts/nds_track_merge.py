@@ -166,7 +166,9 @@ def pitch_commands(units):
     return bytes([0xC1, 12, 0xC0, 64 + bend, 0xC8, 64 + tune])
 
 
-def assess_groups(tracks, groups, finite_support=False):
+def assess_groups(tracks, groups, finite_support=False, mixed_loop_support=False):
+    if finite_support and mixed_loop_support:
+        raise ValueError('Finite-only and mixed score modes are separate experiments')
     ids = {t['track'] for t in tracks}
     flat = [n for group in groups for n in group]
     if len(set(flat)) != len(flat) or set(flat) != ids:
@@ -180,13 +182,33 @@ def assess_groups(tracks, groups, finite_support=False):
                 raise ValueError('Finite notes must finish their gates before or at source END')
         return None, None, {t['track']: [dict(a) for a in t['actions']] for t in tracks}, [
             {'source_tracks': list(group), 'shared_expression': True, 'shared_pitch': True} for group in groups]
-    if any(t['termination'] != 'loop' for t in tracks):
+    looping = [t for t in tracks if t['termination'] == 'loop']
+    finite = [t for t in tracks if t['termination'] == 'end']
+    if mixed_loop_support:
+        if finite_support or not looping or not finite or len(looping) + len(finite) != len(tracks):
+            raise ValueError('Mixed experiment requires both finite and looping source tracks')
+        if any(len(group) != 1 for group in groups):
+            raise ValueError('Mixed experiment requires singleton source tracks')
+        for track in finite:
+            notes = [a for a in track['actions'] if a['name'] == 'note']
+            if not notes or any(a['ticks'] + a['duration'] > track['end_ticks'] for a in notes):
+                raise ValueError('Mixed finite notes must close their gates by source END')
+    elif len(looping) != len(tracks):
         raise ValueError('Merged experiment requires looping source tracks')
-    periods = {t['loop_ticks'] for t in tracks}
-    if len(periods) != 1:
-        raise ValueError('Merged experiment requires a common loop period')
-    period = next(iter(periods))
-    loop_start = max(t['loop_start_ticks'] for t in tracks)
+    periods = {t['loop_ticks'] for t in looping}
+    if mixed_loop_support:
+        if any(p <= 0 for p in periods):
+            raise ValueError('Mixed loop periods must be positive')
+        period = math.lcm(*periods)
+        if period > 16384 or any(period // p > 8 for p in periods):
+            raise ValueError('Mixed common period exceeds bounded expansion budget')
+    else:
+        if len(periods) != 1:
+            raise ValueError('Merged experiment requires a common loop period')
+        period = next(iter(periods))
+    loop_start = max(t['loop_start_ticks'] for t in looping)
+    if mixed_loop_support and any(t['end_ticks'] > loop_start for t in finite):
+        raise ValueError('Mixed finite tracks must finish before the shared loop entry')
     end_tick = loop_start + period
     by_id = {t['track']: t for t in tracks}
     expanded = {n: expand_actions(t, end_tick + period) for n, t in by_id.items()}
@@ -220,11 +242,16 @@ def assess_groups(tracks, groups, finite_support=False):
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
-                        finite_support=False, bandlimited_pcm=False, finite_release_support=False):
+                        finite_support=False, bandlimited_pcm=False, finite_release_support=False,
+                        mixed_loop_support=False, native_pitch_lfo_min_depth=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if native_pitch_lfo_min_depth and not (mixed_loop_support and native_pitch_lfo):
+        raise ValueError('Minimum-depth LFO requires the explicit mixed native-LFO experiment')
+    if mixed_loop_support and (finite_support or finite_release_support or envelope_support or bandlimited_pcm):
+        raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
     if bandlimited_pcm and any(len(group) != 1 for group in groups):
         raise ValueError('Bandlimited PCM requires singleton target tracks')
     if bandlimited_pcm and native_pitch_lfo:
@@ -336,7 +363,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                     raise ValueError('Merged experiment requires tempo in source track 0')
             if action['name'] == 'note' and not 1 <= action['duration'] <= 65535:
                 raise ValueError('Unsupported merged note duration')
-    loop_start, period, expanded, decisions = assess_groups(tracks, groups, finite_support)
+    loop_start, period, expanded, decisions = assess_groups(tracks, groups, finite_support, mixed_loop_support)
+    if mixed_loop_support and len({a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}) != 1:
+        raise ValueError('Mixed experiment requires a fixed source tempo')
+    finite_ids = {t['track'] for t in tracks if t['termination'] == 'end'}
     lfo_tempo, lfo_configs = None, {}
     if native_pitch_lfo:
         if any(len(group) != 1 for group in groups):
@@ -356,10 +386,13 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             for a in t['actions']:
                 if a['name'] == 'note' or (a['name'] == 'control' and a['opcode'] == 0xCA and a['value']):
                     state = a['state_after']
-                    map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay)
+                    map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
                     if state['mod_depth']:
                         key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
-                        lfo_configs[key] = compare_config(state, lfo_tempo, native_pitch_lfo_delay)
+                        lfo_configs[key] = compare_config(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
+                        if (lfo_configs[key].get('minimum_depth_quantized') and
+                                lfo_configs[key]['single_voice_one_second_rms_pitch_error_cents'] > 5):
+                            raise ValueError('Minimum-depth LFO exceeds five-cent isolated RMS pitch error')
     end_tick = max(t['end_ticks'] for t in tracks) + 1 if finite_support else loop_start + period
     bank, archives = archive.bank(info['bank_id'])
     source_map = {n: i for i, group in enumerate(groups) for n in group}
@@ -523,9 +556,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             raise ValueError('Song gain exceeds MPlay VOL headroom')
         return result
 
+    long_starts = {(n['target_track'], n['source_track'], n['key'], n['ticks'], n['duration'])
+                   for n in source_notes if n['duration'] > 223}
     for group_index, group in enumerate(groups):
         events = []
         primary = group[0]
+        track_finite = finite_support or (mixed_loop_support and primary in finite_ids)
         # Expression and effective bend are proven equal for merged members.
         for action in expanded[primary]:
             if action['ticks'] >= end_tick or action['name'] != 'control':
@@ -548,7 +584,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             elif op in (0xC4, 0xC5):
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
             elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
-                value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay)
+                value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
                 command = (bytes([0xC4, value['mod']]) if native_pitch_lfo_live_depth and op == 0xCA
                            else bytes([0xC4, value['mod'], 0xC2, value['lfos']]))
             if command:
@@ -557,24 +593,30 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         for note in (a for a in source_notes if a['target_track'] == group_index):
             command = bytes([0xBA, note['gba_priority'], 0xBD, note['gba_voice']])
             if native_pitch_lfo:
-                command += note_lfo_commands(note['state_after'], lfo_tempo, native_pitch_lfo_delay)
+                command += note_lfo_commands(note['state_after'], lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
             if note['duration'] <= 223:
                 command += note_bytes(note['gba_key'], note['gba_velocity'], note['duration'])
             else:
                 command += bytes([0xCF, note['gba_key'], note['gba_velocity']])
-                events.append((note['ticks'] + note['duration'], 0, note['source_track'],
+                gate_end = note['ticks'] + note['duration']
+                repeats = (group_index, note['source_track'], note['key'],
+                           note['ticks'] + period, note['duration']) in long_starts if mixed_loop_support else True
+                # An intro-only TIE closing exactly at entry belongs before
+                # the loop label. Periodic closures must remain inside it.
+                order = -2 if mixed_loop_support and gate_end == loop_start and not repeats else 0
+                events.append((gate_end, order, note['source_track'],
                                bytes([0xCE, note['gba_key']]), None))
             order = 1 + note['event_order'] if native_pitch_lfo else 2
             events.append((note['ticks'], order, note['source_track'], command, note))
-        if not finite_support:
+        if not track_finite:
             events.append((loop_start, -1, 0, b'', None))
         events.sort(key=lambda event: event[:3])
         code = bytearray([0xBD, 0, 0xBE, volume(group_volume[group_index], 127), 0xBF, 64])
         code.extend(pitch_commands(0))
         tick, loop_position = 0, None
-        stop_tick = next(t['end_ticks'] for t in tracks if t['track'] == primary) if finite_support else end_tick
+        stop_tick = next(t['end_ticks'] for t in tracks if t['track'] == primary) if track_finite else end_tick
         for when, category, _, command, note in events:
-            if when > stop_tick or (not finite_support and when == stop_tick):
+            if when > stop_tick or (not track_finite and when == stop_tick):
                 continue
             code.extend(wait_bytes(when - tick))
             tick = when
@@ -582,14 +624,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 loop_position = len(code)
             code.extend(command)
         code.extend(wait_bytes(stop_tick - tick))
-        if finite_support:
+        if track_finite:
             offset = allocate(code + b'\xB1')
         else:
             offset = allocate(code + b'\xB2' + bytes(4))
             struct.pack_into('<I', output, offset + len(code) + 1, ROM_BASE + offset + loop_position)
         track_offsets.append(offset)
         schedules.append({'source_tracks': list(group), 'target_track': group_index,
-                          **({'termination': 'end', 'end_ticks': stop_tick} if finite_support else
+                          **({'termination': 'end', 'end_ticks': stop_tick} if track_finite else
                              {'loop_start_ticks': loop_start, 'loop_ticks': period})})
     header = allocate(struct.pack('<BBBBI', len(groups), 0, 20, 128, ROM_BASE + bank_offset)
                       + struct.pack('<' + 'I' * len(groups), *(ROM_BASE + offset for offset in track_offsets)))
@@ -604,7 +646,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 for a in source_notes if a['target_track'] == group_index]
         try:
             note_validation.append(validate_finite_notes(track, base, schedules[group_index]['end_ticks'])
-                                   if finite_support else validate_loop_notes(track, base, loop_start, period))
+                                   if schedules[group_index].get('termination') == 'end' else validate_loop_notes(track, base, loop_start, period))
         except AssertionError as error:
             raise AssertionError(f'{error} on track {group_index}') from error
     report = {'schema_version': 1, 'sequence_index': index, 'sequence_info': info,
@@ -629,6 +671,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                               'Relative music priorities mapped below native effect priorities.',
                               'Target PCM voice allocation is separate from sequence track merging.',
                               'Independent source execution and actual GBA playback must still be validated.']}
+    if mixed_loop_support:
+        report['mixed_loop_song'] = {
+            'policy': 'Explicit singleton mixed score; finite tracks END once before common loop entry',
+            'finite_track_end_ticks': {str(t['track']): t['end_ticks'] for t in tracks if t['track'] in finite_ids},
+            'source_loop_periods': {str(t['track']): t['loop_ticks'] for t in tracks if t['track'] not in finite_ids},
+            'common_loop_start_ticks': loop_start, 'common_loop_ticks': period,
+            'max_common_period_ticks': 16384, 'max_period_expansion': 8,
+            'finite_tracks_repeated': False, 'fixed_tempo': True}
     if bandlimited_pcm:
         report['bandlimited_pcm'] = {'mixing_rate_hz': MIX_RATE,
                                      'policy': ('Opt-in finite singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'
@@ -656,6 +706,11 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                     'limitations': ['DS sine replaced by coarsely quantized triangle.',
                                                     'Track phase is shared; new notes reset older overlapping voices.',
                                                     'Release tails follow shared GBA phase rather than independent DS phase.']}
+    if native_pitch_lfo_min_depth:
+        report['native_pitch_lfo']['minimum_depth_quantization'] = {
+            'policy': 'Explicit opt-in: nonzero source depth below MOD resolution uses MOD=1',
+            'all_phase_pitch_difference_bound_cents': 10, 'isolated_one_second_rms_limit_cents': 5,
+            'source_controls_preserved': True, 'scope': 'mixed singleton experiment only'}
     if envelope_support:
         attacks = sorted({n['source_envelope']['attack'] for n in source_notes})
         report['envelope_approximation'] = {

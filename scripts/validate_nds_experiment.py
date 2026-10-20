@@ -198,17 +198,21 @@ def check_reference(experiment, reference):
     note_free = []
     counts = {}
     finite = bool(conversion.get('finite_song'))
-    if finite:
+    mixed = conversion.get('mixed_loop_song')
+    finite_tracks = [t for t in conversion['tracks'] if t['termination'] == 'end']
+    if mixed:
+        assert mixed['finite_track_end_ticks'] == {str(t['track']): t['end_ticks'] for t in finite_tracks}
+    if finite or mixed:
         rates = {t['nds_ticks_per_second'] for t in conversion['tempo_mapping']}
         metadata = json.loads((reference / 'reference.json').read_text())
-        if len(rates) != 1 or metadata['seconds'] < max(t['end_ticks'] for t in conversion['tracks']) / min(rates) + 1:
+        if len(rates) != 1 or metadata['seconds'] < max(t['end_ticks'] for t in finite_tracks) / min(rates) + 1:
             raise AssertionError('Finite reference must cover source END and at least one second of tail')
     for track in conversion['tracks']:
         actual = [(n['tick'], n['instrument'], n['key'], n['velocity'], n['duration'])
                   for n in notes if n['track'] == track['track']]
         basis = [(a['ticks'], a['instrument'], a['key'], a['velocity'], a['duration'])
                  for a in track['actions'] if a['name'] == 'note']
-        if finite:
+        if finite or (mixed and track['termination'] == 'end'):
             if track['termination'] != 'end' or actual != basis:
                 raise AssertionError(f'Independent finite DS note execution differs on track {track["track"]}')
             counts[str(track['track'])] = len(actual)
@@ -251,12 +255,13 @@ def check_reference(experiment, reference):
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
+            track_finite = finite or bool(mixed and track['termination'] == 'end')
             silent = track['track'] not in sounding
             for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if check_depth else ()) + ((0xE1,) if silent else ()):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
                 if not actual:
-                    if (finite or silent) and any(a['opcode'] == opcode for a in track['actions']):
+                    if (track_finite or silent) and any(a['opcode'] == opcode for a in track['actions']):
                         raise AssertionError('Independent finite/note-free DS controls are missing')
                     if opcode == 0xCA and any(a['opcode'] == opcode for a in track['actions']):
                         raise AssertionError('Independent DS depth controls are missing')
@@ -270,11 +275,11 @@ def check_reference(experiment, reference):
                     raw = action['value']
                     return raw - 256 if opcode == 0xC4 and raw >= 128 else raw
                 basis = [(a['ticks'], value(a)) for a in track['actions'] if a['opcode'] == opcode]
-                body = [] if finite else [(a['ticks'], value(a)) for a in track['actions'][track['loop_action']:] if a['opcode'] == opcode]
+                body = [] if track_finite else [(a['ticks'], value(a)) for a in track['actions'][track['loop_action']:] if a['opcode'] == opcode]
                 expected = basis[:]
-                for turn in (() if finite else range(1, 1 + last // track['loop_ticks'])):
+                for turn in (() if track_finite else range(1, 1 + last // track['loop_ticks'])):
                     expected.extend((tick + turn * track['loop_ticks'], v) for tick, v in body)
-                if not finite:
+                if not track_finite:
                     expected = [a for a in expected if a[0] <= last]
                 if actual != expected:
                     raise AssertionError(f'Independent DS control {opcode:#x} differs on track {track["track"]}')
@@ -318,6 +323,7 @@ def check_reference(experiment, reference):
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             **({'note_free_track_checks': note_free} if note_free else {}),
             'finite_complete_note_schedule_checked': finite,
+            **({'mixed_finite_track_note_schedules_checked': [t['track'] for t in finite_tracks]} if mixed else {}),
             'offline_resampling': ({'target_sample_count': len(conversion['samples']),
                                     'scope': 'PCM16 comparisons check original source decoding; offline filtering is separate',
                                     **conversion['bandlimited_pcm']} if conversion.get('bandlimited_pcm') else None),

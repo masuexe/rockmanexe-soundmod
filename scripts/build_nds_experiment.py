@@ -37,7 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
-                 'sf1-planetarium-delay': 'ssr1',
+                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1',
                  'sf1-ura': 'ssr1',
                  'sf1-satellite': 'ssr1',
                  'sf1-henkan-finite': 'ssr1',
@@ -130,6 +130,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
             native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
+    elif song == 'sf1-hokora-mixed-delay':
+        index, name = 20, 'BGM20HOKORA'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_delay=True, mixed_loop_support=True,
+            native_pitch_lfo_min_depth=True)
     elif song == 'sf2-battle-delay':
         index, name = 27, 'BGM_BATTLE'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
@@ -225,6 +232,10 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
             manifest['nds_conversion']['native_pitch_lfo_live_toggle_approximation'] = True
     if conversion.get('bandlimited_pcm'):
         manifest['nds_conversion']['bandlimited_pcm'] = conversion['bandlimited_pcm']
+    if conversion.get('native_pitch_lfo', {}).get('minimum_depth_quantization'):
+        manifest['nds_conversion']['native_pitch_lfo_minimum_depth_quantization'] = True
+    if conversion.get('mixed_loop_song'):
+        manifest['nds_conversion']['mixed_loop_song'] = conversion['mixed_loop_song']
     if conversion.get('finite_song'):
         manifest['nds_conversion']['finite_song'] = True
     if conversion.get('finite_release_snapshots'):

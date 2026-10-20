@@ -56,7 +56,7 @@ def map_pitch_delay(state, gba_tempo):
             'native_counter_wait_ms': (shift + 1) * 1000 / tick_rate}
 
 
-def map_pitch_lfo(state, gba_tempo, allow_delay=False):
+def map_pitch_lfo(state, gba_tempo, allow_delay=False, allow_min_depth=False):
     depth, speed, span = (state[k] for k in ('mod_depth', 'mod_speed', 'mod_range'))
     if not all(type(v) is int and 0 <= v <= 127 for v in (depth, speed, span)):
         raise ValueError('Invalid DS LFO parameter')
@@ -71,20 +71,31 @@ def map_pitch_lfo(state, gba_tempo, allow_delay=False):
     tick_rate = GBA_FPS * gba_tempo / 75
     lfos = round(DS_CLOCK_HZ * speed / (2 * tick_rate))
     mod = round(127 * span * depth / 1024)
+    quantized = not mod and allow_min_depth
+    if quantized:
+        mod = 1
+        source = [ds_pitch_units(phase << 8, depth, span) for phase in range(128)]
+        target = [4 * gba_lfo_value(phase, mod) for phase in range(256)]
+        if max(abs(a-b) for a in source for b in target) * 100 / 64 > 10:
+            raise ValueError('Minimum-depth LFO exceeds ten-cent absolute pitch difference bound')
     if not 1 <= lfos <= 255 or not 1 <= mod <= 127:
         raise ValueError('DS LFO cannot be represented by the bounded native approximation')
-    return {'lfos': lfos, 'mod': mod}
+    result = {'lfos': lfos, 'mod': mod}
+    if quantized:
+        result['minimum_depth_quantized'] = True
+        result['all_phase_pitch_difference_bound_cents'] = max(abs(a-b) for a in source for b in target) * 100 / 64
+    return result
 
 
-def note_lfo_commands(state, gba_tempo, allow_delay=False):
-    value = map_pitch_lfo(state, gba_tempo, allow_delay)
+def note_lfo_commands(state, gba_tempo, allow_delay=False, allow_min_depth=False):
+    value = map_pitch_lfo(state, gba_tempo, allow_delay, allow_min_depth)
     delay = map_pitch_delay(state, gba_tempo)['lfodl'] if allow_delay else 1
     # LFOS=0 resets phase/value; a one-tick LFODL keeps onset at zero.
     return bytes([0xC2, 0, 0xC5, 0, 0xC3, delay, 0xC4, value['mod'], 0xC2, value['lfos']])
 
 
-def compare_config(state, gba_tempo, allow_delay=False):
-    value = map_pitch_lfo(state, gba_tempo, allow_delay)
+def compare_config(state, gba_tempo, allow_delay=False, allow_min_depth=False):
+    value = map_pitch_lfo(state, gba_tempo, allow_delay, allow_min_depth)
     delay = map_pitch_delay(state, gba_tempo) if allow_delay else None
     tick_rate = GBA_FPS * gba_tempo / 75
     errors = []

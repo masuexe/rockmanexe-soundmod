@@ -95,3 +95,10 @@ pass; 33 accepted ROM/BPS pairs and two unaccepted controls rebuild identically.
 are recorded in `validation-summary.json`.
 Archived v10–v14 reports and their counts remain unchanged; this investigation
 does not retrospectively replace v14's analysis status or acceptance evidence.
+
+The subsequent [mixed-delay experiment](nds-sf1-hokora-mixed-delay-research.md)
+now implements the proposed bounded mixed structure, plus explicit weak-LFO
+quantization discovered during conversion. Its original-song native tests
+cover two common cycles and preserve the finite track's END. On 2026-10-20 the
+user reported that this later exact ROM passed its requested listening/gameplay
+checks; the source-only investigation above remains separate.
