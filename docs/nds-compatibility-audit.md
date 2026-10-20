@@ -569,3 +569,11 @@ listening, effects and three-encounter lifecycle checklist, accepting that exact
 ROM; no timed trace, two-peer or rematch result is inferred.
 The standalone route is not integrated into the batch scanner, and v15's
 56 primary/29 filtered packed counts remain unchanged.
+
+The subsequent [SF3 LOSE experiment](nds-sf3-lose-live-min-depth-research.md)
+reuses the accepted live/weak-depth combination with fourteen waves and no
+fitted attacks. Its independent source, two-loop natural playback and native
+allocation/LFO checks pass. On 2026-10-20 the user reported no issues after
+its requested listening/effects/three-encounter checklist, accepting this exact
+ROM; no timed trace, two-peer/rematch result or comparative preference is inferred.
+It is not yet integrated into the scanner, and archived v15 remains unchanged.
