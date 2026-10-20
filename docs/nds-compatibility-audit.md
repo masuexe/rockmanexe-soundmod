@@ -611,8 +611,8 @@ matches 6,493 notes and seventeen original waves, with no carried-positive
 coverage claimed. Native frontend playback reaches two common cycles and all
 eighteen prepared waves; the allocation-aware model checks 91,672 states.
 All 317 tests and 37 accepted/two control ROM/BPS rebuilds pass. Exact-ROM
-listening was reported without issues on 2026-10-20; effects and three-encounter
-checks remain unconfirmed. No timed trace or broader gameplay acceptance is
-inferred.
+listening, effects and three-encounter checks were explicitly confirmed passed
+on 2026-10-20, accepting this exact ROM. No independently timed trace,
+two-peer/rematch result or comparative preference is inferred.
 The new mode is not in the batch scanner; archived v17 remains 59 primary/
 29 filtered versions.

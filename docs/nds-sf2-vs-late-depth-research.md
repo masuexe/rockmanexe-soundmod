@@ -1,8 +1,8 @@
 # SF2 VS: late initial activation with positive depth updates
 
 This standalone experiment follows the accepted SF2 LOSE extension and the
-[v17 audit](nds-compatibility-audit-v17.md). The user reported listening without issues on 2026-10-20; effects and
-three-encounter lifecycle checks await separate confirmation. Artifact: `out/nds-research/sf2-vs-late-depth-exe6-v1/`.
+[v17 audit](nds-compatibility-audit-v17.md). The user confirmed all three requested checks passed on 2026-10-20,
+accepting the exact ROM below. Artifact: `out/nds-research/sf2-vs-late-depth-exe6-v1/`.
 
 - ROM SHA-256: `9f8e72d738aeb88d289145508efe12e6b2c347efc0b9c4b5b0d02f639ce2f215`.
 - ROM CRC32: `0FEB4BD7`; 8,784,856 bytes.
@@ -115,14 +115,13 @@ The requested checklist for the exact ROM above was:
 3. Return to the map and start another battle, for three encounters total;
    check native map restoration and a fresh imported start each time.
 
-On 2026-10-20 the user reported “试听没有问题”. The exact-ROM listening
-check is recorded as user-reported pass. Effects and three-encounter lifecycle
-checks remain pending clarification; they are not inferred from the listening
-report. No independently timed recording, completion trace, two-peer/rematch
-result or comparative preference is established. `manual-testing.json` retains
-partial acceptance, so this version does not yet match the scanner's full
-`user_reported_pass` evidence policy. Source/tests/docs can be committed with
-this listening-only scope; full checklist acceptance remains separate.
+On 2026-10-20 the user reported “试听没有问题”, then explicitly clarified
+“三项都已通过”. The exact ROM above is accepted for the requested extended
+battle listening, chip/Buster coexistence and three-encounter lifecycle checks.
+No independently timed recording or completion trace was supplied; two-peer
+communication, rematches and comparative preference are not inferred.
+`manual-testing.json` records full user-reported checklist acceptance separately
+from automated evidence and its limits.
 
 ```sh
 python3 scripts/build_nds_experiment.py \
