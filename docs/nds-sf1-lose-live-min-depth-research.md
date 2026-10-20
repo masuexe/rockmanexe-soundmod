@@ -146,3 +146,9 @@ Use fresh directories for reproduction. `validate-allocated-lfo.py`,
 `check-allocation-evidence.py`, `check-packed-tones.py`, `rebuild-prior.py`,
 `source-fingerprints.json`, renderer provenance and individual transcripts
 retain the bounded local research evidence. ROMs/source assets stay out of Git.
+
+The subsequent [v16 audit](nds-compatibility-audit-v16.md) integrates the
+explicit looping live/minimum-depth retry, with fitting kept separate.
+Its SF1 LOSE ROM/BPS and conversion parameters exactly match this accepted
+artifact. Archived v15 remains unchanged; the audit adds no runtime or manual
+acceptance beyond the original bounded checks and user report.

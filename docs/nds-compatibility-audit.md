@@ -577,3 +577,11 @@ allocation/LFO checks pass. On 2026-10-20 the user reported no issues after
 its requested listening/effects/three-encounter checklist, accepting this exact
 ROM; no timed trace, two-peer/rematch result or comparative preference is inferred.
 It is not yet integrated into the scanner, and archived v15 remains unchanged.
+
+The subsequent [v16 audit](nds-compatibility-audit-v16.md) integrates the accepted
+looping live/weak-depth combination and rescans all 132 slots. SF1/SF3 LOSE add
+two primary packed songs (58 total), exactly matching their accepted ROM/BPS.
+All 56 prior primary and 29 filtered pairs remain identical. Filtered counts
+stay 29 packed/eleven accepted/eighteen pending; 299 tests and report/filter/
+archive checks pass. It adds no runtime or manual acceptance and keeps v15's
+history unchanged. SF2 LOSE's later finite END remains a separate capability.

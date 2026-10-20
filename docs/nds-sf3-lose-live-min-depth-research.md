@@ -128,3 +128,9 @@ Use fresh directories for reproduction. The existing reference renderer,
 checks. Local `validate-allocated-lfo.py`, `check-allocation-evidence.py` and
 `check-packed-tones.py` retain the stricter allocation and resource evidence.
 ROMs, original game assets and local research outputs remain outside Git.
+
+The subsequent [v16 audit](nds-compatibility-audit-v16.md) integrates this
+looping live/minimum-depth route after established attempts. Its SF3 LOSE
+ROM/BPS and conversion parameters match this separately accepted artifact.
+The audit adds no new runtime, gameplay or comparative listening evidence;
+archived v15 remains separate.
