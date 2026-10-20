@@ -26,6 +26,9 @@ STATUS_LABELS = {
     'packed_standard': '常规路径打包通过', 'packed_lfo_approximation': '颤音近似打包通过',
     'packed_finite_standard': '非循环常规路径打包通过',
     'packed_finite_release_snapshots': '非循环收音快照路径打包通过',
+    'packed_mixed_standard': '一次性与循环轨道混合打包通过',
+    'packed_mixed_delayed_lfo_approximation': '混合轨道＋延迟颤音近似打包通过',
+    'packed_mixed_min_depth_lfo_approximation': '混合轨道＋弱颤音量化打包通过',
     'packed_envelope_approximation': '包络近似打包通过',
     'packed_envelope_lfo_approximation': '包络＋颤音近似打包通过',
     'packed_delayed_lfo_approximation': '固定延迟颤音近似打包通过',
@@ -202,16 +205,23 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         routes.append('known_sf3_battle_merge')
     if len(tracks) <= capacity and all(t.get('termination') == 'end' for t in tracks):
         routes.append('finite_singleton_long')
+    if len(tracks) <= capacity and {t.get('termination') for t in tracks} == {'end', 'loop'}:
+        routes.append('mixed_singleton_long')
+        if row['features']['nonzero_mod_depth_executed']:
+            routes.append('mixed_fixed_delay_pitch_lfo_approximation')
     if not routes:
         row.update(status='capacity_blocked', track_capacity=capacity)
         return row
     pack_errors = False
     for route in routes:
+        mixed = route.startswith('mixed_')
+        minimum_depth = route == 'mixed_min_depth_pitch_lfo_approximation'
         release = route == 'finite_singleton_release'
         finite = release or route == 'finite_singleton_long'
         live_toggle = route in ('live_toggle_pitch_lfo_approximation', 'envelope_live_toggle_pitch_lfo_approximation')
         live_depth = route in ('live_depth_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation')
-        delayed = live_depth or live_toggle or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation')
+        delayed = live_depth or live_toggle or route in ('fixed_delay_pitch_lfo_approximation', 'envelope_fixed_delay_pitch_lfo_approximation',
+                                                       'mixed_fixed_delay_pitch_lfo_approximation', 'mixed_min_depth_pitch_lfo_approximation')
         pitch_lfo = delayed or route in ('native_pitch_lfo_approximation', 'envelope_pitch_lfo_approximation')
         envelope = route in ('singleton_envelope_approximation', 'envelope_pitch_lfo_approximation',
                              'envelope_fixed_delay_pitch_lfo_approximation', 'envelope_live_depth_pitch_lfo_approximation',
@@ -227,6 +237,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['finite_support'] = True
             if release:
                 attempt['finite_release_support'] = True
+            if mixed:
+                attempt.update(mixed_loop_support=True, native_pitch_lfo_min_depth=minimum_depth)
             try:
                 if route == 'direct':
                     blob, dependency, conversion = convert_song(archive, slot['index'], capacity,
@@ -239,6 +251,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                         options['finite_support'] = True
                     if release:
                         options['finite_release_support'] = True
+                    if mixed:
+                        options.update(mixed_loop_support=True, native_pitch_lfo_min_depth=minimum_depth)
                     blob, dependency, conversion = convert_merged_song(
                         archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else groups,
                         capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope,
@@ -246,6 +260,10 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['conversion_passed'] = True
             except (ValueError, AssertionError, IndexError, struct.error) as error:
                 attempt['error'] = error_record(error)
+                if (route == 'mixed_fixed_delay_pitch_lfo_approximation' and type(error) is ValueError
+                        and str(error) == 'DS LFO cannot be represented by the bounded native approximation'
+                        and 'mixed_min_depth_pitch_lfo_approximation' not in routes):
+                    routes.append('mixed_min_depth_pitch_lfo_approximation')
                 if (route == 'finite_singleton_long' and isinstance(error, ValueError)
                         and str(error) == 'Unsupported merged-conversion effect 0xd3'
                         and 'finite_singleton_release' not in routes):
@@ -262,7 +280,10 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_finite_release_snapshots' if release else
+            status = ('packed_mixed_min_depth_lfo_approximation' if minimum_depth else
+                      'packed_mixed_delayed_lfo_approximation' if mixed and pitch_lfo else
+                      'packed_mixed_standard' if mixed else
+                      'packed_finite_release_snapshots' if release else
                       'packed_finite_standard' if finite else
                       'packed_envelope_live_toggle_lfo_approximation' if envelope and live_toggle else
                       'packed_live_toggle_lfo_approximation' if live_toggle else
@@ -285,6 +306,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             row['note_timing_validation'] = conversion.get('note_timing_validation', [])
             row['voice_context_splits'] = conversion.get('voice_context_splits', [])
             row['finite_song'] = conversion.get('finite_song')
+            if mixed:
+                row['mixed_loop_song'] = conversion['mixed_loop_song']
             if release:
                 row['finite_release_snapshots'] = conversion['finite_release_snapshots']
             if envelope:
@@ -468,6 +491,9 @@ def summarize(rows):
             'completed_execution_traces_with_notes': sum(bool(r.get('features', {}).get('executed_note_events_in_trace')) for r in rows),
             'packed': sum(r['status'].startswith('packed_') for r in rows),
             'packed_exact_manual_matches': sum(r['manual_matches_packed_variant'] for r in rows),
+            'packed_mixed_variants': sum(bool(r.get('mixed_loop_song')) for r in rows),
+            'packed_mixed_exact_manual_matches': sum(bool(r.get('mixed_loop_song')) and r['manual_matches_packed_variant'] for r in rows),
+            'packed_minimum_depth_lfo_variants': sum(bool(r.get('native_pitch_lfo', {}).get('minimum_depth_quantization')) for r in rows),
             'blocking_features_nonexclusive': {
                 'noninstant_attack_definitions': sum(bool(r.get('features', {}).get('noninstant_attack_definitions')) for r in blocked),
                 'envelope_override_controls': sum(bool(r.get('features', {}).get('envelope_override_controls')) for r in blocked),
@@ -482,8 +508,8 @@ def write_reports(directory, report):
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     summary = ['# NDS → EXE6 兼容性扫描', '',
                '扫描仅覆盖 SSEQ。通过转换与 ROM 打包不等于人工试听通过；本轮没有执行新曲目的游戏运行测试。', '',
-               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 启闭颤音 | 包络＋启闭颤音 | 非循环常规 | 其余受阻 |',
-               '| ' + ' | '.join(['---'] + ['---:'] * 14) + ' |']
+               '| 游戏 | 槽位 | 非空、非无音符候选 | 常规通过 | 颤音近似 | 包络近似 | 包络＋颤音 | 延迟颤音 | 包络＋延迟颤音 | 实时深度颤音 | 包络＋实时深度颤音 | 启闭颤音 | 包络＋启闭颤音 | 非循环常规 | 混合常规 | 混合延迟颤音 | 混合弱颤音量化 | 其余受阻 |',
+               '| ' + ' | '.join(['---'] + ['---:'] * 17) + ' |']
     for family in ('ssr1', 'ssr2', 'ssr3'):
         values = report['summary']['by_family'][family]
         slots = sum(values.values())
@@ -498,9 +524,13 @@ def write_reports(directory, report):
         envelope_live_depth = values.get('packed_envelope_live_depth_lfo_approximation', 0)
         live_toggle = values.get('packed_live_toggle_lfo_approximation', 0)
         envelope_live_toggle = values.get('packed_envelope_live_toggle_lfo_approximation', 0)
+        mixed = values.get('packed_mixed_standard', 0)
+        mixed_delay = values.get('packed_mixed_delayed_lfo_approximation', 0)
+        mixed_minimum = values.get('packed_mixed_min_depth_lfo_approximation', 0)
         summary.append(f'| {family} | {slots} | {candidates} | {standard} | {lfo} | {envelope} | {combined} | '
                        f'{delayed} | {envelope_delayed} | {live_depth} | {envelope_live_depth} | {live_toggle} | {envelope_live_toggle} | {finite} | '
-                       f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle} |')
+                       f'{mixed} | {mixed_delay} | {mixed_minimum} | '
+                       f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle - mixed - mixed_delay - mixed_minimum} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
                     '常规路径仍使用既有 PCM8、包络和速度量化近似；颤音近似还有共享相位和波形差异。',
@@ -510,7 +540,9 @@ def write_reports(directory, report):
                     '启闭路径允许深度零与单个固定正深度之间切换，其余参数固定。GBA 关闭时清零共享相位，DS 保留各声道相位，仍有近似差异。所有分类互斥，组合路径不重复计数。',
                     '长音跨循环仅接受入口与出口匹配的延续区间，不在跳转处重新起音；独立解码继续追踪窗口末尾音符的停音。扫描未执行原生全循环播放。',
                     '不同原始音高共用同一乐器别名时，使用独立音色表项消除冲突；优先复用兼容音色表，仍限制在 128 个乐器表项内。',
-                    '非循环路径仅接受全部轨道自然结束、固定速度的独立轨道；长音先显式停音，再按各轨原定时间结束。D3 失败后可尝试首音之前初始化的收音快照，拒绝音符之后更新、其他 ADSR 覆盖及非瞬时起音。仍拒绝主动颤音、渐强包络拟合及结束后仍未完结的音符。'])
+                    '非循环路径仅接受全部轨道自然结束、固定速度的独立轨道；长音先显式停音，再按各轨原定时间结束。D3 失败后可尝试首音之前初始化的收音快照，拒绝音符之后更新、其他 ADSR 覆盖及非瞬时起音。仍拒绝主动颤音、渐强包络拟合及结束后仍未完结的音符。',
+                    '混合路径在旧路径失败后尝试，要求固定速度、独立轨道、同时含一次性与循环轨道；一次性轨道在共享循环入口之前结束且音符门限已关闭。公共周期最多 16384 tick，每轨最多展开 8 倍；不组合滤波、起音拟合或收音覆盖。',
+                    '混合固定延迟颤音仅在明确的原生参数表示失败后重试弱深度量化：非零深度映射至 MOD=1，保留源控制，并要求全相位音高差不超过 10 音分、独立一秒 RMS 不超过 5 音分。模型失败与其他错误不会触发此重试。'])
     aa = report['summary'].get('antialias', {})
     if aa.get('scanned_slots'):
         summary.extend(['', '## 独立抗混叠版本', '',
@@ -540,6 +572,9 @@ def write_reports(directory, report):
               'source_depth_changes', 'source_depth_toggles', 'modulation_initializations', 'delay_mappings',
               'attack_fits', 'long_note_loop_carries', 'voice_context_splits', 'finite_song', 'finite_track_end_ticks',
               'finite_release_snapshots', 'finite_release_overrides', 'manual_matches_packed_variant', 'errors',
+              'mixed_loop_song', 'mixed_finite_track_end_ticks', 'mixed_source_loop_periods',
+              'mixed_common_loop_start_ticks', 'mixed_common_loop_ticks', 'minimum_depth_lfo_quantization',
+              'minimum_depth_lfo_policy',
               'antialias_status', 'antialias_route', 'antialias_gain_db', 'antialias_samples',
               'antialias_pcm8_bytes', 'antialias_appended_bytes_delta', 'antialias_manual_exact_match',
               'antialias_envelope_approximation', 'antialias_attack_fits', 'antialias_finite_release_snapshots',
@@ -572,6 +607,13 @@ def write_reports(directory, report):
                              'antialias_finite_release_overrides': json.dumps((row.get('antialias', {}).get('finite_release_snapshots') or {}).get('source_overrides', [])),
                              'finite_song': bool(row.get('finite_song')),
                              'finite_track_end_ticks': json.dumps((row.get('finite_song') or {}).get('track_end_ticks', {})),
+                             'mixed_loop_song': bool(row.get('mixed_loop_song')),
+                             'mixed_finite_track_end_ticks': json.dumps(row.get('mixed_loop_song', {}).get('finite_track_end_ticks', {})),
+                             'mixed_source_loop_periods': json.dumps(row.get('mixed_loop_song', {}).get('source_loop_periods', {})),
+                             'mixed_common_loop_start_ticks': row.get('mixed_loop_song', {}).get('common_loop_start_ticks'),
+                             'mixed_common_loop_ticks': row.get('mixed_loop_song', {}).get('common_loop_ticks'),
+                             'minimum_depth_lfo_quantization': bool(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization')),
+                             'minimum_depth_lfo_policy': json.dumps(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization', {})),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False),
                              'antialias_envelope_approximation': bool(row.get('antialias', {}).get('envelope_approximation')),
@@ -589,16 +631,17 @@ def write_reports(directory, report):
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
 <h1>NDS → EXE6 曲目兼容性扫描</h1><p>非循环路径接受固定速度、全部轨道自然结束的独立轨道，长音显式停音后按各轨原定时间结束。常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
-<p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
+<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限，不组合抗混叠、起音拟合或收音覆盖。详情保留实际周期和近似参数。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>混合轨道<select id="structure"><option value="">全部</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>主路径人工记录</th><th>抗混叠版本</th><th>抗混叠人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
 const {report,labels,antialiasLabels}=JSON.parse(document.querySelector('#data').textContent);const get=id=>document.getElementById(id);
-get('counts').textContent=`${report.summary.slots} 个槽位，${report.summary.packed} 首通过打包，${report.summary.packed_exact_manual_matches} 首与已有人工验收版本字节匹配。抗混叠另有 ${report.summary.antialias?.packed_variants??0} 个打包通过版本，其中 ${report.summary.antialias?.packed_exact_manual_matches??0} 个精确匹配已验收版本；渐入组合 ${report.summary.antialias?.packed_fitted_envelope_variants??0} 个，有限收音快照 ${report.summary.antialias?.packed_finite_release_variants??0} 个。`;
+get('counts').textContent=`${report.summary.slots} 个槽位，${report.summary.packed} 首通过打包，${report.summary.packed_exact_manual_matches} 首与已有人工验收版本字节匹配；混合路径 ${report.summary.packed_mixed_variants??0} 首，其中弱颤音量化 ${report.summary.packed_minimum_depth_lfo_variants??0} 首。抗混叠另有 ${report.summary.antialias?.packed_variants??0} 个打包通过版本，其中 ${report.summary.antialias?.packed_exact_manual_matches??0} 个精确匹配已验收版本；渐入组合 ${report.summary.antialias?.packed_fitted_envelope_variants??0} 个，有限收音快照 ${report.summary.antialias?.packed_finite_release_variants??0} 个。`;
 Object.entries(labels).forEach(([key,label])=>{const o=document.createElement('option');o.value=key;o.textContent=label;get('status').append(o)});
 function aaMatch(r){const a=r.antialias,k=get('antialias').value;if(!k)return true;if(!a)return false;if(k==='release')return a.status==='packed'&&Boolean(a.finite_release_snapshots);if(k==='envelope')return a.status==='packed'&&Boolean(a.envelope_approximation);if(k==='accepted')return a.status==='packed'&&a.manual_matches_packed_variant;if(k==='untested')return a.status==='packed'&&!a.manual_matches_packed_variant;if(k==='blocked')return !['packed','empty_slot','silent_sequence'].includes(a.status);return a.status===k}
-function draw(){const chosen=report.rows.filter(r=>aaMatch(r)&&(!get('game').value||r.family===get('game').value)&&(!get('status').value||r.status===get('status').value)&&(`${r.id} ${r.name||''}`).toLowerCase().includes(get('search').value.toLowerCase()));get('rows').replaceChildren();get('shown').textContent=`显示 ${chosen.length} 项`;
+function structureMatch(r){const k=get('structure').value;if(!k)return true;if(!r.status.startsWith('packed_')||!r.mixed_loop_song)return false;if(k==='minimum')return Boolean(r.native_pitch_lfo?.minimum_depth_quantization);if(k==='accepted')return r.manual_matches_packed_variant;return k==='mixed'}
+function draw(){const chosen=report.rows.filter(r=>aaMatch(r)&&structureMatch(r)&&(!get('game').value||r.family===get('game').value)&&(!get('status').value||r.status===get('status').value)&&(`${r.id} ${r.name||''}`).toLowerCase().includes(get('search').value.toLowerCase()));get('rows').replaceChildren();get('shown').textContent=`显示 ${chosen.length} 项`;
 for(const r of chosen){const tr=document.createElement('tr');const cells=[`${r.id} ${r.name||'(无符号名)'}`,`${r.features?.track_count??'—'} → ${r.target_track_count??'—'}`,labels[r.status],r.route?`${r.route} / ${r.gain_db} dB`:'—',r.manual_matches_packed_variant?'与已验收版本一致':r.related_manual_records.length?'同曲目有记录，扫描版本不同':'未匹配人工记录',r.antialias?`${antialiasLabels[r.antialias.status]||r.antialias.status}${r.antialias.status==='packed'?` / ${r.antialias.gain_db} dB / ${r.antialias.target_sample_count} 采样${r.antialias.envelope_approximation?' / 渐入拟合':''}${r.antialias.finite_release_snapshots?' / 有限收音快照':''}`:''}`:'未扫描',r.antialias?.manual_matches_packed_variant?'与已验收版本一致':'未匹配人工记录'];for(const value of cells){const td=document.createElement('td');td.textContent=value;tr.append(td)}tr.children[2].className=r.status.startsWith('packed_')?'ok':'blocked';const td=document.createElement('td'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent='执行／资源／尝试记录';pre.textContent=JSON.stringify(r,null,2);details.append(summary,pre);td.append(details);tr.append(td);get('rows').append(tr)}}
-['game','status','search','antialias'].forEach(id=>get(id).addEventListener('input',draw));draw();</script></html>'''
+['game','status','search','antialias','structure'].forEach(id=>get(id).addEventListener('input',draw));draw();</script></html>'''
     (directory / 'index.html').write_text(page.replace('PAYLOAD', payload))
 
 
@@ -626,7 +669,16 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 11, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 12, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'mixed_route_policy': {'tried_after_existing_routes': True, 'singleton_tracks_only': True,
+                  'requires_both_finite_and_looping_tracks': True, 'fixed_tempo': True,
+                  'finite_end_not_after_original_shared_loop_entry': True,
+                  'finite_gates_closed_by_end': True, 'finite_tracks_repeated': False,
+                  'max_common_period_ticks': 16384, 'max_period_expansion': 8,
+                  'filtering_fitted_envelopes_release_overrides': False,
+                  'fixed_delay_native_lfo': True, 'minimum_depth_retry_after_explicit_representation_failure_only': True,
+                  'minimum_depth_native_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
+                  'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
                   'separate_from_primary_route': True, 'singleton_tracks_only': True,
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],

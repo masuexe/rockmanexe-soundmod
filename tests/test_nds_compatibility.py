@@ -83,7 +83,7 @@ class CompatibilityAuditTests(unittest.TestCase):
             line = next(l for l in (path / 'summary.md').read_text().splitlines() if l.startswith('| ssr1 |'))
             numbers = [int(c.strip()) for c in line.split('|')[2:-1]]
             self.assertEqual(sum(numbers[2:-1]), 1)
-            self.assertEqual(numbers[-2:], [1, 0])
+            self.assertEqual(numbers[-5:], [1, 0, 0, 0, 0])
 
     def test_direct_finite_success_keeps_existing_route(self):
         archive = SimpleNamespace(sequence=lambda index: (b'', {}))

@@ -124,3 +124,9 @@ the completed implementation and documentation follow the standing commit/push
 workflow. ROMs, source assets and local research outputs remain outside Git.
 A later compatibility refresh can integrate this explicit bounded route while
 preserving v14's history.
+
+The subsequent [v15 compatibility audit](nds-compatibility-audit-v15.md)
+integrates these bounded options after existing primary routes, retaining
+explicit minimum-depth retry guards. Its HOKORA ROM/BPS and conversion
+parameters match this accepted experiment exactly. The filtered version
+remains blocked by active modulation; no acceptance transfers to it.

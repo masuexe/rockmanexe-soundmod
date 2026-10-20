@@ -551,3 +551,12 @@ On 2026-10-20 the user reported that this exact ROM passed the requested extende
 battle listening, effects coexistence and three-encounter lifecycle checks. No
 timed recording or completion trace was supplied; linked play and rematch were
 not separately reported. Archived v14 remains unchanged.
+
+The subsequent [v15 audit](nds-compatibility-audit-v15.md) integrates the accepted
+bounded mixed-track route and rescans all 132 slots. HOKORA adds one primary
+packable song, bringing the total to 56 and exactly matching its accepted
+ROM/BPS. All 55 prior primary and 29 filtered pairs remain identical. Filtered
+counts stay at 29 packed, eleven exact accepted and eighteen pending; HOKORA's
+filtered route still rejects active modulation. All 285 tests and report,
+filter and archived v10–v14 integrity checks pass. The scan records no new
+native playback or manual acceptance.
