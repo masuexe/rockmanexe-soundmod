@@ -585,3 +585,12 @@ All 56 prior primary and 29 filtered pairs remain identical. Filtered counts
 stay 29 packed/eleven accepted/eighteen pending; 299 tests and report/filter/
 archive checks pass. It adds no runtime or manual acceptance and keeps v15's
 history unchanged. SF2 LOSE's later finite END remains a separate capability.
+
+The subsequent [SF2 LOSE experiment](nds-sf2-lose-mixed-live-depth-research.md)
+implements the bounded mixed/live-depth extension and shifts the entry by one
+common period. Finite FINE=911 remains once; two natural loops and actual
+finite-channel/LFO checks pass, alongside 306 tests and exact old ROM/BPS
+rebuilds. On 2026-10-20 the user reported this exact ROM passed its requested
+extended listening, effects and three-encounter checklist. No timed trace,
+two-peer/rematch result or comparative preference is inferred. The scanner does
+not yet enable this extension; archived v16 remains 58 primary/29 filtered versions.

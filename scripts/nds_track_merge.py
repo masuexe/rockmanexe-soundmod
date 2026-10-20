@@ -166,7 +166,9 @@ def pitch_commands(units):
     return bytes([0xC1, 12, 0xC0, 64 + bend, 0xC8, 64 + tune])
 
 
-def assess_groups(tracks, groups, finite_support=False, mixed_loop_support=False):
+def assess_groups(tracks, groups, finite_support=False, mixed_loop_support=False, mixed_later_entry=False):
+    if mixed_later_entry and not mixed_loop_support:
+        raise ValueError('Later entry requires the explicit mixed score mode')
     if finite_support and mixed_loop_support:
         raise ValueError('Finite-only and mixed score modes are separate experiments')
     ids = {t['track'] for t in tracks}
@@ -208,7 +210,12 @@ def assess_groups(tracks, groups, finite_support=False, mixed_loop_support=False
         period = next(iter(periods))
     loop_start = max(t['loop_start_ticks'] for t in looping)
     if mixed_loop_support and any(t['end_ticks'] > loop_start for t in finite):
-        raise ValueError('Mixed finite tracks must finish before the shared loop entry')
+        if not mixed_later_entry:
+            raise ValueError('Mixed finite tracks must finish before the shared loop entry')
+        advance = (max(t['end_ticks'] for t in finite) - loop_start + period - 1) // period
+        if advance > 1:
+            raise ValueError('Later mixed entry exceeds one additional common period')
+        loop_start += advance * period
     end_tick = loop_start + period
     by_id = {t['track']: t for t in tracks}
     expanded = {n: expand_actions(t, end_tick + period) for n, t in by_id.items()}
@@ -243,18 +250,24 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
-                        mixed_loop_support=False, native_pitch_lfo_min_depth=False):
+                        mixed_loop_support=False, native_pitch_lfo_min_depth=False,
+                        mixed_live_depth_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if mixed_live_depth_support and not (
+            mixed_loop_support and native_pitch_lfo and native_pitch_lfo_delay and native_pitch_lfo_live_depth
+            and not (finite_support or finite_release_support or bandlimited_pcm or native_pitch_lfo_live_toggle)):
+        raise ValueError('Mixed live-depth extension requires mixed singleton delayed positive-depth mode without finite-only, filter or toggle modes')
     if native_pitch_lfo_min_depth and not (native_pitch_lfo and (mixed_loop_support or native_pitch_lfo_live_depth)):
         raise ValueError('Minimum-depth LFO requires the explicit mixed or looping live-depth native-LFO experiment')
     if native_pitch_lfo_min_depth and native_pitch_lfo_live_depth and (
-            mixed_loop_support or finite_support or finite_release_support or
+            (mixed_loop_support and not mixed_live_depth_support) or finite_support or finite_release_support or
             bandlimited_pcm or native_pitch_lfo_live_toggle):
         raise ValueError('Minimum-depth live LFO requires looping singleton tracks without mixed, finite, filter or toggle modes')
-    if mixed_loop_support and (finite_support or finite_release_support or envelope_support or bandlimited_pcm):
+    if mixed_loop_support and (finite_support or finite_release_support or
+                               (envelope_support and not mixed_live_depth_support) or bandlimited_pcm):
         raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
     if bandlimited_pcm and any(len(group) != 1 for group in groups):
         raise ValueError('Bandlimited PCM requires singleton target tracks')
@@ -367,7 +380,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                     raise ValueError('Merged experiment requires tempo in source track 0')
             if action['name'] == 'note' and not 1 <= action['duration'] <= 65535:
                 raise ValueError('Unsupported merged note duration')
-    loop_start, period, expanded, decisions = assess_groups(tracks, groups, finite_support, mixed_loop_support)
+    loop_start, period, expanded, decisions = assess_groups(
+        tracks, groups, finite_support, mixed_loop_support, mixed_live_depth_support)
+    selected_entry_before_lfo = loop_start
     if mixed_loop_support and len({a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}) != 1:
         raise ValueError('Mixed experiment requires a fixed source tempo')
     finite_ids = {t['track'] for t in tracks if t['termination'] == 'end'}
@@ -683,6 +698,14 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             'common_loop_start_ticks': loop_start, 'common_loop_ticks': period,
             'max_common_period_ticks': 16384, 'max_period_expansion': 8,
             'finite_tracks_repeated': False, 'fixed_tempo': True}
+    if mixed_live_depth_support:
+        original_entry = max(t['loop_start_ticks'] for t in tracks if t['termination'] == 'loop')
+        report['mixed_live_depth_extension'] = {
+            'original_shared_loop_start_ticks': original_entry,
+            'selected_entry_before_lfo_warmup': selected_entry_before_lfo,
+            'later_entry_common_cycles': (selected_entry_before_lfo - original_entry) // period,
+            'max_later_entry_common_cycles': 1, 'finite_tracks_repeated': False,
+            'live_positive_depth': True, 'fitted_envelope_explicit': bool(envelope_support)}
     if bandlimited_pcm:
         report['bandlimited_pcm'] = {'mixing_rate_hz': MIX_RATE,
                                      'policy': ('Opt-in finite singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'
@@ -714,7 +737,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         report['native_pitch_lfo']['minimum_depth_quantization'] = {
             'policy': 'Explicit opt-in: nonzero source depth below MOD resolution uses MOD=1',
             'all_phase_pitch_difference_bound_cents': 10, 'isolated_one_second_rms_limit_cents': 5,
-            'source_controls_preserved': True, 'scope': ('looping singleton live-depth experiment only'
+            'source_controls_preserved': True, 'scope': ('mixed singleton live-depth experiment only'
+                                                        if mixed_live_depth_support else 'looping singleton live-depth experiment only'
                                                         if native_pitch_lfo_live_depth else 'mixed singleton experiment only')}
     if envelope_support:
         attacks = sorted({n['source_envelope']['attack'] for n in source_notes})

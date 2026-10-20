@@ -39,6 +39,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-gowaiincho-delay': 'ssr1',
                  'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1',
                  'sf3-lose-depth-min': 'ssr3',
+                 'sf2-lose-mixed-depth-min': 'ssr2',
                  'sf1-ura': 'ssr1',
                  'sf1-satellite': 'ssr1',
                  'sf1-henkan-finite': 'ssr1',
@@ -131,6 +132,14 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
             native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
+    elif song == 'sf2-lose-mixed-depth-min':
+        index, name = 32, 'BGM_LOSE'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_delay=True, native_pitch_lfo_live_depth=True,
+            native_pitch_lfo_min_depth=True, mixed_loop_support=True, mixed_live_depth_support=True,
+            envelope_support=True)
     elif song in ('sf1-lose-depth-min', 'sf3-lose-depth-min'):
         index, name = (32, 'BGM32LOSE') if song == 'sf1-lose-depth-min' else (42, 'BGM_LOSE')
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
@@ -245,6 +254,8 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
         manifest['nds_conversion']['native_pitch_lfo_minimum_depth_quantization'] = True
     if conversion.get('mixed_loop_song'):
         manifest['nds_conversion']['mixed_loop_song'] = conversion['mixed_loop_song']
+    if conversion.get('mixed_live_depth_extension'):
+        manifest['nds_conversion']['mixed_live_depth_extension'] = conversion['mixed_live_depth_extension']
     if conversion.get('finite_song'):
         manifest['nds_conversion']['finite_song'] = True
     if conversion.get('finite_release_snapshots'):
