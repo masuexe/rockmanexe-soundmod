@@ -11,3 +11,9 @@ reference, native-runtime and regression checks without waiting for approval
 after each intermediate step. Request one final manual listening/gameplay
 check when the complete experimental ROM is ready. Keep automated verification
 and user-reported manual acceptance distinct.
+
+When the user authorizes a continuing research loop, advance through suitable
+source investigations and automated experiments without intermediate approval
+requests. Stop and notify the user when a new exact ROM needs manual listening
+or gameplay acceptance. A silent environment defers those manual checks;
+automated success does not replace them.

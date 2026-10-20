@@ -65,6 +65,42 @@ class PitchLfoTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'all active'):
                 compare_reference_window(root, reference)
 
+    def test_lfodl_changes_reload_without_reset_and_dropped_note_keeps_counter(self):
+        events = [{'ticks': 0, 'name': 'LFOS', 'value': 32},
+                  {'ticks': 0, 'name': 'MOD', 'value': 2},
+                  {'ticks': 0, 'name': 'LFODL', 'value': 3},
+                  {'ticks': 0, 'name': 'NOTE'},
+                  {'ticks': 1, 'name': 'LFODL', 'value': 7},
+                  {'ticks': 1, 'name': 'NOTE', 'allocated': False},
+                  {'ticks': 4, 'name': 'NOTE', 'allocated': True}]
+        model = LfoModel(events)
+        self.assertEqual(model.advance(1)['count'], 2)
+        self.assertEqual(model.advance(2)['count'], 1)
+        self.assertEqual(model.advance(4)['phase'], 32)
+        after = model.advance(5)
+        self.assertEqual((after['count'], after['phase'], after['value']), (6, 0, 0))
+        with self.assertRaisesRegex(ValueError, 'boolean'):
+            LfoModel([{'ticks': 0, 'name': 'NOTE', 'allocated': 0}]).advance(1)
+
+    def test_reference_comparison_maps_sparse_source_ids_and_rejects_ambiguity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = {'complete': True, 'active_modulation_tracks': [0, 1],
+                      'source_track_ids': [5, 15],
+                      'snapshots': [{'clock': 10, 'tracks': [{'value': 1}, {'value': -2}]}]}
+            (root / 'validation.json').write_text(json.dumps(report))
+            reference = root / 'reference'
+            reference.mkdir()
+            (reference / 'modulation.csv').write_text(
+                'timer_frame,tick,track,type,value\n20,10,5,0,4\n20,10,15,0,-8\n20,10,0,0,127\n')
+            result = compare_reference_window(root, reference)
+            self.assertTrue(all(t['rms_pitch_difference_cents'] == 0 for t in result['tracks'].values()))
+            self.assertEqual(result['source_track_ids'], [5, 15])
+            report['source_track_ids'] = [5, 5]
+            (root / 'validation.json').write_text(json.dumps(report))
+            with self.assertRaisesRegex(ValueError, 'unique singleton'):
+                compare_reference_window(root, reference)
+
     def test_ds_sine_quadrants_and_signed_pitch_rounding(self):
         self.assertEqual([ds_sine(i) for i in (0, 32, 64, 96)], [0, 127, 0, -127])
         self.assertEqual([ds_pitch_units(i, 20) for i in (0, 1024, 2048, 8192, 24576)],

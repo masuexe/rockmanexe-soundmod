@@ -37,7 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
-                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1',
+                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1',
                  'sf1-ura': 'ssr1',
                  'sf1-satellite': 'ssr1',
                  'sf1-henkan-finite': 'ssr1',
@@ -130,6 +130,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
             native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
+    elif song == 'sf1-lose-depth-min':
+        index, name = 32, 'BGM32LOSE'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_delay=True,
+            native_pitch_lfo_live_depth=True, native_pitch_lfo_min_depth=True, envelope_support=True)
     elif song == 'sf1-hokora-mixed-delay':
         index, name = 20, 'BGM20HOKORA'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)

@@ -560,3 +560,12 @@ counts stay at 29 packed, eleven exact accepted and eighteen pending; HOKORA's
 filtered route still rejects active modulation. All 285 tests and report,
 filter and archived v10–v14 integrity checks pass. The scan records no new
 native playback or manual acceptance.
+
+The subsequent [SF1 LOSE experiment](nds-sf1-lose-live-min-depth-research.md)
+combines guarded weak-depth quantization, looping live positive-depth controls
+and explicit fitted attacks. Its independent source and full-loop native
+checks pass. On 2026-10-20 the user reported no issues after its requested
+listening, effects and three-encounter lifecycle checklist, accepting that exact
+ROM; no timed trace, two-peer or rematch result is inferred.
+The standalone route is not integrated into the batch scanner, and v15's
+56 primary/29 filtered packed counts remain unchanged.

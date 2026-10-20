@@ -248,8 +248,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
-    if native_pitch_lfo_min_depth and not (mixed_loop_support and native_pitch_lfo):
-        raise ValueError('Minimum-depth LFO requires the explicit mixed native-LFO experiment')
+    if native_pitch_lfo_min_depth and not (native_pitch_lfo and (mixed_loop_support or native_pitch_lfo_live_depth)):
+        raise ValueError('Minimum-depth LFO requires the explicit mixed or looping live-depth native-LFO experiment')
+    if native_pitch_lfo_min_depth and native_pitch_lfo_live_depth and (
+            mixed_loop_support or finite_support or finite_release_support or
+            bandlimited_pcm or native_pitch_lfo_live_toggle):
+        raise ValueError('Minimum-depth live LFO requires looping singleton tracks without mixed, finite, filter or toggle modes')
     if mixed_loop_support and (finite_support or finite_release_support or envelope_support or bandlimited_pcm):
         raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
     if bandlimited_pcm and any(len(group) != 1 for group in groups):
@@ -710,7 +714,8 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         report['native_pitch_lfo']['minimum_depth_quantization'] = {
             'policy': 'Explicit opt-in: nonzero source depth below MOD resolution uses MOD=1',
             'all_phase_pitch_difference_bound_cents': 10, 'isolated_one_second_rms_limit_cents': 5,
-            'source_controls_preserved': True, 'scope': 'mixed singleton experiment only'}
+            'source_controls_preserved': True, 'scope': ('looping singleton live-depth experiment only'
+                                                        if native_pitch_lfo_live_depth else 'mixed singleton experiment only')}
     if envelope_support:
         attacks = sorted({n['source_envelope']['attack'] for n in source_notes})
         report['envelope_approximation'] = {

@@ -30,6 +30,11 @@ def compare_reference_window(directory, reference):
     actual = json.loads((directory / 'validation.json').read_text())
     if not actual['complete']:
         raise ValueError('Requires a passed native LFO window')
+    mapping = actual.get('source_track_ids', list(range(len(actual['snapshots'][0]['tracks']))))
+    if (len(mapping) != len(actual['snapshots'][0]['tracks']) or
+            any(type(i) is not int or i < 0 for i in mapping) or len(set(mapping)) != len(mapping)):
+        raise ValueError('Reference comparison requires unique singleton source-track IDs')
+    target_for_source = {source: target for target, source in enumerate(mapping)}
     latest = {}
     with (reference / 'modulation.csv').open() as stream:
         for raw in csv.DictReader(stream):
@@ -42,13 +47,14 @@ def compare_reference_window(directory, reference):
     errors = {i: [] for i in actual['active_modulation_tracks']}
     for snapshot in actual['snapshots']:
         for row in latest.get(snapshot['clock'], (None, []))[1]:
-            i = row['track']
+            i = target_for_source.get(row['track'])
             if i in errors and row['type'] == 0:
                 target = snapshot['tracks'][i]['value'] * 4
                 errors[i].append((target - row['value']) * 100 / 64)
     if any(not values for values in errors.values()):
         raise ValueError('Reference does not cover all active modulated tracks')
     return {'scope': 'sequence-clock alignment to latest observed DS timer frame, allocated DS voices vs shared target track',
+            'source_track_ids': mapping,
             'sample_aligned': False, 'equal_voice_allocation': False,
             'tracks': {str(i): {'comparisons': len(values),
                                'rms_pitch_difference_cents': math.sqrt(sum(v * v for v in values) / len(values)),
@@ -76,7 +82,9 @@ class LfoModel:
                     if not value:
                         self.phase = self.value = 0
                 elif name == 'LFODL':
-                    self.delay = self.count = value
+                    # EXE6's command writes the reload value only. The note
+                    # handler copies it to count after successful allocation.
+                    self.delay = value
                 elif name == 'MOD':
                     self.depth = value
                     if not value:
@@ -84,9 +92,13 @@ class LfoModel:
                 elif name == 'MODT':
                     self.kind = value
                 elif name in ('NOTE', 'TIE'):
-                    self.count = self.delay
-                    if self.delay:
-                        self.phase = self.value = 0
+                    allocated = event.get('allocated', True)
+                    if type(allocated) is not bool:
+                        raise ValueError('Note allocation evidence must be boolean')
+                    if allocated:
+                        self.count = self.delay
+                        if self.delay:
+                            self.phase = self.value = 0
             if self.speed and self.depth:
                 if self.count:
                     self.count -= 1
@@ -106,6 +118,9 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     if not manifest['nds_conversion'].get('native_pitch_lfo_approximation') or frames < 1:
         raise ValueError('Requires a native pitch-LFO experiment and positive frame count')
     dependency = analyze(data, manifest['target_table_file_offset'], 474)
+    groups = json.loads((experiment / 'conversion.json').read_text())['track_groups']
+    if len(groups) != len(dependency['tracks']) or any(len(group) != 1 for group in groups):
+        raise ValueError('Native LFO probe requires singleton source-track groups')
     directory.mkdir(parents=True, exist_ok=False)
     rom = directory / 'test.gba'
     rom.write_bytes(data)
@@ -121,6 +136,7 @@ def probe(experiment, directory, frames=1500, mgba='/usr/games/mgba'):
     report = {'complete': False, 'scope': 'requested natural-title window only',
               'rom_fingerprint': fingerprint(data),
               'register_or_ram_injection': False, 'full_loop_validation': False,
+              'source_track_ids': [group[0] for group in groups],
               'ds_synthesis_equivalence': False, 'frames_requested': frames, 'snapshots': []}
     bank = dependency['header']['tone_bank']['file_offset']
     header = struct.unpack_from('<I', data, manifest['target_table_file_offset'] + 474 * 8)[0]
