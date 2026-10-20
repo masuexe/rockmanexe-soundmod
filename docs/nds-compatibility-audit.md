@@ -604,3 +604,15 @@ and 30 unique accepted sequences across both routes. Filtered totals stay
 29 packed/eleven accepted/eighteen pending. It adds no runtime or manual
 acceptance; archived v16 remains separate. SF2 VS's late first activation plus
 positive depth updates is the next fixed-tempo capability candidate.
+
+The subsequent [SF2 VS experiment](nds-sf2-vs-late-depth-research.md) adds a
+separate explicit late-activation/positive-depth mode. Its source reference
+matches 6,493 notes and seventeen original waves, with no carried-positive
+coverage claimed. Native frontend playback reaches two common cycles and all
+eighteen prepared waves; the allocation-aware model checks 91,672 states.
+All 317 tests and 37 accepted/two control ROM/BPS rebuilds pass. Exact-ROM
+listening was reported without issues on 2026-10-20; effects and three-encounter
+checks remain unconfirmed. No timed trace or broader gameplay acceptance is
+inferred.
+The new mode is not in the batch scanner; archived v17 remains 59 primary/
+29 filtered versions.

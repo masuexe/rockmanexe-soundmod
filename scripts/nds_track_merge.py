@@ -251,11 +251,16 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if native_pitch_lfo_late_depth and not (
+            native_pitch_lfo and native_pitch_lfo_delay and native_pitch_lfo_live_depth
+            and not (mixed_loop_support or finite_support or finite_release_support or
+                     bandlimited_pcm or native_pitch_lfo_live_toggle or envelope_support or native_pitch_lfo_min_depth)):
+        raise ValueError('Late positive-depth activation requires looping singleton delayed live-depth mode without mixed, finite, filter, toggle, fitting or minimum-depth modes')
     if mixed_live_depth_support and not (
             mixed_loop_support and native_pitch_lfo and native_pitch_lfo_delay and native_pitch_lfo_live_depth
             and not (finite_support or finite_release_support or bandlimited_pcm or native_pitch_lfo_live_toggle)):
@@ -315,7 +320,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 continue
             activation = active[0]
             baseline = tuple(track['actions'][activation]['state_after'][k] for k in fields)
-            if not notes or (not native_pitch_lfo_live_toggle and track['actions'][activation]['ticks'] > notes[0]['ticks']):
+            if not notes or (not (native_pitch_lfo_live_toggle or native_pitch_lfo_late_depth) and track['actions'][activation]['ticks'] > notes[0]['ticks']):
                 raise ValueError('Delayed LFO requires activation before or at the first note timestamp')
             initializations.append({'source_track': track['track'],
                                     'activation_tick': track['actions'][activation]['ticks'],
@@ -326,7 +331,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 current = tuple(a['state_after'][k] for k in fields)
                 # Some originals enable depth just after their first note at
                 # the same tick. No DS timer update has elapsed in between.
-                initial_off = (i < activation and (native_pitch_lfo_live_toggle or a['ticks'] == notes[0]['ticks'])
+                initial_off = (i < activation and (native_pitch_lfo_live_toggle or native_pitch_lfo_late_depth or a['ticks'] == notes[0]['ticks'])
                                and current[2] == 0)
                 toggled_off = native_pitch_lfo_live_toggle and current[2] == 0
                 live_depth = (native_pitch_lfo_live_depth and current[2] > 0 and
@@ -604,7 +609,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
             elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
                 value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
-                command = (bytes([0xC4, value['mod']]) if native_pitch_lfo_live_depth and op == 0xCA
+                command = (bytes([0xC4, value['mod']]) if native_pitch_lfo_live_depth and not native_pitch_lfo_late_depth and op == 0xCA
                            else bytes([0xC4, value['mod'], 0xC2, value['lfos']]))
             if command:
                 order = 1 + action['event_order'] if native_pitch_lfo else 1
@@ -782,4 +787,20 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                             'Changing active depth or other modulation parameters remains rejected.']}
         report['native_pitch_lfo']['delay_approximation']['policy'] = report['native_pitch_lfo']['live_toggle_approximation']['policy']
         report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; fixed delay with live on/off approximation'
+    if native_pitch_lfo_late_depth:
+        report['native_pitch_lfo']['late_depth_activation'] = {
+            'enabled': True, 'initial_off_notes_allowed': True,
+            'initializations': initializations,
+            'disabling_after_activation': False,
+            'positive_depth_updates_preserve_phase_and_count': True,
+            'enable_emits_nonzero_speed': True,
+            'scope': 'Explicit looping singleton delayed positive-depth experiment'}
+        live = report['native_pitch_lfo']['live_depth_approximation']
+        live['policy'] = 'Initial inactive notes and later first activation; positive depths thereafter; fixed pitch type, speed, range and delay'
+        live['method'] = 'Ordered MOD and nonzero LFOS updates preserve shared phase/count; inactive notes preload LFODL and stop LFOS'
+        report['native_pitch_lfo']['method'] = 'MPlay triangle pitch LFO; explicit late activation and live positive-depth updates'
+        live['limitations'] = [
+            'Native shared phase/count and same-track note resets approximate independent DS voice state.',
+            'Disabling after activation and other live parameter changes remain rejected.']
+        report['native_pitch_lfo']['delay_approximation']['policy'] = live['policy']
     return blob, dependency, report

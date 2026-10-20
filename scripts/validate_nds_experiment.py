@@ -135,6 +135,43 @@ def check_live_depth_reference(conversion, reference):
             'phase_and_delay_count_preserved': True}
 
 
+def check_late_depth_reference(conversion, reference):
+    """Check explicit late activation; report carried-positive coverage separately."""
+    late = conversion['native_pitch_lfo']['late_depth_activation']
+    setups = [r for r in late['initializations'] if r['activation_tick'] > r['first_note_tick']]
+    if not late['enabled'] or not setups:
+        raise AssertionError('Late-depth reference requires an actual late initialization')
+    with (reference / 'controls.csv').open() as stream:
+        controls = [{k: int(v) for k, v in r.items()} for r in csv.DictReader(stream)
+                    if int(r['opcode']) == 0xCA]
+    points = {(r['track'], r['tick'], r['value']) for r in controls}
+    with (reference / 'modulation-changes.csv').open() as stream:
+        updates = [{k: int(v) for k, v in r.items()} for r in csv.DictReader(stream)]
+    for r in updates:
+        if (r['phase_before'], r['counter_before']) != (r['phase_after'], r['counter_after']):
+            raise AssertionError('Independent DS late-depth update resets phase/counter')
+    coverage = []
+    for setup in setups:
+        point = (setup['source_track'], setup['activation_tick'], setup['depth'])
+        if point not in points:
+            raise AssertionError('Independent late activation control is missing')
+        matches = [r for r in updates if (r['track'], r['tick'], r['depth']) == point
+                   and r['before_depth'] == 0]
+        if not matches:
+            raise AssertionError('Independent late activation has no allocated voice updates')
+        coverage.append({**setup, 'voice_enable_updates': len(matches),
+                         'updates_with_carried_state': sum(bool(r['phase_before'] or r['counter_before']) for r in matches)})
+    positive = [r for r in updates if r['before_depth'] > 0 and r['depth'] > 0
+                and (r['track'], r['tick'], r['depth']) in points]
+    carried = sum(bool(r['phase_before'] or r['counter_before']) for r in positive)
+    return {'complete': True, 'late_initializations': coverage,
+            'voice_update_states_checked': len(updates), 'phase_and_delay_count_preserved': True,
+            'positive_control_voice_updates': len(positive),
+            'positive_updates_with_carried_state': carried,
+            'carried_positive_depth_covered': bool(carried),
+            'scope': 'Explicit late-depth mode; source CA points only for positive counts; absent carried-positive state is reported, not established by this source'}
+
+
 def check_toggle_reference(reference, require_carried_disable=False, require_disable=True):
     """DS parameter updates preserve counters across both toggle directions."""
     with (reference / 'controls.csv').open() as stream:
@@ -335,7 +372,9 @@ def check_reference(experiment, reference):
                 r['before'] > 0 and r['after'] == 0 for r in live_toggle['source_depth_toggles'])) if live_toggle else None,
             'pre_note_initializations_checked': pre_note,
             'initialization_depth_control_matches': depth_control_matches if pre_note else 0,
-            'live_depth_reference': check_live_depth_reference(conversion, reference) if live_depth else None,
+            'live_depth_reference': (check_late_depth_reference(conversion, reference)
+                                     if conversion.get('native_pitch_lfo', {}).get('late_depth_activation')
+                                     else check_live_depth_reference(conversion, reference)) if live_depth else None,
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 
