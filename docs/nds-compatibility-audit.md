@@ -636,3 +636,17 @@ pass. On 2026-10-20 the user reported this exact ROM passed the requested
 three-minute battle/effects/three-encounter checklist. No independently timed
 trace, two-peer/rematch result or comparative preference is inferred. The new mode is not in the batch scanner; archived v18 remains
 60 primary/29 filtered versions.
+
+The subsequent [v19 audit](nds-compatibility-audit-v19.md) integrates only the
+accepted fixed zero-delay variable-tempo route after its explicit fixed-tempo
+failure. Primary counts rise to 61 packed and 27 exact accepted; old 60 primary
+and 29 filtered ROM/BPS pairs remain identical. Filtered counts stay 29/11/18;
+32 unique source sequences have an exact accepted variant. All 132 slots are
+scanned using six verified ROM variants and three unchanged pinned family
+archives. The local second SF2 input now has an unregistered fingerprint and a
+differing SDAT; it is excluded without changing source files or verification
+policy. Of 339 tests, 338 pass and that verified-variant equivalence test is
+explicitly skipped. Report and archive checks add no native or manual tests.
+The remaining three in-capacity conversion blockers are the SABISHI songs;
+SF1's combination of variable tempo, late first activation and fitted attacks
+is a separate prospective experiment.

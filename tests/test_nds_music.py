@@ -6,11 +6,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from analyze_song import analyze, trace_track
-from build_nds_experiment import build_experiment
+from build_nds_experiment import SOURCES, build_experiment
 from nds_music import (NoteDefinition, SoundArchive, convert_song, decode_adpcm,
                        nds_sdat, note_bytes, read_event, trace_sequence, wait_bytes)
 from nds_track_merge import BATTLE_GROUPS, assess_groups, convert_merged_song, expand_actions, pitch_commands
-from scan_audio import apply_bps
+from scan_audio import apply_bps, fingerprint
 
 
 def note(key=60, velocity=100, length=12):
@@ -1134,6 +1134,11 @@ class LocalStarForce2Tests(unittest.TestCase):
 
     @unittest.skipUnless((SF2.parent / 'ssr2s.nds').exists(), 'local second Star Force 2 input unavailable')
     def test_both_source_variants_produce_identical_mplay_and_target(self):
+        alternate = (SF2.parent / 'ssr2s.nds').read_bytes()
+        if SOURCES.get(fingerprint(alternate)['sha256']) != 'ssr2s':
+            with self.assertRaisesRegex(ValueError, 'verified'):
+                build_experiment(alternate, BASE.read_bytes(), song='sf2-win')
+            self.skipTest('local second Star Force 2 input has an unverified fingerprint; variant equivalence not checked')
         base, previous = BASE.read_bytes(), None
         for key in ('ssr2d', 'ssr2s'):
             output, _, manifest, _, _, blob, _, sdat = build_experiment(
