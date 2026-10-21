@@ -661,3 +661,20 @@ production CLI; the user reported the exact-ROM three-item listening/effects/lif
 passed on 2026-10-20. This adds no independently timed trace, linked-play/rematch
 result or comparative preference. This separate
 extension does not alter archived v19 counts or enter the batch scanner.
+
+The [v20 audit](nds-compatibility-audit-v20.md) integrates the accepted variable
+late-enable/fitted-attack capability after an explicit envelope/LFO fixed-tempo
+failure. Three SABISHI slots become packable: 64 primary variants, 28 exact
+accepted primary variants, 33 unique accepted sequences. All 61 prior primary
+and 29 filtered pairs retain their bytes, routes and gains. The 58 remaining
+primary blockers all exceed eight tracks. The scan retains its six-source
+selection; independent current verification checks all seven originals after
+the second SF2 source again matches its registered fingerprint and SDAT. All
+350 tests pass without skips. Historical v19 restrictions remain recorded.
+Batch counts and exact standalone listening/gameplay acceptance stay separate.
+
+A source-only investigation of eleven nine-track blockers finds that SF2 HOKORA
+admits 21 pair-merging configurations through the existing plain converter's
+control compatibility checks. This has no packed ROM, native playback or manual
+acceptance yet; all other nine-track candidates still fail existing constraints.
+It is a bounded next investigation after completing the standalone SF3 check.

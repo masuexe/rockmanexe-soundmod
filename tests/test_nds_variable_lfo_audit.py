@@ -7,6 +7,7 @@ ROUTE='variable_tempo_pitch_lfo_approximation'
 POLICY={'source_tempos':[80,120],'conductor_modulation':False,'max_source_tempos':8}
 
 def convert(*args,**options):
+ if options.get('variable_late_fitted_support'):raise ValueError('fixture covers plain variable-tempo mode only')
  if not options.get('native_pitch_lfo_variable_tempo'):raise ValueError(FAILURE)
  return b'blob',{'samples':[]},{'track_count':2,'native_pitch_lfo':{'variable_tempo_approximation':POLICY}}
 
