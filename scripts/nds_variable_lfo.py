@@ -4,7 +4,7 @@ from nds_music import DS_CLOCK_HZ,GBA_FPS
 
 FIELDS=('mod_type','mod_speed','mod_depth','mod_range','mod_delay')
 
-def prepare_variable_lfo(tracks,expanded):
+def prepare_variable_lfo(tracks,expanded,late_activation=False):
     baselines={}
     for track in tracks:
         notes=[a for a in track['actions'] if a['name']=='note']
@@ -15,7 +15,7 @@ def prepare_variable_lfo(tracks,expanded):
         first=notes[0]
         active=[a for a in track['actions'] if a.get('state_after',{}).get('mod_depth')]
         activation=active[0] if active else first
-        if active and activation['ticks']>first['ticks']:
+        if active and activation['ticks']>first['ticks'] and not late_activation:
             raise ValueError('Variable-tempo LFO excludes late activation')
         baseline=activation['state_after'];values=tuple(baseline[k] for k in FIELDS)
         if baseline['mod_depth'] and (baseline['mod_type'] or baseline['mod_delay']):
@@ -25,7 +25,7 @@ def prepare_variable_lfo(tracks,expanded):
                                          action['opcode'] in (0xCA,0xCB,0xCC,0xCD,0xE0)):
                 current=tuple(action['state_after'][k] for k in FIELDS)
                 initial_off=(action['name']=='note' and action['event_order']<activation['event_order']
-                             and action['ticks']==first['ticks'] and current[2]==0
+                             and (late_activation or action['ticks']==first['ticks']) and current[2]==0
                              and current[:2]+current[3:]==values[:2]+values[3:])
                 if current!=values and not initial_off:
                     raise ValueError('Variable-tempo LFO excludes live modulation changes')

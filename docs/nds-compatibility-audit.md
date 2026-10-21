@@ -650,3 +650,14 @@ explicitly skipped. Report and archive checks add no native or manual tests.
 The remaining three in-capacity conversion blockers are the SABISHI songs;
 SF1's combination of variable tempo, late first activation and fitted attacks
 is a separate prospective experiment.
+
+The separate [SF1 SABISHI experiment](nds-sf1-sabishi-variable-late-envelope-research.md)
+combines variable tempo, late first activation and bounded fitted attacks only
+through explicit options. Independent reference, natural two-cycle playback,
+actual allocation-aware LFO states, envelopes, tempo rates, resources and old
+ROM/BPS rebuilds pass. Of 344 cases, 343 pass and one unavailable verified second
+SF2 input check is skipped. The exact native-tested ROM reproduces through the
+production CLI; the user reported the exact-ROM three-item listening/effects/lifecycle checklist
+passed on 2026-10-20. This adds no independently timed trace, linked-play/rematch
+result or comparative preference. This separate
+extension does not alter archived v19 counts or enter the batch scanner.

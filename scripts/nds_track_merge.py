@@ -251,14 +251,16 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if variable_late_fitted_support and not (native_pitch_lfo_variable_tempo and envelope_support):
+        raise ValueError('Variable late/fitted extension requires explicit variable-tempo and fitted-envelope modes')
     if native_pitch_lfo_variable_tempo and not (native_pitch_lfo and not (
             native_pitch_lfo_delay or native_pitch_lfo_live_depth or native_pitch_lfo_live_toggle or
-            native_pitch_lfo_late_depth or native_pitch_lfo_min_depth or envelope_support or
+            native_pitch_lfo_late_depth or native_pitch_lfo_min_depth or (envelope_support and not variable_late_fitted_support) or
             finite_support or finite_release_support or mixed_loop_support or bandlimited_pcm)):
         raise ValueError('Variable-tempo LFO requires looping singleton fixed zero-delay mode without other approximations')
     if native_pitch_lfo_late_depth and not (
@@ -420,7 +422,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             # Apply source action order only to the validation copy; original
             # reports retain their source trace representation.
             ordered=[dict(t,actions=[dict(a,event_order=i) for i,a in enumerate(t['actions'])]) for t in tracks]
-            variable_baselines, variable_timeline, lfo_tempo_at = prepare_variable_lfo(ordered,expanded)
+            variable_baselines, variable_timeline, lfo_tempo_at = prepare_variable_lfo(ordered,expanded,late_activation=variable_late_fitted_support)
             config_tempos=sorted({r['gba_tempo'] for r in variable_timeline})
         else:
             config_tempos=[lfo_tempo]
@@ -841,4 +843,17 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             'live_modulation_or_delays':False,
             'limitations':['Frequency and tempo remain quantized; shared note-reset phase approximates independent DS voices.',
                            'A tempo control changes the native tick rate; no waveform, allocation or DS timer-phase equivalence is claimed.']}
+    if variable_late_fitted_support:
+        initializations=[]
+        for track in tracks:
+            notes=[a for a in track['actions'] if a['name']=='note']
+            active=[a for a in track['actions'] if a.get('state_after',{}).get('mod_depth')]
+            if active and notes:
+                initializations.append({'source_track':track['track'],'activation_tick':active[0]['ticks'],
+                                        'first_note_tick':notes[0]['ticks'],'depth':active[0]['state_after']['mod_depth']})
+        report['native_pitch_lfo']['variable_late_fitted_extension'] = {
+            'enabled':True, 'initializations':initializations, 'initial_off_notes_allowed':True,
+            'fixed_positive_depth_after_enable':True, 'active_source_delays':False,
+            'fitted_envelope_explicit':True, 'disabling_after_activation':False,
+            'scope':'Explicit variable-tempo late initial activation with fitted attacks; fixed zero-delay pitch modulation'}
     return blob, dependency, report

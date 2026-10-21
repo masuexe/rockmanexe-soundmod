@@ -135,9 +135,9 @@ def check_live_depth_reference(conversion, reference):
             'phase_and_delay_count_preserved': True}
 
 
-def check_late_depth_reference(conversion, reference):
+def check_late_depth_reference(conversion, reference, policy_key="late_depth_activation"):
     """Check explicit late activation; report carried-positive coverage separately."""
-    late = conversion['native_pitch_lfo']['late_depth_activation']
+    late = conversion['native_pitch_lfo'][policy_key]
     setups = [r for r in late['initializations'] if r['activation_tick'] > r['first_note_tick']]
     if not late['enabled'] or not setups:
         raise AssertionError('Late-depth reference requires an actual late initialization')
@@ -307,7 +307,8 @@ def check_reference(experiment, reference):
     live_toggle = conversion.get('native_pitch_lfo', {}).get('live_toggle_approximation')
     pre_note = [r for r in conversion.get('native_pitch_lfo', {}).get('delay_approximation', {}).get('initializations', [])
                 if r['activation_tick'] < r['first_note_tick']]
-    check_depth = live_depth or pre_note or live_toggle
+    variable_late = conversion.get("native_pitch_lfo", {}).get("variable_late_fitted_extension")
+    check_depth = live_depth or pre_note or live_toggle or variable_late
     if (check_depth or note_free) and not (reference / 'controls.csv').is_file():
         raise AssertionError('Depth or note-free conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
@@ -399,6 +400,7 @@ def check_reference(experiment, reference):
                                      else check_live_depth_reference(conversion, reference)) if live_depth else None,
             **({'variable_tempo_reference': check_variable_tempo_reference(conversion, reference)}
                if conversion.get('native_pitch_lfo', {}).get('variable_tempo_approximation') else {}),
+            **({'variable_late_fitted_reference': {**check_late_depth_reference(conversion, reference, 'variable_late_fitted_extension'), 'depth_control_matches': depth_control_matches}} if variable_late else {}),
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 

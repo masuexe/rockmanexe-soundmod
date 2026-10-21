@@ -37,7 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
-                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1',
+                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1',
                  'sf3-lose-depth-min': 'ssr3',
                  'sf2-lose-mixed-depth-min': 'ssr2', 'sf2-vs-late-depth': 'ssr2', 'sf2-mizuumi-variable-tempo': 'ssr2',
                  'sf1-ura': 'ssr1',
@@ -132,6 +132,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
             native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
+    elif song == 'sf1-sabishi-variable-late-envelope':
+        index, name = 36, 'BGM36SABISHI'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_variable_tempo=True,
+            envelope_support=True, variable_late_fitted_support=True)
     elif song == 'sf2-mizuumi-variable-tempo':
         index, name = 6, 'BGM_MIZUUMI'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
@@ -267,6 +274,8 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
         manifest['nds_conversion']['native_pitch_lfo_minimum_depth_quantization'] = True
     if conversion.get('mixed_loop_song'):
         manifest['nds_conversion']['mixed_loop_song'] = conversion['mixed_loop_song']
+    if conversion.get('native_pitch_lfo', {}).get('variable_late_fitted_extension'):
+        manifest['nds_conversion']['variable_late_fitted_extension'] = conversion['native_pitch_lfo']['variable_late_fitted_extension']
     if conversion.get('native_pitch_lfo', {}).get('variable_tempo_approximation'):
         manifest['nds_conversion']['native_pitch_lfo_variable_tempo_approximation'] = conversion['native_pitch_lfo']['variable_tempo_approximation']
     if conversion.get('native_pitch_lfo', {}).get('late_depth_activation'):
