@@ -678,3 +678,13 @@ admits 21 pair-merging configurations through the existing plain converter's
 control compatibility checks. This has no packed ROM, native playback or manual
 acceptance yet; all other nine-track candidates still fail existing constraints.
 It is a bounded next investigation after completing the standalone SF3 check.
+
+The separate [SF3 SABISHI experiment](nds-sf3-sabishi-variable-late-envelope-research.md)
+validates its distinct source note gates using the existing explicit capability.
+Independent reference, native full-loop/all-sample playback, actual NOTE allocation
+and LFO states, envelope steps, tempo rates, resources and controlled helper
+lifecycle checks pass. All 352 tests and forty accepted/two control ROM/BPS pairs
+pass, and all eight production outputs reproduce exactly. On 2026-10-21 the user reported the final exact-ROM listening/effects/three-
+encounter checklist passed. No independent timing, full gameplay trace, linked-
+play/rematch result or comparative preference is inferred; archived v20 family-
+specific acceptance counts remain unchanged.
