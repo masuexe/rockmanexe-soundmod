@@ -688,3 +688,15 @@ pass, and all eight production outputs reproduce exactly. On 2026-10-21 the user
 encounter checklist passed. No independent timing, full gameplay trace, linked-
 play/rematch result or comparative preference is inferred; archived v20 family-
 specific acceptance counts remain unchanged.
+
+The separate [SF2 HOKORA nine-track experiment](nds-sf2-hokora-nine-track-research.md)
+selects merged tracks 0/4 with fixed equal volume and neutral pan. The original
+nine-track schedule and note velocities match an unpacked singleton control;
+compiled and actual native per-note priorities stay distinct. Independent source
+reference, natural two-cycle/all-sample playback, actual NOTE allocations and
+native gate/key/velocity/priority fields, resource and controlled effects/
+lifecycle checks pass. All 354 tests, 41 accepted/two control ROM/BPS rebuilds
+and eight-file production reproduction pass. On 2026-10-21 the user reported the final exact-ROM listening/effects/three-
+encounter checklist passed. No independent timed recording, full gameplay trace,
+linked-play/rematch result or comparative preference is inferred. It adds no generic
+batch grouping; archived v20 counts and constraints remain unchanged.
