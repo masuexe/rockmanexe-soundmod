@@ -712,3 +712,15 @@ checks pass. SF3 SABISHI's exact acceptance updates its manual match, not its
 conversion status. No new native playback or manual acceptance is established
 by this batch scan. Source-only grouping investigation selects SF3 KINCHO as a
 separate prospective ten-to-eight experiment.
+
+The separate [SF3 KINCHO ten-track experiment](nds-sf3-kincho-ten-track-research.md)
+groups equal-volume sources 2/4/6, retaining the moving source's note-on pan.
+All ten original source schedules and note velocities match an unpacked ten-
+track control. Independent reference, natural two-cycle/all-sample playback,
+actual NOTE allocation and gate/key/velocity/priority fields, opposing stereo
+observations, packed resources and controlled effects/lifecycle checks pass.
+All 362 tests, 42 accepted/two control ROM/BPS rebuilds and eight-file production
+reproduction pass. On 2026-10-22 the user reported the final exact-ROM listening/effects/three-
+encounter checklist passed. No independent timing, full gameplay trace, linked-
+play/rematch result or comparative preference is inferred; it adds no generic batch grouping or rewrite
+of archived v21 counts.
