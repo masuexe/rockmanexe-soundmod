@@ -14,7 +14,7 @@ from original_catalog import catalog_originals
 from scan_audio import apply_bps, fingerprint
 from target_profiles import validate_target
 from transplant_song import make_bps
-from nds_track_merge import BATTLE_GROUPS, convert_merged_song
+from nds_track_merge import BATTLE_GROUPS, SF2_HOKORA_GROUPS, convert_merged_song
 
 SOURCES = {
     '9ea3c6e253d4111eec250d611296be5fab0e2ec2b8f6f25ece71dcc8e3492899': 'ssr2d',
@@ -135,7 +135,7 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
     elif song == 'sf2-hokora-nine-track':
         index, name = 20, 'BGM_HOKORA'
         blob, dependency, conversion = convert_merged_song(
-            archive, index, ((0,4),(1,),(2,),(3,),(5,),(6,),(7,),(8,)), capacity, song_gain_db)
+            archive, index, SF2_HOKORA_GROUPS, capacity, song_gain_db)
     elif song in ('sf1-sabishi-variable-late-envelope','sf3-sabishi-variable-late-envelope'):
         index, name = (36, 'BGM36SABISHI') if song.startswith('sf1-') else (33, 'BGM_SABISHI')
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)

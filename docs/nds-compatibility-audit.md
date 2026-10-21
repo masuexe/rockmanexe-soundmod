@@ -700,3 +700,15 @@ and eight-file production reproduction pass. On 2026-10-21 the user reported the
 encounter checklist passed. No independent timed recording, full gameplay trace,
 linked-play/rematch result or comparative preference is inferred. It adds no generic
 batch grouping; archived v20 counts and constraints remain unchanged.
+
+The [v21 audit](nds-compatibility-audit-v21.md) adds only the accepted fixed SF2
+HOKORA grouping, retaining ordinary control/conversion guards without group
+search. All seven original ROM variants and pinned family SDATs verify. Primary
+packing rises to 65, with 30 exact accepted primary variants and 35 unique
+accepted sequences; all 64 old primary and 29 filtered pairs keep their bytes,
+routes and gains. Primary pending is 35 and all 57 primary blockers exceed eight
+tracks. Filtered counts remain 29/11/18. All 360 tests and report/filter/archive
+checks pass. SF3 SABISHI's exact acceptance updates its manual match, not its
+conversion status. No new native playback or manual acceptance is established
+by this batch scan. Source-only grouping investigation selects SF3 KINCHO as a
+separate prospective ten-to-eight experiment.

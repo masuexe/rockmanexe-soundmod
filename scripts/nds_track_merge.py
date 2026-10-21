@@ -14,6 +14,8 @@ from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
 from nds_resample import MIX_RATE, resample_wave
 from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
+SF2_HOKORA_GROUPS = ((0, 4), (1,), (2,), (3,), (5,), (6,), (7,), (8,))
+
 BATTLE_GROUPS = ((0, 9), (1,), (2, 15), (3,), (4, 14), (5,), (6,), (7,))
 
 
