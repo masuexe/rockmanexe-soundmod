@@ -206,6 +206,28 @@ def check_toggle_reference(reference, require_carried_disable=False, require_dis
             'scope': 'UpdateMod observations at depth-control timestamps; disabling with no allocated voices is allowed; frozen inactive timer updates are not logged'}
 
 
+def check_variable_tempo_reference(conversion, reference):
+    """Check the source tempo schedule without assuming a constant tick rate."""
+    policy=conversion['native_pitch_lfo']['variable_tempo_approximation']
+    conductor=next(t for t in conversion['tracks'] if t['track']==0)
+    with (reference/'controls.csv').open() as stream:
+        controls=[{k:int(v) for k,v in r.items()} for r in csv.DictReader(stream) if int(r['opcode'])==0xE1]
+    if not controls or any(r['track']!=0 for r in controls):
+        raise AssertionError('Variable-tempo reference needs track-zero tempo controls')
+    actual=[(r['tick'],r['value']) for r in controls]
+    last=actual[-1][0]
+    if conductor['termination']!='loop' or last<conductor['end_ticks']+conductor['loop_ticks']:
+        raise AssertionError('Variable-tempo reference must cover two complete source cycles')
+    expected=[(a['ticks'],a['value']) for a in conductor['actions'] if a['opcode']==0xE1]
+    body=[(a['ticks'],a['value']) for a in conductor['actions'][conductor['loop_action']:] if a['opcode']==0xE1]
+    for turn in range(1,1+last//conductor['loop_ticks']):
+        expected.extend((tick+turn*conductor['loop_ticks'],value) for tick,value in body)
+    if actual!=[r for r in expected if r[0]<=last] or sorted({r[1] for r in actual})!=policy['source_tempos']:
+        raise AssertionError('Independent variable source tempo schedule differs')
+    return {'complete':True,'tempo_control_matches':len(actual),'source_tempos':policy['source_tempos'],
+            'scope':'Executed source E1 controls through two source cycles; no native frame or DS waveform equivalence'}
+
+
 def check_reference(experiment, reference):
     conversion = json.loads((experiment / 'conversion.json').read_text())
     archive = SoundArchive((experiment / 'source.sdat').read_bytes())
@@ -375,6 +397,8 @@ def check_reference(experiment, reference):
             'live_depth_reference': (check_late_depth_reference(conversion, reference)
                                      if conversion.get('native_pitch_lfo', {}).get('late_depth_activation')
                                      else check_live_depth_reference(conversion, reference)) if live_depth else None,
+            **({'variable_tempo_reference': check_variable_tempo_reference(conversion, reference)}
+               if conversion.get('native_pitch_lfo', {}).get('variable_tempo_approximation') else {}),
             'envelope_reference': envelope, 'delay_reference': delay, 'complete': True}
 
 

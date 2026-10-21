@@ -251,11 +251,16 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
         raise ValueError('Merged NDS sequence exceeds target track capacity')
+    if native_pitch_lfo_variable_tempo and not (native_pitch_lfo and not (
+            native_pitch_lfo_delay or native_pitch_lfo_live_depth or native_pitch_lfo_live_toggle or
+            native_pitch_lfo_late_depth or native_pitch_lfo_min_depth or envelope_support or
+            finite_support or finite_release_support or mixed_loop_support or bandlimited_pcm)):
+        raise ValueError('Variable-tempo LFO requires looping singleton fixed zero-delay mode without other approximations')
     if native_pitch_lfo_late_depth and not (
             native_pitch_lfo and native_pitch_lfo_delay and native_pitch_lfo_live_depth
             and not (mixed_loop_support or finite_support or finite_release_support or
@@ -392,13 +397,17 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Mixed experiment requires a fixed source tempo')
     finite_ids = {t['track'] for t in tracks if t['termination'] == 'end'}
     lfo_tempo, lfo_configs = None, {}
+    variable_baselines, variable_timeline, variable_updates = {}, [], []
+    def lfo_tempo_at(tick):
+        return lfo_tempo
     if native_pitch_lfo:
         if any(len(group) != 1 for group in groups):
             raise ValueError('Native pitch LFO experiment requires one source track per target track')
         tempos = {a['value'] for t in tracks for a in t['actions'] if a['opcode'] == 0xE1}
-        if len(tempos) != 1:
+        if len(tempos) != 1 and not native_pitch_lfo_variable_tempo:
             raise ValueError('Native pitch LFO experiment requires a fixed tempo')
-        lfo_tempo = round(tempos.pop() * DS_CLOCK_HZ * 75 / (240 * GBA_FPS))
+        if not native_pitch_lfo_variable_tempo:
+            lfo_tempo = round(tempos.pop() * DS_CLOCK_HZ * 75 / (240 * GBA_FPS))
         # A common timestamp can fall inside a source's partial-tick loop
         # closure. Compile a complete warmup period before looping this mode.
         loop_start += period
@@ -406,17 +415,30 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         for actions in expanded.values():
             for order, action in enumerate(actions):
                 action['event_order'] = order
+        if native_pitch_lfo_variable_tempo:
+            from nds_variable_lfo import prepare_variable_lfo
+            # Apply source action order only to the validation copy; original
+            # reports retain their source trace representation.
+            ordered=[dict(t,actions=[dict(a,event_order=i) for i,a in enumerate(t['actions'])]) for t in tracks]
+            variable_baselines, variable_timeline, lfo_tempo_at = prepare_variable_lfo(ordered,expanded)
+            config_tempos=sorted({r['gba_tempo'] for r in variable_timeline})
+        else:
+            config_tempos=[lfo_tempo]
         for t in tracks:
             for a in t['actions']:
                 if a['name'] == 'note' or (a['name'] == 'control' and a['opcode'] == 0xCA and a['value']):
                     state = a['state_after']
-                    map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
-                    if state['mod_depth']:
-                        key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
-                        lfo_configs[key] = compare_config(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
-                        if (lfo_configs[key].get('minimum_depth_quantized') and
-                                lfo_configs[key]['single_voice_one_second_rms_pitch_error_cents'] > 5):
-                            raise ValueError('Minimum-depth LFO exceeds five-cent isolated RMS pitch error')
+                    for tempo in config_tempos:
+                        map_pitch_lfo(state, tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
+                        if state['mod_depth']:
+                            key = tuple(state[k] for k in ('mod_type', 'mod_speed', 'mod_depth', 'mod_range', 'mod_delay'))
+                            if native_pitch_lfo_variable_tempo:
+                                key += (tempo,)
+                            if not native_pitch_lfo_variable_tempo or key not in lfo_configs:
+                                lfo_configs[key] = compare_config(state, tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
+                            if (lfo_configs[key].get('minimum_depth_quantized') and
+                                    lfo_configs[key]['single_voice_one_second_rms_pitch_error_cents'] > 5):
+                                raise ValueError('Minimum-depth LFO exceeds five-cent isolated RMS pitch error')
     end_tick = max(t['end_ticks'] for t in tracks) + 1 if finite_support else loop_start + period
     bank, archives = archive.bank(info['bank_id'])
     source_map = {n: i for i, group in enumerate(groups) for n in group}
@@ -608,16 +630,23 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             elif op in (0xC4, 0xC5):
                 command = pitch_commands((state['bend'] * state['bend_range']) >> 1)
             elif native_pitch_lfo and op in (0xCA, 0xCB, 0xCC, 0xCD, 0xE0):
-                value = map_pitch_lfo(state, lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
+                value = map_pitch_lfo(state, lfo_tempo_at(action['ticks']), native_pitch_lfo_delay, native_pitch_lfo_min_depth)
                 command = (bytes([0xC4, value['mod']]) if native_pitch_lfo_live_depth and not native_pitch_lfo_late_depth and op == 0xCA
                            else bytes([0xC4, value['mod'], 0xC2, value['lfos']]))
             if command:
                 order = 1 + action['event_order'] if native_pitch_lfo else 1
                 events.append((action['ticks'], order, primary, command, None))
+        if native_pitch_lfo_variable_tempo and primary in variable_baselines:
+            for update in variable_timeline:
+                if update['tick'] >= end_tick:
+                    continue
+                mapped = map_pitch_lfo(variable_baselines[primary], update['gba_tempo'])
+                events.append((update['tick'], 0, primary, bytes([0xC2, mapped['lfos']]), None))
+                variable_updates.append({'source_track':primary, **update, 'lfos':mapped['lfos']})
         for note in (a for a in source_notes if a['target_track'] == group_index):
             command = bytes([0xBA, note['gba_priority'], 0xBD, note['gba_voice']])
             if native_pitch_lfo:
-                command += note_lfo_commands(note['state_after'], lfo_tempo, native_pitch_lfo_delay, native_pitch_lfo_min_depth)
+                command += note_lfo_commands(note['state_after'], lfo_tempo_at(note['ticks']), native_pitch_lfo_delay, native_pitch_lfo_min_depth)
             if note['duration'] <= 223:
                 command += note_bytes(note['gba_key'], note['gba_velocity'], note['duration'])
             else:
@@ -803,4 +832,13 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             'Native shared phase/count and same-track note resets approximate independent DS voice state.',
             'Disabling after activation and other live parameter changes remain rejected.']
         report['native_pitch_lfo']['delay_approximation']['policy'] = live['policy']
+    if native_pitch_lfo_variable_tempo:
+        report['native_pitch_lfo']['variable_tempo_approximation'] = {
+            'policy':'Fixed zero-delay per-track pitch modulation; explicit LFOS compensation at source tempo changes',
+            'source_tempos':sorted(tempos), 'tempo_timeline':variable_timeline,
+            'lfos_updates':variable_updates, 'max_source_tempos':8, 'max_unfolded_tempo_changes':128,
+            'conductor_modulation':False, 'positive_speed_writes_preserve_phase_and_count':True,
+            'live_modulation_or_delays':False,
+            'limitations':['Frequency and tempo remain quantized; shared note-reset phase approximates independent DS voices.',
+                           'A tempo control changes the native tick rate; no waveform, allocation or DS timer-phase equivalence is claimed.']}
     return blob, dependency, report

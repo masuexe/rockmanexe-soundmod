@@ -626,3 +626,13 @@ versions and 31 unique accepted sequences across both routes. Filtered counts
 stay 29 packed/eleven accepted/eighteen pending. It adds no runtime or manual
 acceptance; archived v17 remains separate. Variable-tempo SF2 MIZUUMI is the next
 bounded capability candidate.
+
+The subsequent [SF2 MIZUUMI experiment](nds-sf2-mizuumi-variable-tempo-research.md)
+adds explicit zero-delay LFO frequency compensation across six source tempos.
+Independent source execution matches 4,217 notes, 24 waves and 25 E1 controls;
+native playback reaches two common cycles, 75,440 LFO states and 22 actual
+tempo-rate windows. All 333 tests and 38 accepted/two control ROM/BPS rebuilds
+pass. On 2026-10-20 the user reported this exact ROM passed the requested
+three-minute battle/effects/three-encounter checklist. No independently timed
+trace, two-peer/rematch result or comparative preference is inferred. The new mode is not in the batch scanner; archived v18 remains
+60 primary/29 filtered versions.
