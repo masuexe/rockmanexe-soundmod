@@ -616,3 +616,13 @@ on 2026-10-20, accepting this exact ROM. No independently timed trace,
 two-peer/rematch result or comparative preference is inferred.
 The new mode is not in the batch scanner; archived v17 remains 59 primary/
 29 filtered versions.
+
+The subsequent [v18 audit](nds-compatibility-audit-v18.md) integrates the accepted
+late-enable/live-depth mode only after the plain route's explicit activation
+failure. SF2 VS raises primary packed songs to 60, exactly matching its accepted
+ROM/BPS. All 59 prior primary and 29 filtered pairs remain identical; 323 tests
+and report/filter/archive checks pass. There are 26 exact accepted primary
+versions and 31 unique accepted sequences across both routes. Filtered counts
+stay 29 packed/eleven accepted/eighteen pending. It adds no runtime or manual
+acceptance; archived v17 remains separate. Variable-tempo SF2 MIZUUMI is the next
+bounded capability candidate.
