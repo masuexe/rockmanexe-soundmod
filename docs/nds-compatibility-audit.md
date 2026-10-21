@@ -724,3 +724,14 @@ reproduction pass. On 2026-10-22 the user reported the final exact-ROM listening
 encounter checklist passed. No independent timing, full gameplay trace, linked-
 play/rematch result or comparative preference is inferred; it adds no generic batch grouping or rewrite
 of archived v21 counts.
+
+The [v22 audit](nds-compatibility-audit-v22.md) adds only the accepted fixed SF3
+KINCHO grouping under original control/conversion guards, without automatic
+search. All seven original variants and pinned SDATs verify. Primary packing
+rises to 66, with 31 exact accepted primary variants and 36 unique accepted
+sequences; all 65 old primary and 29 filtered pairs retain bytes, routes, gains
+and manual matches. Primary pending remains 35 and all 56 primary blockers exceed
+eight tracks. Filtered counts remain 29/11/18. All 368 tests and report/filter/
+archive checks pass. A separate DEMPАJIKEN experiment studies two equal-volume
+groups and a long-note alias, retaining native budget rejections as a limit.
+This batch scan establishes no new native playback or manual acceptance.
