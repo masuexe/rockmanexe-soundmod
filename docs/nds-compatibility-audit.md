@@ -772,3 +772,15 @@ listening limit, not a measured audible-error count. All 378 tests, 44 accepted/
 two control ROM/BPS rebuilds and eight-file production reproduction pass.
 On 2026-10-22 the user reported the exact-ROM listening/effects/three-encounter checklist passed; no independent timing, full gameplay trace, linked-play/rematch result or comparative preference is inferred; v23
 counts are not rewritten and no generic grouping search is added.
+
+The [v24 audit](nds-compatibility-audit-v24.md) adds only the accepted fixed SF3
+BOSSMAE twelve-to-eight grouping under unchanged control/conversion guards,
+without search. All seven originals and pinned SDATs verify. Primary packing
+rises to 68, with 33 exact accepted primary variants and 38 unique accepted
+sequences; all 67 old primary and 29 filtered ROM/BPS pairs retain bytes, routes,
+gains and manual matches. Primary pending stays 35, and all 54 remaining primary
+blockers exceed eight tracks. Filtered counts remain 29/11/18. All 384 tests and
+report/filter/archive checks pass. Native budget observations remain attributed
+to the standalone ROM, not remeasured by the scan; there is no new native or
+manual acceptance. A separate thirteen-track CHANGE experiment remains outside
+batch grouping.

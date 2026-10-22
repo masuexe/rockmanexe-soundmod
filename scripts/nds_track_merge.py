@@ -14,6 +14,8 @@ from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
 from nds_resample import MIX_RATE, resample_wave
 from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
+SF3_BOSSMAE_GROUPS = ((0, 3, 4), (1,), (2,), (5, 7), (8,), (9,), (13, 15), (14,))
+
 SF3_DEMPAJIKEN_GROUPS = ((0,), (1,), (2, 4, 6), (3,), (5, 8), (7,), (14,), (15,))
 
 SF3_KINCHO_GROUPS = ((0,), (1,), (2, 4, 6), (3,), (5,), (7,), (14,), (15,))
