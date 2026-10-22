@@ -567,13 +567,25 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
               'manual_matches_packed_variant': False}
     if row['status'] in ('empty_slot', 'silent_sequence', 'analysis_blocked'):
         return result
-    if row['features']['track_count'] > capacity:
+    known_candidate = (row['family'] == 'ssr3' and row['index'] == 27 and capacity == 8
+        and row['features']['track_count'] == 12
+        and not row['features'].get('noninstant_attack_definitions', 0)
+        and not row['features'].get('nonzero_mod_depth_executed', False))
+    if row['features']['track_count'] > capacity and not known_candidate:
         result.update(status='capacity_blocked', track_capacity=capacity)
         return result
     data, _ = archive.sequence(row['index'])
     tracks = trace_sequence(data, analysis_only=True)
+    known_merge = (known_candidate and len(tracks) == 12
+        and {t['track'] for t in tracks} == {0,1,2,3,4,5,7,8,9,13,14,15}
+        and all(t.get('termination') == 'loop' for t in tracks))
+    if row['features']['track_count'] > capacity and not known_merge:
+        result.update(status='capacity_blocked', track_capacity=capacity)
+        return result
     finite = all(t.get('termination') == 'end' for t in tracks)
-    result['route'] = 'finite_singleton_antialias' if finite else 'looping_singleton_antialias'
+    groups = SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
+    result['route'] = ('known_sf3_bossmae_merged_antialias' if known_merge else
+                       'finite_singleton_antialias' if finite else 'looping_singleton_antialias')
     modes = [(False, False, result['route'])]
     pack_errors = False
     for envelope, release, route in modes:
@@ -586,13 +598,14 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
             result['attempts'].append(attempt)
             try:
                 blob, dependency, conversion = convert_merged_song(
-                    archive, row['index'], [(t['track'],) for t in tracks], capacity, gain,
+                    archive, row['index'], groups, capacity, gain,
                     finite_support=finite, bandlimited_pcm=True, envelope_support=envelope,
-                    finite_release_support=release)
+                    finite_release_support=release,
+                    **({'merged_bandlimited_support': True} if known_merge else {}))
                 attempt['conversion_passed'] = True
             except (ValueError, AssertionError, IndexError, struct.error) as error:
                 attempt['error'] = error_record(error)
-                if (not finite and not envelope and isinstance(error, ValueError)
+                if (not known_merge and not finite and not envelope and isinstance(error, ValueError)
                         and str(error) == 'Non-instant DS attack requires envelope fitting'
                         and not any(mode[0] for mode in modes)):
                     modes.append((True, False, 'looping_singleton_antialias_envelope'))
@@ -629,6 +642,20 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                           prepared_pcm8_bytes=sum(s['pcm8_bytes'] for s in conversion['samples']),
                           pcm8_quantizer_clamped_values=sum(s['resampling']['pcm8_clipped_samples'] for s in conversion['samples']),
                           maximum_source_step=max(s['resampling']['source_pitched_rate_hz'] / 10512 for s in conversion['samples']))
+            if known_merge:
+                result['known_merged_antialias'] = {
+                    'source_track_count':12, 'target_track_count':8,
+                    'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
+                    'scope':'Pinned accepted BOSSMAE grouping and filtering only; existing guards; no group search',
+                    'standalone_observations': {
+                        'source':'sf3-bossmae-merged-antialias-exe6-v1',
+                        'rom_sha256':'dde49b852f1c45e5d988eb45554fe14c029406b9ee976b1a6da1264250813b7c',
+                        'observed_note_calls':1514, 'observed_rejections':0,
+                        'held_or_starting_preemptions':0,
+                        'release_flagged_reuses_with_nonzero_envelope':905,
+                        'prepared_pcm8_clamped_values':4763, 'prepared_pcm8_bytes':513763,
+                        'scope':'Standalone two-cycle window and prepared storage counts; not an audible-error bound',
+                        'batch_native_remeasured':False}}
             if row['status'].startswith('packed_'):
                 result['appended_bytes_delta_vs_primary'] = result['appended_bytes'] - row['appended_bytes']
             return result
@@ -642,6 +669,7 @@ def summarize_antialias(rows):
     packed = [r for r in scanned if r['antialias']['status'] == 'packed']
     return {'scanned_slots': len(scanned), 'statuses': dict(Counter(r['antialias']['status'] for r in scanned)),
             'packed_variants': len(packed),
+            'packed_known_merged_variants': sum(bool(r['antialias'].get('known_merged_antialias')) for r in packed),
             'packed_by_route': dict(Counter(r['antialias']['route'] for r in packed)),
             'packed_finite_release_variants': sum(bool(r['antialias'].get('finite_release_snapshots')) for r in packed),
             'packed_finite_release_exact_manual_matches': sum(bool(r['antialias'].get('finite_release_snapshots'))
@@ -762,6 +790,7 @@ def write_reports(directory, report):
                        f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle - mixed - mixed_delay - mixed_minimum} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
+                    '合轨抗混叠仅开放已验收 SF3 BOSSMAE 十二轨固定分组，保留既有分组、音高和滤波校验；原生声道复用与采样限幅记录引用独立实验，扫描未新增试听或游戏验证。',
                     '十五轨固定分组仅开放已验收的 SF3 STUDIO，合并源轨 4/5/6/7/8/12/14/15；保持既有校验和固定音量比例量化。独立原生实验 5202 次音符均获分配、无持续／起音抢占，2863 次收音复用；4 个极弱映射在未合轨对照亦为零，扫描未重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十四轨固定分组仅开放已验收的 SF3 AJITO，合并源轨 0/4/6/7/8/11/14；保持控制、长音和转换校验，使用既有固定音量比例量化。独立原生实验记录 14 次持续／起音声道抢占和 1544 次收音声道复用，扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十三轨固定分组仅开放已验收的 SF3 CHANGE，合并源轨 4/6/7/9/14/15；保持控制、长音和转换校验，使用既有固定音量比例映射及量化。独立原生实验记录前奏 4 次持续／起音声道抢占及 183 次收音声道复用，扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
@@ -818,7 +847,7 @@ def write_reports(directory, report):
               'minimum_depth_lfo_policy', 'mixed_live_depth_extension', 'late_depth_activation', 'variable_tempo_approximation', 'variable_late_fitted_extension', 'known_nine_track_merge', 'known_ten_track_merge', 'known_eleven_track_merge', 'known_twelve_track_merge', 'known_thirteen_track_merge', 'known_fourteen_track_merge', 'known_fifteen_track_merge',
               'antialias_status', 'antialias_route', 'antialias_gain_db', 'antialias_samples',
               'antialias_pcm8_bytes', 'antialias_appended_bytes_delta', 'antialias_manual_exact_match',
-              'antialias_envelope_approximation', 'antialias_attack_fits', 'antialias_finite_release_snapshots',
+              'antialias_known_merged', 'antialias_envelope_approximation', 'antialias_attack_fits', 'antialias_finite_release_snapshots',
               'antialias_finite_release_overrides', 'antialias_errors']
     with (directory / 'report.csv').open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -868,6 +897,7 @@ def write_reports(directory, report):
                              'minimum_depth_lfo_policy': json.dumps(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization', {})),
                              'manual_matches_packed_variant': row['manual_matches_packed_variant'],
                              'errors': json.dumps(row.get('analysis_error') or errors, ensure_ascii=False),
+                             'antialias_known_merged': json.dumps(row.get('antialias', {}).get('known_merged_antialias', {})),
                              'antialias_envelope_approximation': bool(row.get('antialias', {}).get('envelope_approximation')),
                              'antialias_attack_fits': json.dumps((row.get('antialias', {}).get('envelope_approximation') or {}).get('attack_fits', [])),
                              'antialias_status': row.get('antialias', {}).get('status'),
@@ -883,13 +913,13 @@ def write_reports(directory, report):
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
 <h1>NDS → EXE6 曲目兼容性扫描</h1><p>非循环路径接受固定速度、全部轨道自然结束的独立轨道，长音显式停音后按各轨原定时间结束。常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
-<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限；混合实时深度扩展另行明确启用起音拟合，入口最多后移一个完整周期。仍拒绝抗混叠和收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>结构／颤音<select id="structure"><option value="">全部</option><option value="fifteen">十五轨固定分组</option><option value="fourteen">十四轨固定分组</option><option value="thirteen">十三轨固定分组</option><option value="twelve">十二轨固定分组</option><option value="eleven">十一轨固定分组</option><option value="ten">已验证十轨分组通过</option><option value="nine">已验证九轨分组通过</option><option value="variable_fitted">变速＋渐入组合通过</option><option value="variable">变速颤音补偿通过</option><option value="late">后期启用颤音通过</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
+<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限；混合实时深度扩展另行明确启用起音拟合，入口最多后移一个完整周期。仍拒绝抗混叠和收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>结构／颤音<select id="structure"><option value="">全部</option><option value="fifteen">十五轨固定分组</option><option value="fourteen">十四轨固定分组</option><option value="thirteen">十三轨固定分组</option><option value="twelve">十二轨固定分组</option><option value="eleven">十一轨固定分组</option><option value="ten">已验证十轨分组通过</option><option value="nine">已验证九轨分组通过</option><option value="variable_fitted">变速＋渐入组合通过</option><option value="variable">变速颤音补偿通过</option><option value="late">后期启用颤音通过</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="merged">合轨抗混叠通过</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>主路径人工记录</th><th>抗混叠版本</th><th>抗混叠人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
 const {report,labels,antialiasLabels}=JSON.parse(document.querySelector('#data').textContent);const get=id=>document.getElementById(id);
 get('counts').textContent=`${report.summary.slots} 个槽位，${report.summary.packed} 首通过打包，${report.summary.packed_exact_manual_matches} 首与已有人工验收版本字节匹配；混合路径 ${report.summary.packed_mixed_variants??0} 首；弱颤音量化 ${report.summary.packed_minimum_depth_lfo_variants??0} 首。抗混叠另有 ${report.summary.antialias?.packed_variants??0} 个打包通过版本，其中 ${report.summary.antialias?.packed_exact_manual_matches??0} 个精确匹配已验收版本；渐入组合 ${report.summary.antialias?.packed_fitted_envelope_variants??0} 个，有限收音快照 ${report.summary.antialias?.packed_finite_release_variants??0} 个。`;
 Object.entries(labels).forEach(([key,label])=>{const o=document.createElement('option');o.value=key;o.textContent=label;get('status').append(o)});
-function aaMatch(r){const a=r.antialias,k=get('antialias').value;if(!k)return true;if(!a)return false;if(k==='release')return a.status==='packed'&&Boolean(a.finite_release_snapshots);if(k==='envelope')return a.status==='packed'&&Boolean(a.envelope_approximation);if(k==='accepted')return a.status==='packed'&&a.manual_matches_packed_variant;if(k==='untested')return a.status==='packed'&&!a.manual_matches_packed_variant;if(k==='blocked')return !['packed','empty_slot','silent_sequence'].includes(a.status);return a.status===k}
+function aaMatch(r){const a=r.antialias,k=get('antialias').value;if(!k)return true;if(!a)return false;if(k==='merged')return a.status==='packed'&&Boolean(a.known_merged_antialias);if(k==='release')return a.status==='packed'&&Boolean(a.finite_release_snapshots);if(k==='envelope')return a.status==='packed'&&Boolean(a.envelope_approximation);if(k==='accepted')return a.status==='packed'&&a.manual_matches_packed_variant;if(k==='untested')return a.status==='packed'&&!a.manual_matches_packed_variant;if(k==='blocked')return !['packed','empty_slot','silent_sequence'].includes(a.status);return a.status===k}
 function structureMatch(r){const k=get('structure').value;if(!k)return true;if(!r.status.startsWith('packed_'))return false;if(k==='fifteen')return Boolean(r.known_fifteen_track_merge);if(k==='fourteen')return Boolean(r.known_fourteen_track_merge);if(k==='thirteen')return Boolean(r.known_thirteen_track_merge);if(k==='twelve')return Boolean(r.known_twelve_track_merge);if(k==='eleven')return Boolean(r.known_eleven_track_merge);if(k==='ten')return Boolean(r.known_ten_track_merge);if(k==='nine')return Boolean(r.known_nine_track_merge);if(k==='variable_fitted')return Boolean(r.native_pitch_lfo?.variable_late_fitted_extension?.enabled);if(k==='variable')return Boolean(r.native_pitch_lfo?.variable_tempo_approximation);if(k==='late')return Boolean(r.native_pitch_lfo?.late_depth_activation?.enabled);if(k==='minimum')return Boolean(r.native_pitch_lfo?.minimum_depth_quantization);if(!r.mixed_loop_song)return false;if(k==='accepted')return r.manual_matches_packed_variant;return k==='mixed'}
 function draw(){const chosen=report.rows.filter(r=>aaMatch(r)&&structureMatch(r)&&(!get('game').value||r.family===get('game').value)&&(!get('status').value||r.status===get('status').value)&&(`${r.id} ${r.name||''}`).toLowerCase().includes(get('search').value.toLowerCase()));get('rows').replaceChildren();get('shown').textContent=`显示 ${chosen.length} 项`;
 for(const r of chosen){const tr=document.createElement('tr');const cells=[`${r.id} ${r.name||'(无符号名)'}`,`${r.features?.track_count??'—'} → ${r.target_track_count??'—'}`,labels[r.status],r.route?`${r.route} / ${r.gain_db} dB`:'—',r.manual_matches_packed_variant?'与已验收版本一致':r.related_manual_records.length?'同曲目有记录，扫描版本不同':'未匹配人工记录',r.antialias?`${antialiasLabels[r.antialias.status]||r.antialias.status}${r.antialias.status==='packed'?` / ${r.antialias.gain_db} dB / ${r.antialias.target_sample_count} 采样${r.antialias.envelope_approximation?' / 渐入拟合':''}${r.antialias.finite_release_snapshots?' / 有限收音快照':''}`:''}`:'未扫描',r.antialias?.manual_matches_packed_variant?'与已验收版本一致':'未匹配人工记录'];for(const value of cells){const td=document.createElement('td');td.textContent=value;tr.append(td)}tr.children[2].className=r.status.startsWith('packed_')?'ok':'blocked';const td=document.createElement('td'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent='执行／资源／尝试记录';pre.textContent=JSON.stringify(r,null,2);details.append(summary,pre);td.append(details);tr.append(td);get('rows').append(tr)}}
@@ -921,7 +951,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 24, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 25, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1027,8 +1057,17 @@ def main():
                   'fixed_delay_native_lfo': True, 'minimum_depth_retry_after_explicit_representation_failure_only': True,
                   'minimum_depth_native_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
                   'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
+              'known_merged_antialias_policy': {
+                  'source_family':'ssr3', 'sequence_index':27,
+                  'source_track_ids':[0,1,2,3,4,5,7,8,9,13,14,15],
+                  'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
+                  'all_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_group_and_filter_guards':True, 'group_search':False,
+                  'standalone_voice_and_clipping_observations_attributed':True,
+                  'batch_native_runtime_validation':False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
-                  'separate_from_primary_route': True, 'singleton_tracks_only': True,
+                  'separate_from_primary_route': True, 'singleton_tracks_only': False,
+                  'merged_exception':'Pinned SF3 BOSSMAE slot27 only; existing guards and no search',
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],
                   'pcm_sample_budget': 4_000_000, 'native_mixing_rate_hz': 10512,
                   'upward_bend_transpose_modulation_portamento': False,
