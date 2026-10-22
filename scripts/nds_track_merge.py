@@ -265,7 +265,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False, merged_bandlimited_support=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False, merged_bandlimited_support=False, bandlimited_upward_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -295,6 +295,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     if mixed_loop_support and (finite_support or finite_release_support or
                                (envelope_support and not mixed_live_depth_support) or bandlimited_pcm):
         raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
+    if bandlimited_upward_support and not (bandlimited_pcm and not (
+            native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
+        raise ValueError('Upward-bandlimited mode requires plain looping filtered tracks')
     if merged_bandlimited_support and not (bandlimited_pcm and any(len(group) > 1 for group in groups)
             and not (native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
         raise ValueError('Merged bandlimited mode requires plain looping merged tracks and explicit filtering')
@@ -304,7 +307,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         raise ValueError('Bandlimited PCM excludes native LFO modes')
     data, info = archive.sequence(index)
     tracks = trace_sequence(data, analysis_only=True)
-    if bandlimited_pcm and any(a.get('state_after', {}).get('bend', 0) > 0 or
+    if bandlimited_pcm and any((a.get('state_after', {}).get('bend', 0) > 0 and not bandlimited_upward_support) or
                                any(a.get('state_after', {}).get(k, 0) for k in
                                    ('transpose', 'mod_depth', 'porta', 'sweep_pitch'))
                                for t in tracks for a in t['actions']):
@@ -562,6 +565,22 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         return offset
 
     bank_offset = allocate(bytes(128 * 12))
+    preparation_keys, upward_bounds = {}, {}
+    if bandlimited_upward_support:
+        track_bounds = {track['track']: max([0] + [
+            ((action['state_after']['bend'] * action['state_after']['bend_range']) >> 1)
+            for action in track['actions'] if 'state_after' in action]) for track in tracks}
+        for note in source_notes:
+            definition = archive.note_definition(bank, note['instrument'], note['key'])
+            if definition.kind != 1 or not 0 <= definition.archive_slot < len(archives):
+                raise ValueError('Merged experiment requires valid PCM instruments')
+            identity = (archives[definition.archive_slot], definition.wave_id, definition.root_key, note['key'])
+            upward_bounds[identity] = max(upward_bounds.get(identity, 0), track_bounds[note['source_track']])
+        for identity, units in upward_bounds.items():
+            shift = (units + 63) // 64
+            if shift > 12 or identity[3] + shift > 127:
+                raise ValueError('Upward-bandlimited preparation key exceeds bounded one-octave/key range')
+            preparation_keys[identity] = identity[3] + shift
     tone_map, wave_cache, sample_reports = {}, {}, []
     for note in source_notes:
         definition = archive.note_definition(bank, note['instrument'], note['key'])
@@ -580,9 +599,21 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             target_loop = metadata['loop_start_samples']
             resampling = None
             if bandlimited_pcm:
+                prepared_key = preparation_keys.get(cache_key, note['key'])
                 pcm8, frequency, target_loop, resampling = resample_wave(
-                    pcm, metadata['effective_rate_hz'], note['key'], definition.root_key,
+                    pcm, metadata['effective_rate_hz'], prepared_key, definition.root_key,
                     metadata['looped'], metadata['loop_start_samples'])
+                if bandlimited_upward_support:
+                    resampling.update(source_key=note['key'], preparation_key=prepared_key,
+                        positive_pitch_bound_units=upward_bounds[cache_key], pitch_units_per_semitone=64,
+                        bound_method='Maximum positive effective pitch across each source track; maximum across shared wave/root/source-key uses',
+                        native_step_at_bound=(resampling['native_playback_rate_hz'] / MIX_RATE)
+                            * 2 ** ((upward_bounds[cache_key] / 64 - (prepared_key - note['key'])) / 12))
+                    resampling['nominal_cutoff_at_bound_fraction_of_mixer_nyquist'] = (
+                        resampling['filter_cutoff_input_nyquist_fraction']
+                        * resampling['source_samples_per_output'] * resampling['native_step_at_bound'])
+                    if resampling['nominal_cutoff_at_bound_fraction_of_mixer_nyquist'] > 1:
+                        raise ValueError('Upward-bandlimited nominal cutoff exceeds mixer Nyquist')
                 if sum(s['pcm8_bytes'] for s in sample_reports) + len(pcm8) > 4_000_000:
                     raise ValueError('Bandlimited song exceeds PCM sample budget')
             raw = struct.pack('<HHIII', 0, 0x4000 if metadata['looped'] else 0,
@@ -770,6 +801,12 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         report['bandlimited_pcm'].update(
             policy='Opt-in plain looping merged tracks, per-source-key cached PCM8; existing grouping/control guards and volume-ratio quantization; no upward bend/modulation; periodic loop guard and compensated tuning',
             merged_tracks=True, existing_group_guards_unchanged=True)
+    if bandlimited_upward_support:
+        report['bandlimited_pcm'].update(
+            upward_pitch_preparation=True, max_preparation_shift_semitones=12,
+            upward_bound_method='Conservative per-source-track effective-pitch maximum, shared per wave/root/source-key',
+            source_keys_and_controls_unchanged=True,
+            policy='Opt-in plain looping per-key filtering at a conservative upward-pitch ceiling; existing controls, grouping and sample guards retained; no modulation/transpose/porta/sweep')
     if bandlimited_pcm and envelope_support:
         report['bandlimited_pcm']['fitted_attack_envelopes'] = True
     if finite_support:
