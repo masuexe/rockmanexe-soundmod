@@ -732,6 +732,20 @@ rises to 66, with 31 exact accepted primary variants and 36 unique accepted
 sequences; all 65 old primary and 29 filtered pairs retain bytes, routes, gains
 and manual matches. Primary pending remains 35 and all 56 primary blockers exceed
 eight tracks. Filtered counts remain 29/11/18. All 368 tests and report/filter/
-archive checks pass. A separate DEMPАJIKEN experiment studies two equal-volume
+archive checks pass. A separate DEMPAJIKEN experiment studies two equal-volume
 groups and a long-note alias, retaining native budget rejections as a limit.
 This batch scan establishes no new native playback or manual acceptance.
+
+The separate [SF3 DEMPAJIKEN eleven-track experiment](nds-sf3-dempajiken-eleven-track-research.md)
+uses two equal-volume groups, source-note pan and a long-note alias. All original
+schedule events remain; 999 native calls produce 996 allocations and three
+lowest-priority accompaniment rejections under the ten-voice budget. Original
+long-note holds/releases and a separate modified-score EOT-isolation diagnostic
+pass, with scopes kept distinct. Independent reference, natural full-loop/all-
+sample playback, allocated note fields, stereo, resources and controlled helper
+checks pass within those recorded limits. All 370 tests, 43 accepted/two control
+ROM/BPS rebuilds and eight-file production reproduction pass. On 2026-10-22 the user reported the exact-ROM
+listening/effects/three-encounter checklist passed, explicitly finding the
+known accompaniment omission inaudible. No independent timing, full gameplay
+trace, linked-play/rematch result or comparative preference is inferred; v22 counts are
+not rewritten and no generic batch grouping is added.

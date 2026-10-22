@@ -37,7 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
-                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1', 'sf3-sabishi-variable-late-envelope': 'ssr3', 'sf3-kincho-ten-track': 'ssr3',
+                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1', 'sf3-sabishi-variable-late-envelope': 'ssr3', 'sf3-kincho-ten-track': 'ssr3', 'sf3-dempajiken-eleven-track': 'ssr3',
                  'sf3-lose-depth-min': 'ssr3',
                  'sf2-lose-mixed-depth-min': 'ssr2', 'sf2-vs-late-depth': 'ssr2', 'sf2-mizuumi-variable-tempo': 'ssr2', 'sf2-hokora-nine-track': 'ssr2',
                  'sf1-ura': 'ssr1',
@@ -132,6 +132,10 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_depth=song == 'sf1-hometown-depth',
             native_pitch_lfo_live_toggle=song == 'sf1-boss-toggle',
             envelope_support=song == 'sf1-hometown-depth')
+    elif song == 'sf3-dempajiken-eleven-track':
+        index, name = 26, 'BGM_DEMPAJIKEN'
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, ((0,),(1,),(2,4,6),(3,),(5,8),(7,),(14,),(15,)), capacity, song_gain_db)
     elif song == 'sf3-kincho-ten-track':
         index, name = 30, 'BGM_KINCHO'
         blob, dependency, conversion = convert_merged_song(
