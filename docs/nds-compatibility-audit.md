@@ -761,3 +761,14 @@ all 55 remaining primary blockers exceed eight tracks. Filtered counts remain
 the separately measured standalone native allocation limit and the user's
 inaudible-omission report; the scan adds no native or manual acceptance.
 A separate BOSSMAE twelve-track experiment remains outside batch grouping.
+
+The separate [SF3 BOSSMAE twelve-track experiment](nds-sf3-bossmae-twelve-track-research.md)
+uses three equal-volume groups under unchanged conversion guards. Independent
+source checks, natural two-cycle/all-sample playback, all 1,514 allocated NOTE
+field checks, source-7 stereo contrast and controlled helper checks pass.
+Pre-unlink observations record no held/starting channel preemption but 905
+release-channel reuses with nonzero envelope; tail-shortening remains a manual
+listening limit, not a measured audible-error count. All 378 tests, 44 accepted/
+two control ROM/BPS rebuilds and eight-file production reproduction pass.
+On 2026-10-22 the user reported the exact-ROM listening/effects/three-encounter checklist passed; no independent timing, full gameplay trace, linked-play/rematch result or comparative preference is inferred; v23
+counts are not rewritten and no generic grouping search is added.
