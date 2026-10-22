@@ -16,12 +16,13 @@ import struct
 from analyze_song import Reader
 from build_nds_experiment import SOURCES, SOURCE_ARCHIVES, pack_converted_experiment
 from nds_music import SoundArchive, convert_song, nds_sdat, trace_sequence
-from nds_track_merge import BATTLE_GROUPS, SF2_HOKORA_GROUPS, SF3_KINCHO_GROUPS, SF3_DEMPAJIKEN_GROUPS, SF3_BOSSMAE_GROUPS, SF3_CHANGE_GROUPS, SF3_AJITO_GROUPS, convert_merged_song
+from nds_track_merge import BATTLE_GROUPS, SF2_HOKORA_GROUPS, SF3_KINCHO_GROUPS, SF3_DEMPAJIKEN_GROUPS, SF3_BOSSMAE_GROUPS, SF3_CHANGE_GROUPS, SF3_AJITO_GROUPS, SF3_STUDIO_GROUPS, convert_merged_song
 from scan_audio import fingerprint
 from target_profiles import validate_target
 
 EVENTS = ('1', '21', 'scene:communication')
 STATUS_LABELS = {
+    'packed_known_fifteen_track_merge': '已验证十五轨分组打包通过',
     'packed_known_fourteen_track_merge': '已验证十四轨分组打包通过',
     'packed_known_thirteen_track_merge': '已验证十三轨分组打包通过',
     'packed_known_twelve_track_merge': '已验证十二轨分组打包通过',
@@ -244,6 +245,11 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             and all(t.get('termination') == 'loop' for t in tracks)
             and not envelope_needed and not row['features']['nonzero_mod_depth_executed']):
         routes.append('known_sf3_ajito_fourteen_track_merge')
+    if (family == 'ssr3' and slot['index'] == 4 and capacity == 8
+            and len(tracks) == 15 and {t['track'] for t in tracks} == set(range(13)) | {14,15}
+            and all(t.get('termination') == 'loop' for t in tracks)
+            and not envelope_needed and not row['features']['nonzero_mod_depth_executed']):
+        routes.append('known_sf3_studio_fifteen_track_merge')
     if family == 'ssr3' and slot['index'] == 35:
         routes.append('known_sf3_battle_merge')
     if len(tracks) <= capacity and all(t.get('termination') == 'end' for t in tracks):
@@ -257,6 +263,7 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
         return row
     pack_errors = False
     for route in routes:
+        known_fifteen = route == 'known_sf3_studio_fifteen_track_merge'
         known_fourteen = route == 'known_sf3_ajito_fourteen_track_merge'
         known_thirteen = route == 'known_sf3_change_thirteen_track_merge'
         known_twelve = route == 'known_sf3_bossmae_twelve_track_merge'
@@ -290,6 +297,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
             attempt = {'route': route, 'gain_db': applied_gain, 'approximations': approximations,
                        'conversion_passed': False, 'packing_passed': False}
             row['attempts'].append(attempt)
+            if known_fifteen:
+                attempt['known_fifteen_track_groups'] = [list(g) for g in SF3_STUDIO_GROUPS]
             if known_fourteen:
                 attempt['known_fourteen_track_groups'] = [list(g) for g in SF3_AJITO_GROUPS]
             if known_thirteen:
@@ -343,7 +352,7 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                     elif minimum_depth:
                         options['native_pitch_lfo_min_depth'] = True
                     blob, dependency, conversion = convert_merged_song(
-                        archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else SF2_HOKORA_GROUPS if known_nine else SF3_KINCHO_GROUPS if known_ten else SF3_DEMPAJIKEN_GROUPS if known_eleven else SF3_BOSSMAE_GROUPS if known_twelve else SF3_CHANGE_GROUPS if known_thirteen else SF3_AJITO_GROUPS if known_fourteen else groups,
+                        archive, slot['index'], BATTLE_GROUPS if route == 'known_sf3_battle_merge' else SF2_HOKORA_GROUPS if known_nine else SF3_KINCHO_GROUPS if known_ten else SF3_DEMPAJIKEN_GROUPS if known_eleven else SF3_BOSSMAE_GROUPS if known_twelve else SF3_CHANGE_GROUPS if known_thirteen else SF3_AJITO_GROUPS if known_fourteen else SF3_STUDIO_GROUPS if known_fifteen else groups,
                         capacity, applied_gain, native_pitch_lfo=pitch_lfo, envelope_support=envelope,
                         native_pitch_lfo_delay=delayed, **options)
                 attempt['conversion_passed'] = True
@@ -399,7 +408,8 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                 attempt['packing_error'] = error_record(error)
                 continue
             attempt['packing_passed'] = True
-            status = ('packed_known_fourteen_track_merge' if known_fourteen else
+            status = ('packed_known_fifteen_track_merge' if known_fifteen else
+                      'packed_known_fourteen_track_merge' if known_fourteen else
                       'packed_known_thirteen_track_merge' if known_thirteen else
                       'packed_known_twelve_track_merge' if known_twelve else
                       'packed_known_eleven_track_merge' if known_eleven else
@@ -434,6 +444,25 @@ def scan_sequence(archive, slot, family, source, base, raw_sdat, profile, capaci
                        bps_reconstruction_verified=True,
                        manual_matches_packed_variant=any(r['output_sha256'] == manifest['output_fingerprint']['sha256']
                                                         for r in row['related_manual_records']))
+            if known_fifteen:
+                row['known_fifteen_track_merge'] = {
+                    'source_track_count':15, 'target_track_count':8,
+                    'track_groups':[list(g) for g in SF3_STUDIO_GROUPS],
+                    'scope':'Explicit pinned SF3 STUDIO grouping only; existing control and conversion guards; no search',
+                    'additional_velocity_ratio_quantization':True,
+                    'standalone_native_voice_budget_limit': {
+                        'source':'sf3-studio-fifteen-track-exe6-v1',
+                        'rom_sha256':'0a45586aee5c22835490442cf4536d3d168f21017bcb923c36583183e2f40489',
+                        'pcm_channels':10, 'observed_note_calls':5202, 'observed_rejections':0,
+                        'held_or_starting_voice_preemptions':0,
+                        'held_preemption_clocks':[],
+                        'release_flagged_channel_reuses_with_nonzero_envelope':2863,
+                        'scope':'Original standalone two-cycle observation; channel flags are not an audible-error bound',
+                        'batch_remeasured':False},
+                    'standalone_zero_velocity_limit': {
+                        'source_mappings':4, 'observed_native_calls':6,
+                        'unpacked_control_source_mappings':4, 'added_by_grouping':0,
+                        'events_retained':True, 'batch_remeasured':False}}
             if known_fourteen:
                 row['known_fourteen_track_merge'] = {
                     'source_track_count':14, 'target_track_count':8,
@@ -710,7 +739,7 @@ def write_reports(directory, report):
         values = report['summary']['by_family'][family]
         slots = sum(values.values())
         candidates = slots - values.get('empty_slot', 0) - values.get('silent_sequence', 0)
-        standard = values.get('packed_standard', 0) + values.get('packed_known_nine_track_merge', 0) + values.get('packed_known_ten_track_merge', 0) + values.get('packed_known_eleven_track_merge', 0) + values.get('packed_known_twelve_track_merge', 0) + values.get('packed_known_thirteen_track_merge', 0) + values.get('packed_known_fourteen_track_merge', 0)
+        standard = values.get('packed_standard', 0) + values.get('packed_known_nine_track_merge', 0) + values.get('packed_known_ten_track_merge', 0) + values.get('packed_known_eleven_track_merge', 0) + values.get('packed_known_twelve_track_merge', 0) + values.get('packed_known_thirteen_track_merge', 0) + values.get('packed_known_fourteen_track_merge', 0) + values.get('packed_known_fifteen_track_merge', 0)
         lfo = values.get('packed_lfo_approximation', 0) + values.get('packed_variable_tempo_lfo_approximation', 0)
         finite = values.get('packed_finite_standard', 0) + values.get('packed_finite_release_snapshots', 0)
         envelope = values.get('packed_envelope_approximation', 0)
@@ -733,6 +762,7 @@ def write_reports(directory, report):
                        f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle - mixed - mixed_delay - mixed_minimum} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
+                    '十五轨固定分组仅开放已验收的 SF3 STUDIO，合并源轨 4/5/6/7/8/12/14/15；保持既有校验和固定音量比例量化。独立原生实验 5202 次音符均获分配、无持续／起音抢占，2863 次收音复用；4 个极弱映射在未合轨对照亦为零，扫描未重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十四轨固定分组仅开放已验收的 SF3 AJITO，合并源轨 0/4/6/7/8/11/14；保持控制、长音和转换校验，使用既有固定音量比例量化。独立原生实验记录 14 次持续／起音声道抢占和 1544 次收音声道复用，扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十三轨固定分组仅开放已验收的 SF3 CHANGE，合并源轨 4/6/7/9/14/15；保持控制、长音和转换校验，使用既有固定音量比例映射及量化。独立原生实验记录前奏 4 次持续／起音声道抢占及 183 次收音声道复用，扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十二轨固定分组仅开放已验收的 SF3 BOSSMAE，合并源轨 0/3/4、5/7 和 13/15；保持控制、声像和转换校验。独立原生实验记录 1514 次音符均获分配、无持续／起音声道被抢占，905 次收音声道复用仍可能缩短尾音；扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
@@ -785,7 +815,7 @@ def write_reports(directory, report):
               'finite_release_snapshots', 'finite_release_overrides', 'manual_matches_packed_variant', 'errors',
               'mixed_loop_song', 'mixed_finite_track_end_ticks', 'mixed_source_loop_periods',
               'mixed_common_loop_start_ticks', 'mixed_common_loop_ticks', 'minimum_depth_lfo_quantization',
-              'minimum_depth_lfo_policy', 'mixed_live_depth_extension', 'late_depth_activation', 'variable_tempo_approximation', 'variable_late_fitted_extension', 'known_nine_track_merge', 'known_ten_track_merge', 'known_eleven_track_merge', 'known_twelve_track_merge', 'known_thirteen_track_merge', 'known_fourteen_track_merge',
+              'minimum_depth_lfo_policy', 'mixed_live_depth_extension', 'late_depth_activation', 'variable_tempo_approximation', 'variable_late_fitted_extension', 'known_nine_track_merge', 'known_ten_track_merge', 'known_eleven_track_merge', 'known_twelve_track_merge', 'known_thirteen_track_merge', 'known_fourteen_track_merge', 'known_fifteen_track_merge',
               'antialias_status', 'antialias_route', 'antialias_gain_db', 'antialias_samples',
               'antialias_pcm8_bytes', 'antialias_appended_bytes_delta', 'antialias_manual_exact_match',
               'antialias_envelope_approximation', 'antialias_attack_fits', 'antialias_finite_release_snapshots',
@@ -824,6 +854,7 @@ def write_reports(directory, report):
                              'mixed_common_loop_start_ticks': row.get('mixed_loop_song', {}).get('common_loop_start_ticks'),
                              'mixed_common_loop_ticks': row.get('mixed_loop_song', {}).get('common_loop_ticks'),
                              'minimum_depth_lfo_quantization': bool(row.get('native_pitch_lfo', {}).get('minimum_depth_quantization')),
+                             'known_fifteen_track_merge': json.dumps(row.get('known_fifteen_track_merge', {})),
                              'known_fourteen_track_merge': json.dumps(row.get('known_fourteen_track_merge', {})),
                              'known_thirteen_track_merge': json.dumps(row.get('known_thirteen_track_merge', {})),
                              'known_twelve_track_merge': json.dumps(row.get('known_twelve_track_merge', {})),
@@ -852,14 +883,14 @@ def write_reports(directory, report):
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NDS → EXE6 曲目兼容性扫描</title><style>body{font:16px/1.6 system-ui;margin:30px;background:#111923;color:#edf2f7}input,select{font:inherit;padding:6px;margin:5px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #354458;text-align:left;vertical-align:top}summary{cursor:pointer}pre{white-space:pre-wrap;max-width:65vw;font-size:13px}.ok{color:#89dfa4}.blocked{color:#e8c792}</style>
 <h1>NDS → EXE6 曲目兼容性扫描</h1><p>非循环路径接受固定速度、全部轨道自然结束的独立轨道，长音显式停音后按各轨原定时间结束。常规、颤音、包络、固定延迟颤音、实时深度颤音、启闭颤音及其组合路径成功后，均通过共享资源打包和 BPS 回建。常规路径同样使用已有采样和包络近似。详情保留起音拟合误差与延迟映射；固定延迟路径要求首次音符之前或同一时刻完成初始化且此后参数固定。实时深度路径额外允许正深度变化，其余参数固定，MOD 更新保留共享相位和延迟计数，同轨新音符仍会重置相位。启闭路径允许深度零与单个固定正深度之间切换，其余参数固定；GBA 关闭时清零共享相位，而 DS 保留各声道相位。自动通过不等于实际试听或战斗验证通过；空槽、无音符序列不计为可播放曲目。扫描仅覆盖 SSEQ，SSAR 与 STRM 不在转换范围内。</p>
-<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限；混合实时深度扩展另行明确启用起音拟合，入口最多后移一个完整周期。仍拒绝抗混叠和收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>结构／颤音<select id="structure"><option value="">全部</option><option value="fourteen">十四轨固定分组</option><option value="thirteen">十三轨固定分组</option><option value="twelve">十二轨固定分组</option><option value="eleven">十一轨固定分组</option><option value="ten">已验证十轨分组通过</option><option value="nine">已验证九轨分组通过</option><option value="variable_fitted">变速＋渐入组合通过</option><option value="variable">变速颤音补偿通过</option><option value="late">后期启用颤音通过</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
+<p>混合路径保留一次性轨道 END，并对循环周期作有限展开；弱颤音量化有独立的音高误差上限；混合实时深度扩展另行明确启用起音拟合，入口最多后移一个完整周期。仍拒绝抗混叠和收音覆盖。详情保留实际周期和近似参数。</p><p>全部轨道循环的实时深度路径也可单独重试弱颤音量化；渐入拟合是明确的附加模式。弱深度误差上限不代表整曲颤音等同 DS。</p><p>抗混叠结果是额外的独立版本，保留原有主路径；主路径通过和人工验收不会自动转移。扫描没有批量试听或游戏验证。</p><p id="counts"></p><label>游戏<select id="game"><option value="">全部</option><option>ssr1</option><option>ssr2</option><option>ssr3</option></select></label><label>结果<select id="status"><option value="">全部</option></select></label><label>结构／颤音<select id="structure"><option value="">全部</option><option value="fifteen">十五轨固定分组</option><option value="fourteen">十四轨固定分组</option><option value="thirteen">十三轨固定分组</option><option value="twelve">十二轨固定分组</option><option value="eleven">十一轨固定分组</option><option value="ten">已验证十轨分组通过</option><option value="nine">已验证九轨分组通过</option><option value="variable_fitted">变速＋渐入组合通过</option><option value="variable">变速颤音补偿通过</option><option value="late">后期启用颤音通过</option><option value="mixed">混合路径通过</option><option value="minimum">弱颤音量化通过</option><option value="accepted">混合路径精确匹配已验收</option></select></label><label>抗混叠<select id="antialias"><option value="">全部</option><option value="packed">打包通过</option><option value="accepted">精确匹配已验收</option><option value="untested">打包通过、待试听</option><option value="blocked">受阻候选</option><option value="envelope">渐入组合通过</option><option value="release">有限收音快照通过</option></select></label><input id="search" placeholder="查找曲名或编号"><span id="shown"></span>
 <table><thead><tr><th>曲目</th><th>轨数</th><th>结果</th><th>路径／增益</th><th>主路径人工记录</th><th>抗混叠版本</th><th>抗混叠人工记录</th><th>详情</th></tr></thead><tbody id="rows"></tbody></table>
 <script type="application/json" id="data">PAYLOAD</script><script>
 const {report,labels,antialiasLabels}=JSON.parse(document.querySelector('#data').textContent);const get=id=>document.getElementById(id);
 get('counts').textContent=`${report.summary.slots} 个槽位，${report.summary.packed} 首通过打包，${report.summary.packed_exact_manual_matches} 首与已有人工验收版本字节匹配；混合路径 ${report.summary.packed_mixed_variants??0} 首；弱颤音量化 ${report.summary.packed_minimum_depth_lfo_variants??0} 首。抗混叠另有 ${report.summary.antialias?.packed_variants??0} 个打包通过版本，其中 ${report.summary.antialias?.packed_exact_manual_matches??0} 个精确匹配已验收版本；渐入组合 ${report.summary.antialias?.packed_fitted_envelope_variants??0} 个，有限收音快照 ${report.summary.antialias?.packed_finite_release_variants??0} 个。`;
 Object.entries(labels).forEach(([key,label])=>{const o=document.createElement('option');o.value=key;o.textContent=label;get('status').append(o)});
 function aaMatch(r){const a=r.antialias,k=get('antialias').value;if(!k)return true;if(!a)return false;if(k==='release')return a.status==='packed'&&Boolean(a.finite_release_snapshots);if(k==='envelope')return a.status==='packed'&&Boolean(a.envelope_approximation);if(k==='accepted')return a.status==='packed'&&a.manual_matches_packed_variant;if(k==='untested')return a.status==='packed'&&!a.manual_matches_packed_variant;if(k==='blocked')return !['packed','empty_slot','silent_sequence'].includes(a.status);return a.status===k}
-function structureMatch(r){const k=get('structure').value;if(!k)return true;if(!r.status.startsWith('packed_'))return false;if(k==='fourteen')return Boolean(r.known_fourteen_track_merge);if(k==='thirteen')return Boolean(r.known_thirteen_track_merge);if(k==='twelve')return Boolean(r.known_twelve_track_merge);if(k==='eleven')return Boolean(r.known_eleven_track_merge);if(k==='ten')return Boolean(r.known_ten_track_merge);if(k==='nine')return Boolean(r.known_nine_track_merge);if(k==='variable_fitted')return Boolean(r.native_pitch_lfo?.variable_late_fitted_extension?.enabled);if(k==='variable')return Boolean(r.native_pitch_lfo?.variable_tempo_approximation);if(k==='late')return Boolean(r.native_pitch_lfo?.late_depth_activation?.enabled);if(k==='minimum')return Boolean(r.native_pitch_lfo?.minimum_depth_quantization);if(!r.mixed_loop_song)return false;if(k==='accepted')return r.manual_matches_packed_variant;return k==='mixed'}
+function structureMatch(r){const k=get('structure').value;if(!k)return true;if(!r.status.startsWith('packed_'))return false;if(k==='fifteen')return Boolean(r.known_fifteen_track_merge);if(k==='fourteen')return Boolean(r.known_fourteen_track_merge);if(k==='thirteen')return Boolean(r.known_thirteen_track_merge);if(k==='twelve')return Boolean(r.known_twelve_track_merge);if(k==='eleven')return Boolean(r.known_eleven_track_merge);if(k==='ten')return Boolean(r.known_ten_track_merge);if(k==='nine')return Boolean(r.known_nine_track_merge);if(k==='variable_fitted')return Boolean(r.native_pitch_lfo?.variable_late_fitted_extension?.enabled);if(k==='variable')return Boolean(r.native_pitch_lfo?.variable_tempo_approximation);if(k==='late')return Boolean(r.native_pitch_lfo?.late_depth_activation?.enabled);if(k==='minimum')return Boolean(r.native_pitch_lfo?.minimum_depth_quantization);if(!r.mixed_loop_song)return false;if(k==='accepted')return r.manual_matches_packed_variant;return k==='mixed'}
 function draw(){const chosen=report.rows.filter(r=>aaMatch(r)&&structureMatch(r)&&(!get('game').value||r.family===get('game').value)&&(!get('status').value||r.status===get('status').value)&&(`${r.id} ${r.name||''}`).toLowerCase().includes(get('search').value.toLowerCase()));get('rows').replaceChildren();get('shown').textContent=`显示 ${chosen.length} 项`;
 for(const r of chosen){const tr=document.createElement('tr');const cells=[`${r.id} ${r.name||'(无符号名)'}`,`${r.features?.track_count??'—'} → ${r.target_track_count??'—'}`,labels[r.status],r.route?`${r.route} / ${r.gain_db} dB`:'—',r.manual_matches_packed_variant?'与已验收版本一致':r.related_manual_records.length?'同曲目有记录，扫描版本不同':'未匹配人工记录',r.antialias?`${antialiasLabels[r.antialias.status]||r.antialias.status}${r.antialias.status==='packed'?` / ${r.antialias.gain_db} dB / ${r.antialias.target_sample_count} 采样${r.antialias.envelope_approximation?' / 渐入拟合':''}${r.antialias.finite_release_snapshots?' / 有限收音快照':''}`:''}`:'未扫描',r.antialias?.manual_matches_packed_variant?'与已验收版本一致':'未匹配人工记录'];for(const value of cells){const td=document.createElement('td');td.textContent=value;tr.append(td)}tr.children[2].className=r.status.startsWith('packed_')?'ok':'blocked';const td=document.createElement('td'),details=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent='执行／资源／尝试记录';pre.textContent=JSON.stringify(r,null,2);details.append(summary,pre);td.append(details);tr.append(td);get('rows').append(tr)}}
 ['game','status','search','antialias','structure'].forEach(id=>get(id).addEventListener('input',draw));draw();</script></html>'''
@@ -890,7 +921,17 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 23, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 24, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'known_fifteen_track_route_policy': {
+                  'source_family':'ssr3', 'sequence_index':4,
+                  'source_track_ids':list(range(13))+[14,15],
+                  'track_groups':[list(g) for g in SF3_STUDIO_GROUPS], 'target_track_capacity':8,
+                  'all_source_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_control_and_conversion_guards':True, 'group_search':False,
+                  'existing_fixed_volume_ratio_mapping_with_quantization':True,
+                  'long_note_alias_and_release_guards_unchanged':True,
+                  'standalone_voice_budget_observations_attributed':True,
+                  'batch_native_runtime_validation':False},
               'known_fourteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':7,
                   'source_track_ids':list(range(12))+[14,15],

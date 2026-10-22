@@ -850,3 +850,5 @@ tests, 47 accepted/two control ROM/BPS rebuilds and eight-file reproduction pass
 The user reported the requested exact-ROM listening/effects/three-encounter
 checks passed on 2026-10-22; the recorded limits remain. This adds no generic
 batch grouping or rewrite of archived v26 counts.
+
+The [v27 compatibility audit](nds-compatibility-audit-v27.md) integrates only the accepted fixed SF3 STUDIO fifteen-to-eight grouping under existing guards and volume-ratio quantization. All seven originals and pinned SDATs verify. Across 132 slots, primary packing rises to 71, with 36 exact accepted primary versions and 41 unique accepted sequences. All 70 old primary and 29 filtered ROM/BPS pairs retain bytes, routes, gains and manual matches; 51 primary capacity blockers remain. All 412 tests and report/filter/archive checks pass. Reports attribute the standalone voice-reuse and existing zero-velocity limits to its exact ROM; the scan adds no native or manual acceptance.

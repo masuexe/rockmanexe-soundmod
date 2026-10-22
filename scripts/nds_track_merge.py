@@ -14,6 +14,8 @@ from nds_music import (ROM_BASE, DS_CLOCK_HZ, GBA_FPS,
 from nds_resample import MIX_RATE, resample_wave
 from nds_lfo import compare_config, map_pitch_lfo, note_lfo_commands
 
+SF3_STUDIO_GROUPS = ((0,), (1,), (2,), (3,), (4, 5, 6, 7, 8, 12, 14, 15), (9,), (10,), (11,))
+
 SF3_AJITO_GROUPS = ((0, 4, 6, 7, 8, 11, 14), (1,), (2,), (3,), (5,), (9,), (10,), (15,))
 
 SF3_CHANGE_GROUPS = ((0,), (1,), (2,), (3,), (4, 6, 7, 9, 14, 15), (5,), (8,), (13,))
