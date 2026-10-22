@@ -812,3 +812,16 @@ Filtered counts remain 29/11/18. All 396 tests and report/filter/archive checks
 pass. Native preemptions, tail reuse and velocity quantization remain explicit
 and attributed to the exact standalone ROM, with no new native/manual acceptance.
 A separate fourteen-track AJITO experiment remains outside batch grouping.
+
+The separate [SF3 AJITO fourteen-track experiment](nds-sf3-ajito-fourteen-track-research.md)
+uses existing fixed-volume ratios and four long aliases under unchanged guards.
+All 2,472 source tuples remain; the reference matches 4,477 notes and 27 unique
+waves. Natural playback covers two common cycles through about 2:44 and all 33
+prepared waves. All 3,964 NOTE calls allocate, but fourteen held/starting voices
+are preempted and 1,544 release channels are reused; manual listening must judge
+those limits and velocity quantization. Fifteen alias holds/releases, 391,120
+control-byte checks, independent dynamics, stereo and clock-rate checks pass.
+All 398 tests, 46 accepted/two control ROM/BPS rebuilds and eight-file production
+reproduction pass. On 2026-10-22 the user reported the exact-ROM listening/effects/three-encounter
+checklist passed; no independent timing, full gameplay trace, linked-play/rematch
+result or comparative preference is inferred; no generic batch grouping or rewrite of archived v25 counts is added.
