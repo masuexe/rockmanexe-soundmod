@@ -837,3 +837,16 @@ all 52 remaining primary blockers exceed eight tracks. Filtered counts remain
 tail reuse and quantization remain explicitly attributed to the standalone
 ROM, with no new native/manual acceptance. A separate fifteen-track STUDIO
 experiment remains outside batch grouping.
+
+The separate [SF3 STUDIO fifteen-track experiment](nds-sf3-studio-fifteen-track-research.md)
+uses existing fixed-volume ratios and two long aliases under unchanged guards.
+All 3,431 source tuples remain; the reference matches6,936 notes and 22 unique
+waves. Natural playback covers two common cycles and all 23 prepared waves.
+All 5,202 NOTE calls allocate, with no held/starting preemption but 2,863 release
+channels reused. Four extremely soft mappings are already zero in the unpacked
+control; grouping adds none. Twenty-four long-alias uses, 320,840 control-byte
+comparisons, held-voice crescendo, stereo and clock-rate checks pass. All 406
+tests, 47 accepted/two control ROM/BPS rebuilds and eight-file reproduction pass.
+The user reported the requested exact-ROM listening/effects/three-encounter
+checks passed on 2026-10-22; the recorded limits remain. This adds no generic
+batch grouping or rewrite of archived v26 counts.
