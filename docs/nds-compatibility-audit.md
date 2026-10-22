@@ -825,3 +825,15 @@ All 398 tests, 46 accepted/two control ROM/BPS rebuilds and eight-file productio
 reproduction pass. On 2026-10-22 the user reported the exact-ROM listening/effects/three-encounter
 checklist passed; no independent timing, full gameplay trace, linked-play/rematch
 result or comparative preference is inferred; no generic batch grouping or rewrite of archived v25 counts is added.
+
+The [v26 audit](nds-compatibility-audit-v26.md) adds only the accepted fixed SF3
+AJITO fourteen-to-eight grouping under unchanged guards and existing fixed-
+volume ratio mapping, without search. All seven originals and pinned SDATs
+verify. Primary packing rises to 70, with 35 exact accepted primary variants
+and 40 unique accepted sequences; all 69 old primary and 29 filtered ROM/BPS
+pairs retain bytes, routes, gains and manual matches. Primary pending stays35;
+all 52 remaining primary blockers exceed eight tracks. Filtered counts remain
+29/11/18. All 404 tests and report/filter/archive checks pass. Native preemptions,
+tail reuse and quantization remain explicitly attributed to the standalone
+ROM, with no new native/manual acceptance. A separate fifteen-track STUDIO
+experiment remains outside batch grouping.
