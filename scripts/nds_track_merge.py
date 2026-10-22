@@ -265,7 +265,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False, merged_bandlimited_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -295,7 +295,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     if mixed_loop_support and (finite_support or finite_release_support or
                                (envelope_support and not mixed_live_depth_support) or bandlimited_pcm):
         raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
-    if bandlimited_pcm and any(len(group) != 1 for group in groups):
+    if merged_bandlimited_support and not (bandlimited_pcm and any(len(group) > 1 for group in groups)
+            and not (native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
+        raise ValueError('Merged bandlimited mode requires plain looping merged tracks and explicit filtering')
+    if bandlimited_pcm and any(len(group) != 1 for group in groups) and not merged_bandlimited_support:
         raise ValueError('Bandlimited PCM requires singleton target tracks')
     if bandlimited_pcm and native_pitch_lfo:
         raise ValueError('Bandlimited PCM excludes native LFO modes')
@@ -763,6 +766,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                                 'Opt-in looping singleton, per-key cached PCM8; downward bends retained, no upward bend/modulation; periodic loop guard and compensated tuning'),
                                      'runtime_mixer_changed': False, 'offline_dependency': 'Python stdlib',
                                      'sample_budget': 4_000_000}
+    if merged_bandlimited_support:
+        report['bandlimited_pcm'].update(
+            policy='Opt-in plain looping merged tracks, per-source-key cached PCM8; existing grouping/control guards and volume-ratio quantization; no upward bend/modulation; periodic loop guard and compensated tuning',
+            merged_tracks=True, existing_group_guards_unchanged=True)
     if bandlimited_pcm and envelope_support:
         report['bandlimited_pcm']['fitted_attack_envelopes'] = True
     if finite_support:
