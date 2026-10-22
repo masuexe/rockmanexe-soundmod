@@ -568,7 +568,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
     if row['status'] in ('empty_slot', 'silent_sequence', 'analysis_blocked'):
         return result
     known_candidate = (row['family'] == 'ssr3' and capacity == 8
-        and (row['index'], row['features']['track_count']) in ((27,12),(4,15))
+        and (row['index'], row['features']['track_count']) in ((27,12),(4,15),(7,14))
         and not row['features'].get('noninstant_attack_definitions', 0)
         and not row['features'].get('nonzero_mod_depth_executed', False))
     if row['features']['track_count'] > capacity and not known_candidate:
@@ -576,18 +576,22 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     data, _ = archive.sequence(row['index'])
     tracks = trace_sequence(data, analysis_only=True)
+    ajito = (known_candidate and row['index'] == 7 and len(tracks) == 14
+        and {t['track'] for t in tracks} == set(range(12)) | {14,15}
+        and all(t.get('termination') == 'loop' for t in tracks))
     studio = (known_candidate and row['index'] == 4 and len(tracks) == 15
         and {t['track'] for t in tracks} == set(range(13)) | {14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
-    known_merge = studio or (known_candidate and row['index'] == 27 and len(tracks) == 12
+    known_merge = studio or ajito or (known_candidate and row['index'] == 27 and len(tracks) == 12
         and {t['track'] for t in tracks} == {0,1,2,3,4,5,7,8,9,13,14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
     if row['features']['track_count'] > capacity and not known_merge:
         result.update(status='capacity_blocked', track_capacity=capacity)
         return result
     finite = all(t.get('termination') == 'end' for t in tracks)
-    groups = SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
-    result['route'] = ('known_sf3_studio_upward_antialias' if studio else
+    groups = SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
+    result['route'] = ('known_sf3_ajito_upward_antialias' if ajito else
+                       'known_sf3_studio_upward_antialias' if studio else
                        'known_sf3_bossmae_merged_antialias' if known_merge else
                        'finite_singleton_antialias' if finite else 'looping_singleton_antialias')
     modes = [(False, False, result['route'])]
@@ -605,7 +609,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                     archive, row['index'], groups, capacity, gain,
                     finite_support=finite, bandlimited_pcm=True, envelope_support=envelope,
                     finite_release_support=release,
-                    **({'merged_bandlimited_support': True, 'bandlimited_upward_support': True} if studio else
+                    **({'merged_bandlimited_support': True, 'bandlimited_upward_support': True} if studio or ajito else
                        {'merged_bandlimited_support': True} if known_merge else {}))
                 attempt['conversion_passed'] = True
             except (ValueError, AssertionError, IndexError, struct.error) as error:
@@ -647,7 +651,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                           prepared_pcm8_bytes=sum(s['pcm8_bytes'] for s in conversion['samples']),
                           pcm8_quantizer_clamped_values=sum(s['resampling']['pcm8_clipped_samples'] for s in conversion['samples']),
                           maximum_source_step=max(s['resampling']['source_pitched_rate_hz'] / 10512 for s in conversion['samples']))
-            if known_merge and not studio:
+            if known_merge and not (studio or ajito):
                 result['known_merged_antialias'] = {
                     'source_track_count':12, 'target_track_count':8,
                     'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
@@ -660,6 +664,24 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'release_flagged_reuses_with_nonzero_envelope':905,
                         'prepared_pcm8_clamped_values':4763, 'prepared_pcm8_bytes':513763,
                         'scope':'Standalone two-cycle window and prepared storage counts; not an audible-error bound',
+                        'batch_native_remeasured':False}}
+            if ajito:
+                result['known_merged_antialias'] = {
+                    'source_track_count':14, 'target_track_count':8,
+                    'track_groups':[list(g) for g in SF3_AJITO_GROUPS],
+                    'scope':'Pinned accepted AJITO grouping and upward-pitch filtering only; existing guards; no search',
+                    'standalone_observations': {
+                        'source':'sf3-ajito-upward-antialias-exe6-v1',
+                        'rom_sha256':'1b535b22c63f0da416d55355c63f12c0af3172adab5c68f786119a71312d341c',
+                        'observed_note_calls':3964, 'observed_rejections':0,
+                        'held_or_starting_preemptions':14,
+                        'held_preemption_clocks':[1108,1113,5064,5160,5232,5256,6580,6585,10536,10632,10704,10728,12052,12057],
+                        'held_displaced_identities_match_plain_baseline':True,
+                        'release_flagged_reuses_with_nonzero_envelope':1551,
+                        'plain_baseline_release_reuses':1544, 'slot_choices_different_from_plain':718,
+                        'prepared_pcm8_clamped_values':9275, 'prepared_pcm8_bytes':1969559,
+                        'zero_velocity_native_calls':0,
+                        'scope':'Standalone two-cycle window and prepared storage; not an audible-error bound',
                         'batch_native_remeasured':False}}
             if studio:
                 result['known_merged_antialias'] = {
@@ -678,6 +700,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'zero_velocity_native_calls':6, 'zero_mappings_added_by_filtering':0,
                         'scope':'Standalone two-cycle window and prepared storage; not an audible-error bound',
                         'batch_native_remeasured':False}}
+            if studio or ajito:
                 result['upward_pitch_preparation'] = {
                     'bound_method':conversion['bandlimited_pcm']['upward_bound_method'],
                     'shift_semitone_counts':dict(Counter(str(s['resampling']['preparation_key']-s['source_key']) for s in conversion['samples'])),
@@ -819,7 +842,7 @@ def write_reports(directory, report):
                        f'{candidates - standard - finite - lfo - envelope - combined - delayed - envelope_delayed - live_depth - envelope_live_depth - live_toggle - envelope_live_toggle - mixed - mixed_delay - mixed_minimum} |')
     summary.extend(['', f'与已有人工验收 ROM 字节一致的扫描构建：{report["summary"]["packed_exact_manual_matches"]} 个。', '',
                     '具体曲目、每条转换路径及失败原因见 report.csv、report.json 或 index.html。', '',
-                    '向上弯音预滤波仅开放已验收 SF3 STUDIO 十五轨固定分组；共享 wave/root/source-key 取各源轨最大正向有效弯音上界，保留音符与控制。标称截止频率不是零混叠或听感误差保证。',
+                    '向上弯音预滤波仅开放已验收 SF3 STUDIO 十五轨及 AJITO 十四轨固定分组；共享 wave/root/source-key 取各源轨最大正向有效弯音上界，保留音符与控制。标称截止频率不是零混叠或听感误差保证。',
                     '合轨抗混叠开放已验收 SF3 STUDIO 十五轨及 SF3 BOSSMAE 十二轨固定分组，保留既有分组、音高和滤波校验；原生声道复用与采样限幅记录引用独立实验，扫描未新增试听或游戏验证。',
                     '十五轨固定分组仅开放已验收的 SF3 STUDIO，合并源轨 4/5/6/7/8/12/14/15；保持既有校验和固定音量比例量化。独立原生实验 5202 次音符均获分配、无持续／起音抢占，2863 次收音复用；4 个极弱映射在未合轨对照亦为零，扫描未重新观测或试听。常规通过列包含该独立标记子路径。',
                     '十四轨固定分组仅开放已验收的 SF3 AJITO，合并源轨 0/4/6/7/8/11/14；保持控制、长音和转换校验，使用既有固定音量比例量化。独立原生实验记录 14 次持续／起音声道抢占和 1544 次收音声道复用，扫描没有重新观测或试听。常规通过列包含该独立标记子路径。',
@@ -982,7 +1005,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 26, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 27, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1088,6 +1111,17 @@ def main():
                   'fixed_delay_native_lfo': True, 'minimum_depth_retry_after_explicit_representation_failure_only': True,
                   'minimum_depth_native_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
                   'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
+              'known_ajito_upward_antialias_policy': {
+                  'source_family':'ssr3', 'sequence_index':7,
+                  'source_track_ids':list(range(12))+[14,15],
+                  'track_groups':[list(g) for g in SF3_AJITO_GROUPS],
+                  'all_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_group_and_filter_guards':True, 'group_search':False,
+                  'maximum_shift_semitones':12, 'preparation_key_overflow_rejected':True,
+                  'shared_wave_root_source_key_maximum':True,
+                  'native_notes_bends_expression_unchanged':True,
+                  'standalone_held_preemptions_explicitly_attributed':True,
+                  'batch_native_runtime_validation':False},
               'known_upward_antialias_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1108,7 +1142,7 @@ def main():
                   'batch_native_runtime_validation':False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
                   'separate_from_primary_route': True, 'singleton_tracks_only': False,
-                  'merged_exception':'Pinned SF3 BOSSMAE slot27 and STUDIO slot4 only; existing guards and no search',
+                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4 and AJITO slot7 only; existing guards and no search',
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],
                   'pcm_sample_budget': 4_000_000, 'native_mixing_rate_hz': 10512,
                   'upward_bend_transpose_modulation_portamento': False,
