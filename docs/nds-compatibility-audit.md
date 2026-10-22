@@ -749,3 +749,15 @@ listening/effects/three-encounter checklist passed, explicitly finding the
 known accompaniment omission inaudible. No independent timing, full gameplay
 trace, linked-play/rematch result or comparative preference is inferred; v22 counts are
 not rewritten and no generic batch grouping is added.
+
+The [v23 audit](nds-compatibility-audit-v23.md) adds only the accepted fixed SF3
+DEMPAJIKEN eleven-to-eight grouping, retaining control, pan, alias/release and
+conversion guards without search. All seven originals and pinned SDATs verify.
+Primary packing rises to 67, with 32 exact accepted primary variants and 37
+unique accepted sequences; all 66 old primary and 29 filtered ROM/BPS pairs
+retain bytes, routes, gains and manual matches. Primary pending stays 35, and
+all 55 remaining primary blockers exceed eight tracks. Filtered counts remain
+29/11/18. All 376 tests and report/filter/archive checks pass. Reports retain
+the separately measured standalone native allocation limit and the user's
+inaudible-omission report; the scan adds no native or manual acceptance.
+A separate BOSSMAE twelve-track experiment remains outside batch grouping.
