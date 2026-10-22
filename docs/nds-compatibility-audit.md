@@ -784,3 +784,19 @@ report/filter/archive checks pass. Native budget observations remain attributed
 to the standalone ROM, not remeasured by the scan; there is no new native or
 manual acceptance. A separate thirteen-track CHANGE experiment remains outside
 batch grouping.
+
+The separate [SF3 CHANGE thirteen-track experiment](nds-sf3-change-thirteen-track-research.md)
+uses existing fixed-volume ratio mapping without relaxing shared controls. All
+855 source tuples and duplicate-note multiplicity remain; the independent
+reference matches 5,070 notes and twenty unique waves. Intro-only reference
+validation now requires exact initial notes and sufficient silent-loop duration
+plus independent controls, with negative tests. Natural playback covers two
+common cycles and all 25 prepared waves. All 1,339 NOTE calls allocate, but four
+held/starting channels are preempted in the intro and 183 release channels are
+reused; manual listening must judge those limits and velocity quantization.
+Original alias holds/releases and native pitch/pan checks pass. All 390 tests,
+45 accepted/two control ROM/BPS rebuilds and eight-file production reproduction
+pass. On 2026-10-22 the user reported the exact-ROM listening/effects/three-encounter
+checklist passed; no independent timing, full gameplay trace, linked-play/rematch
+result or comparative preference is inferred; no
+generic batch grouping or rewrite of archived v24 counts is added.

@@ -255,6 +255,7 @@ def check_reference(experiment, reference):
     if not notes or {n['track'] for n in notes} != sounding:
         raise AssertionError('Independent DS reference does not cover all sounding tracks')
     note_free = []
+    intro_only = []
     counts = {}
     finite = bool(conversion.get('finite_song'))
     mixed = conversion.get('mixed_loop_song')
@@ -287,6 +288,19 @@ def check_reference(experiment, reference):
             note_free.append({'source_track': track['track'], 'note_events': 0,
                               'required_coverage_ticks': horizon})
             continue
+        if not any(a['name'] == 'note' for a in track['actions'][track['loop_action']:]):
+            metadata = json.loads((reference / 'reference.json').read_text())
+            rates = [t['nds_ticks_per_second'] for t in conversion['tempo_mapping']]
+            horizon = track['end_ticks'] + track['loop_ticks']
+            if (track['termination'] != 'loop' or not rates
+                    or metadata['seconds'] * min(rates) < horizon):
+                raise AssertionError('Intro-only reference must cover two complete loops')
+            if actual != basis:
+                raise AssertionError('Independent intro-only DS note execution differs')
+            counts[str(track['track'])] = len(actual)
+            intro_only.append({'source_track': track['track'], 'intro_note_events': len(actual),
+                               'required_coverage_ticks': horizon})
+            continue
         last = actual[-1][0]
         if track['termination'] != 'loop' or last < track['end_ticks'] + track['loop_ticks']:
             raise AssertionError('Reference must cover two complete loops')
@@ -309,14 +323,14 @@ def check_reference(experiment, reference):
                 if r['activation_tick'] < r['first_note_tick']]
     variable_late = conversion.get("native_pitch_lfo", {}).get("variable_late_fitted_extension")
     check_depth = live_depth or pre_note or live_toggle or variable_late
-    if (check_depth or note_free) and not (reference / 'controls.csv').is_file():
+    if (check_depth or note_free or intro_only) and not (reference / 'controls.csv').is_file():
         raise AssertionError('Depth or note-free conversion needs independent control observations')
     if (reference / 'controls.csv').is_file():
         with (reference / 'controls.csv').open() as stream:
             controls = [{k: int(v) for k, v in row.items()} for row in csv.DictReader(stream)]
         for track in conversion['tracks']:
             track_finite = finite or bool(mixed and track['termination'] == 'end')
-            silent = track['track'] not in sounding
+            silent = track['track'] not in sounding or any(r['source_track'] == track['track'] for r in intro_only)
             for opcode in (0xC0, 0xC4, 0xD5, 0xE0) + ((0xCA,) if check_depth else ()) + ((0xE1,) if silent else ()):
                 actual = [(a['tick'], a['value']) for a in controls
                           if a['track'] == track['track'] and a['opcode'] == opcode]
@@ -348,7 +362,7 @@ def check_reference(experiment, reference):
                 elif opcode != 0xE1:
                     control_matches += len(actual)
                 else:
-                    next(r for r in note_free if r['source_track'] == track['track'])['tempo_matches'] = len(actual)
+                    next(r for r in note_free + intro_only if r['source_track'] == track['track'])['tempo_matches'] = len(actual)
         for setup in pre_note:
             first = min(n['tick'] for n in notes if n['track'] == setup['source_track'])
             source_track = next(t for t in conversion['tracks'] if t['track'] == setup['source_track'])
@@ -382,6 +396,7 @@ def check_reference(experiment, reference):
             'reference_metadata': json.loads((reference / 'reference.json').read_text()),
             'sequence_note_matches': len(notes), 'per_track_note_matches': counts,
             **({'note_free_track_checks': note_free} if note_free else {}),
+            **({'intro_only_loop_track_checks': intro_only} if intro_only else {}),
             'finite_complete_note_schedule_checked': finite,
             **({'mixed_finite_track_note_schedules_checked': [t['track'] for t in finite_tracks]} if mixed else {}),
             'offline_resampling': ({'target_sample_count': len(conversion['samples']),
