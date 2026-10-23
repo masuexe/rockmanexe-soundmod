@@ -33,7 +33,7 @@ SOURCE_ARCHIVES = {
              'label': 'Star Force 2'},
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
-SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'kando': 'ssr3', 'kando-antialias': 'ssr3',
+SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'sf3-battle-merged-antialias': 'ssr3', 'kando': 'ssr3', 'kando-antialias': 'ssr3',
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
@@ -76,6 +76,11 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
     if song == 'room':
         index, name = 2, 'BGM_ROOM'
         blob, dependency, conversion = convert_song(archive, index, capacity, song_gain_db=song_gain_db)
+    elif song == 'sf3-battle-merged-antialias':
+        index, name = 35, 'BGM_BATTLE'
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, BATTLE_GROUPS, capacity, song_gain_db,
+            bandlimited_pcm=True, merged_bandlimited_support=True)
     elif song == 'battle':
         index, name = 35, 'BGM_BATTLE'
         blob, dependency, conversion = convert_merged_song(archive, index, BATTLE_GROUPS, capacity, song_gain_db)
