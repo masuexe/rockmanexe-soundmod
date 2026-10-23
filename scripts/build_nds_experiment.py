@@ -37,7 +37,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'ka
                  'sf1-setsunai': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
-                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1', 'sf3-sabishi-variable-late-envelope': 'ssr3', 'sf3-kincho-ten-track': 'ssr3', 'sf3-studio-fifteen-track': 'ssr3', 'sf3-studio-upward-antialias': 'ssr3', 'sf3-ajito-upward-antialias': 'ssr3', 'sf3-change-upward-antialias': 'ssr3', 'sf3-bossmae-merged-antialias': 'ssr3', 'sf3-ajito-fourteen-track': 'ssr3', 'sf3-change-thirteen-track': 'ssr3', 'sf3-bossmae-twelve-track': 'ssr3', 'sf3-dempajiken-eleven-track': 'ssr3',
+                 'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1', 'sf3-sabishi-variable-late-envelope': 'ssr3', 'sf3-kincho-ten-track': 'ssr3', 'sf3-kincho-upward-antialias': 'ssr3', 'sf3-studio-fifteen-track': 'ssr3', 'sf3-studio-upward-antialias': 'ssr3', 'sf3-ajito-upward-antialias': 'ssr3', 'sf3-change-upward-antialias': 'ssr3', 'sf3-bossmae-merged-antialias': 'ssr3', 'sf3-ajito-fourteen-track': 'ssr3', 'sf3-change-thirteen-track': 'ssr3', 'sf3-bossmae-twelve-track': 'ssr3', 'sf3-dempajiken-eleven-track': 'ssr3',
                  'sf3-lose-depth-min': 'ssr3',
                  'sf2-lose-mixed-depth-min': 'ssr2', 'sf2-vs-late-depth': 'ssr2', 'sf2-mizuumi-variable-tempo': 'ssr2', 'sf2-hokora-nine-track': 'ssr2', 'sf2-hokora-merged-antialias': 'ssr2',
                  'sf1-ura': 'ssr1',
@@ -172,6 +172,12 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         index, name = 26, 'BGM_DEMPAJIKEN'
         blob, dependency, conversion = convert_merged_song(
             archive, index, SF3_DEMPAJIKEN_GROUPS, capacity, song_gain_db)
+    elif song == 'sf3-kincho-upward-antialias':
+        index, name = 30, 'BGM_KINCHO'
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, SF3_KINCHO_GROUPS, capacity, song_gain_db,
+            bandlimited_pcm=True, merged_bandlimited_support=True,
+            bandlimited_upward_support=True)
     elif song == 'sf3-kincho-ten-track':
         index, name = 30, 'BGM_KINCHO'
         blob, dependency, conversion = convert_merged_song(
