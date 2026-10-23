@@ -569,7 +569,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     known_candidate = (capacity == 8
         and (row['family'], row['index'], row['features']['track_count']) in
-            (('ssr3',27,12),('ssr3',4,15),('ssr3',7,14),('ssr3',47,13),('ssr2',20,9),('ssr3',30,10),('ssr3',26,11))
+            (('ssr3',27,12),('ssr3',4,15),('ssr3',7,14),('ssr3',47,13),('ssr2',20,9),('ssr3',30,10),('ssr3',26,11),('ssr3',35,11))
         and not row['features'].get('noninstant_attack_definitions', 0)
         and not row['features'].get('nonzero_mod_depth_executed', False))
     if row['features']['track_count'] > capacity and not known_candidate:
@@ -577,6 +577,9 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     data, _ = archive.sequence(row['index'])
     tracks = trace_sequence(data, analysis_only=True)
+    battle = (known_candidate and row['family'] == 'ssr3' and row['index'] == 35
+        and len(tracks) == 11 and {t['track'] for t in tracks} == set(range(8)) | {9,14,15}
+        and all(t.get('termination') == 'loop' for t in tracks))
     dempajiken = (known_candidate and row['family'] == 'ssr3' and row['index'] == 26
         and len(tracks) == 11 and {t['track'] for t in tracks} == set(range(9)) | {14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
@@ -595,15 +598,16 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
     studio = (known_candidate and row['index'] == 4 and len(tracks) == 15
         and {t['track'] for t in tracks} == set(range(13)) | {14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
-    known_merge = studio or ajito or change or hokora or kincho or dempajiken or (known_candidate and row['index'] == 27 and len(tracks) == 12
+    known_merge = studio or ajito or change or hokora or kincho or dempajiken or battle or (known_candidate and row['index'] == 27 and len(tracks) == 12
         and {t['track'] for t in tracks} == {0,1,2,3,4,5,7,8,9,13,14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
     if row['features']['track_count'] > capacity and not known_merge:
         result.update(status='capacity_blocked', track_capacity=capacity)
         return result
     finite = all(t.get('termination') == 'end' for t in tracks)
-    groups = SF3_DEMPAJIKEN_GROUPS if dempajiken else SF3_KINCHO_GROUPS if kincho else SF2_HOKORA_GROUPS if hokora else SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
-    result['route'] = ('known_sf3_dempajiken_merged_antialias' if dempajiken else
+    groups = BATTLE_GROUPS if battle else SF3_DEMPAJIKEN_GROUPS if dempajiken else SF3_KINCHO_GROUPS if kincho else SF2_HOKORA_GROUPS if hokora else SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
+    result['route'] = ('known_sf3_battle_merged_antialias' if battle else
+                       'known_sf3_dempajiken_merged_antialias' if dempajiken else
                        'known_sf3_kincho_upward_antialias' if kincho else
                        'known_sf2_hokora_merged_antialias' if hokora else
                        'known_sf3_change_upward_antialias' if change else
@@ -668,7 +672,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                           prepared_pcm8_bytes=sum(s['pcm8_bytes'] for s in conversion['samples']),
                           pcm8_quantizer_clamped_values=sum(s['resampling']['pcm8_clipped_samples'] for s in conversion['samples']),
                           maximum_source_step=max(s['resampling']['source_pitched_rate_hz'] / 10512 for s in conversion['samples']))
-            if known_merge and not (studio or ajito or change or hokora or kincho or dempajiken):
+            if known_merge and not (studio or ajito or change or hokora or kincho or dempajiken or battle):
                 result['known_merged_antialias'] = {
                     'source_track_count':12, 'target_track_count':8,
                     'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
@@ -681,6 +685,26 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'release_flagged_reuses_with_nonzero_envelope':905,
                         'prepared_pcm8_clamped_values':4763, 'prepared_pcm8_bytes':513763,
                         'scope':'Standalone two-cycle window and prepared storage counts; not an audible-error bound',
+                        'batch_native_remeasured':False}}
+            if battle:
+                result['known_merged_antialias'] = {
+                    'source_track_count':11, 'target_track_count':8,
+                    'track_groups':[list(g) for g in BATTLE_GROUPS],
+                    'scope':'Pinned accepted BATTLE grouping and filtering only; existing guards and original fixed-volume ratios; no search',
+                    'standalone_observations': {
+                        'source':'sf3-battle-merged-antialias-exe6-v1',
+                        'rom_sha256':'1490032534e505fc145877c291f99dd1c80fa789b5db7fa4325be24cb4ac3c33',
+                        'observed_note_calls':4877, 'observed_allocations':4877, 'observed_rejections':0,
+                        'held_or_starting_preemptions':23,
+                        'held_displaced_identities_match_plain_baseline':True,
+                        'all_slot_choices_match_plain_baseline':True,
+                        'release_flagged_reuses_with_nonzero_envelope':3331,
+                        'plain_baseline_release_reuses':3331, 'slot_choices_different_from_plain':0,
+                        'plain_baseline_observation':'sf3-battle-plain-native-baseline-v1',
+                        'original_long_alias_uses':8, 'overlapping_alias_snapshots':561,
+                        'prepared_pcm8_clamped_values':10009, 'prepared_pcm8_bytes':1054239,
+                        'zero_velocity_native_calls':0,
+                        'scope':'Standalone two-cycle window and prepared storage; retained exact original allocation/preemption identities; not an audible-error bound',
                         'batch_native_remeasured':False}}
             if dempajiken:
                 result['known_merged_antialias'] = {
@@ -1096,7 +1120,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 31, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 32, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1202,6 +1226,16 @@ def main():
                   'fixed_delay_native_lfo': True, 'minimum_depth_retry_after_explicit_representation_failure_only': True,
                   'minimum_depth_native_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
                   'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
+              'known_sf3_battle_merged_antialias_policy': {
+                  'source_family':'ssr3', 'sequence_index':35,
+                  'source_track_ids':list(range(8))+[9,14,15],
+                  'track_groups':[list(g) for g in BATTLE_GROUPS],
+                  'all_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_group_and_filter_guards':True, 'group_search':False,
+                  'upward_preparation':False, 'original_fixed_volume_ratios_retained':True,
+                  'standalone_allocation_preemption_and_clipping_observations_attributed':True,
+                  'plain_baseline_observation_is_fresh_read_only_capture':True,
+                  'batch_native_runtime_validation':False},
               'known_sf3_dempajiken_merged_antialias_policy': {
                   'source_family':'ssr3', 'sequence_index':26,
                   'source_track_ids':list(range(9))+[14,15],
@@ -1275,7 +1309,7 @@ def main():
                   'batch_native_runtime_validation':False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
                   'separate_from_primary_route': True, 'singleton_tracks_only': False,
-                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7, CHANGE slot47, KINCHO slot30, DEMPAJIKEN slot26 and SF2 HOKORA slot20 only; existing guards and no search',
+                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7, CHANGE slot47, KINCHO slot30, DEMPAJIKEN slot26, BATTLE slot35 and SF2 HOKORA slot20 only; existing guards and no search',
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],
                   'pcm_sample_budget': 4_000_000, 'native_mixing_rate_hz': 10512,
                   'upward_bend_transpose_modulation_portamento': False,
