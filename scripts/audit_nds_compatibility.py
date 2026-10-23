@@ -567,8 +567,9 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
               'manual_matches_packed_variant': False}
     if row['status'] in ('empty_slot', 'silent_sequence', 'analysis_blocked'):
         return result
-    known_candidate = (row['family'] == 'ssr3' and capacity == 8
-        and (row['index'], row['features']['track_count']) in ((27,12),(4,15),(7,14),(47,13))
+    known_candidate = (capacity == 8
+        and (row['family'], row['index'], row['features']['track_count']) in
+            (('ssr3',27,12),('ssr3',4,15),('ssr3',7,14),('ssr3',47,13),('ssr2',20,9))
         and not row['features'].get('noninstant_attack_definitions', 0)
         and not row['features'].get('nonzero_mod_depth_executed', False))
     if row['features']['track_count'] > capacity and not known_candidate:
@@ -576,6 +577,9 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     data, _ = archive.sequence(row['index'])
     tracks = trace_sequence(data, analysis_only=True)
+    hokora = (known_candidate and row['family'] == 'ssr2' and row['index'] == 20
+        and len(tracks) == 9 and {t['track'] for t in tracks} == set(range(9))
+        and all(t.get('termination') == 'loop' for t in tracks))
     change = (known_candidate and row['index'] == 47 and len(tracks) == 13
         and {t['track'] for t in tracks} == set(range(10)) | {13,14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
@@ -585,15 +589,16 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
     studio = (known_candidate and row['index'] == 4 and len(tracks) == 15
         and {t['track'] for t in tracks} == set(range(13)) | {14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
-    known_merge = studio or ajito or change or (known_candidate and row['index'] == 27 and len(tracks) == 12
+    known_merge = studio or ajito or change or hokora or (known_candidate and row['index'] == 27 and len(tracks) == 12
         and {t['track'] for t in tracks} == {0,1,2,3,4,5,7,8,9,13,14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
     if row['features']['track_count'] > capacity and not known_merge:
         result.update(status='capacity_blocked', track_capacity=capacity)
         return result
     finite = all(t.get('termination') == 'end' for t in tracks)
-    groups = SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
-    result['route'] = ('known_sf3_change_upward_antialias' if change else
+    groups = SF2_HOKORA_GROUPS if hokora else SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
+    result['route'] = ('known_sf2_hokora_merged_antialias' if hokora else
+                       'known_sf3_change_upward_antialias' if change else
                        'known_sf3_ajito_upward_antialias' if ajito else
                        'known_sf3_studio_upward_antialias' if studio else
                        'known_sf3_bossmae_merged_antialias' if known_merge else
@@ -655,7 +660,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                           prepared_pcm8_bytes=sum(s['pcm8_bytes'] for s in conversion['samples']),
                           pcm8_quantizer_clamped_values=sum(s['resampling']['pcm8_clipped_samples'] for s in conversion['samples']),
                           maximum_source_step=max(s['resampling']['source_pitched_rate_hz'] / 10512 for s in conversion['samples']))
-            if known_merge and not (studio or ajito or change):
+            if known_merge and not (studio or ajito or change or hokora):
                 result['known_merged_antialias'] = {
                     'source_track_count':12, 'target_track_count':8,
                     'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
@@ -668,6 +673,23 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'release_flagged_reuses_with_nonzero_envelope':905,
                         'prepared_pcm8_clamped_values':4763, 'prepared_pcm8_bytes':513763,
                         'scope':'Standalone two-cycle window and prepared storage counts; not an audible-error bound',
+                        'batch_native_remeasured':False}}
+            if hokora:
+                result['known_merged_antialias'] = {
+                    'source_track_count':9, 'target_track_count':8,
+                    'track_groups':[list(g) for g in SF2_HOKORA_GROUPS],
+                    'scope':'Pinned accepted SF2 HOKORA grouping and filtering only; existing guards; no search',
+                    'standalone_observations': {
+                        'source':'sf2-hokora-merged-antialias-exe6-v1',
+                        'rom_sha256':'923ead50245fcd3fc0eb18d6689abbac0849be57856a1adbab57bc7f3802b022',
+                        'observed_note_calls':1555, 'observed_rejections':0,
+                        'held_or_starting_preemptions':0,
+                        'release_flagged_reuses_with_nonzero_envelope':384,
+                        'plain_baseline_release_reuses':385, 'slot_choices_different_from_plain':354,
+                        'plain_baseline_observation':'sf2-hokora-plain-native-baseline-v1',
+                        'prepared_pcm8_clamped_values':1197, 'prepared_pcm8_bytes':748395,
+                        'zero_velocity_native_calls':0,
+                        'scope':'Standalone two-cycle window and prepared storage; fresh plain-ROM native observation; not an audible-error bound',
                         'batch_native_remeasured':False}}
             if change:
                 result['known_merged_antialias'] = {
@@ -1028,7 +1050,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 28, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 29, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1134,6 +1156,16 @@ def main():
                   'fixed_delay_native_lfo': True, 'minimum_depth_retry_after_explicit_representation_failure_only': True,
                   'minimum_depth_native_mod': 1, 'all_phase_pitch_difference_bound_cents': 10,
                   'isolated_one_second_rms_limit_cents': 5, 'batch_native_runtime_validation': False},
+              'known_sf2_hokora_merged_antialias_policy': {
+                  'source_family':'ssr2', 'sequence_index':20,
+                  'source_track_ids':list(range(9)),
+                  'track_groups':[list(g) for g in SF2_HOKORA_GROUPS],
+                  'all_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_group_and_filter_guards':True, 'group_search':False,
+                  'upward_preparation':False,
+                  'standalone_voice_and_clipping_observations_attributed':True,
+                  'plain_baseline_observation_is_fresh_read_only_capture':True,
+                  'batch_native_runtime_validation':False},
               'known_change_upward_antialias_policy': {
                   'source_family':'ssr3', 'sequence_index':47,
                   'source_track_ids':list(range(10))+[13,14,15],
@@ -1176,7 +1208,7 @@ def main():
                   'batch_native_runtime_validation':False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
                   'separate_from_primary_route': True, 'singleton_tracks_only': False,
-                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7 and CHANGE slot47 only; existing guards and no search',
+                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7 and CHANGE slot47 and SF2 HOKORA slot20 only; existing guards and no search',
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],
                   'pcm_sample_budget': 4_000_000, 'native_mixing_rate_hz': 10512,
                   'upward_bend_transpose_modulation_portamento': False,
