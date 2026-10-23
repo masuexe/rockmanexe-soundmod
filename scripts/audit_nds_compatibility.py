@@ -569,7 +569,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     known_candidate = (capacity == 8
         and (row['family'], row['index'], row['features']['track_count']) in
-            (('ssr3',27,12),('ssr3',4,15),('ssr3',7,14),('ssr3',47,13),('ssr2',20,9))
+            (('ssr3',27,12),('ssr3',4,15),('ssr3',7,14),('ssr3',47,13),('ssr2',20,9),('ssr3',30,10))
         and not row['features'].get('noninstant_attack_definitions', 0)
         and not row['features'].get('nonzero_mod_depth_executed', False))
     if row['features']['track_count'] > capacity and not known_candidate:
@@ -577,6 +577,9 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
         return result
     data, _ = archive.sequence(row['index'])
     tracks = trace_sequence(data, analysis_only=True)
+    kincho = (known_candidate and row['family'] == 'ssr3' and row['index'] == 30
+        and len(tracks) == 10 and {t['track'] for t in tracks} == set(range(8)) | {14,15}
+        and all(t.get('termination') == 'loop' for t in tracks))
     hokora = (known_candidate and row['family'] == 'ssr2' and row['index'] == 20
         and len(tracks) == 9 and {t['track'] for t in tracks} == set(range(9))
         and all(t.get('termination') == 'loop' for t in tracks))
@@ -589,15 +592,16 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
     studio = (known_candidate and row['index'] == 4 and len(tracks) == 15
         and {t['track'] for t in tracks} == set(range(13)) | {14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
-    known_merge = studio or ajito or change or hokora or (known_candidate and row['index'] == 27 and len(tracks) == 12
+    known_merge = studio or ajito or change or hokora or kincho or (known_candidate and row['index'] == 27 and len(tracks) == 12
         and {t['track'] for t in tracks} == {0,1,2,3,4,5,7,8,9,13,14,15}
         and all(t.get('termination') == 'loop' for t in tracks))
     if row['features']['track_count'] > capacity and not known_merge:
         result.update(status='capacity_blocked', track_capacity=capacity)
         return result
     finite = all(t.get('termination') == 'end' for t in tracks)
-    groups = SF2_HOKORA_GROUPS if hokora else SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
-    result['route'] = ('known_sf2_hokora_merged_antialias' if hokora else
+    groups = SF3_KINCHO_GROUPS if kincho else SF2_HOKORA_GROUPS if hokora else SF3_CHANGE_GROUPS if change else SF3_AJITO_GROUPS if ajito else SF3_STUDIO_GROUPS if studio else SF3_BOSSMAE_GROUPS if known_merge else [(t['track'],) for t in tracks]
+    result['route'] = ('known_sf3_kincho_upward_antialias' if kincho else
+                       'known_sf2_hokora_merged_antialias' if hokora else
                        'known_sf3_change_upward_antialias' if change else
                        'known_sf3_ajito_upward_antialias' if ajito else
                        'known_sf3_studio_upward_antialias' if studio else
@@ -618,7 +622,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                     archive, row['index'], groups, capacity, gain,
                     finite_support=finite, bandlimited_pcm=True, envelope_support=envelope,
                     finite_release_support=release,
-                    **({'merged_bandlimited_support': True, 'bandlimited_upward_support': True} if studio or ajito or change else
+                    **({'merged_bandlimited_support': True, 'bandlimited_upward_support': True} if studio or ajito or change or kincho else
                        {'merged_bandlimited_support': True} if known_merge else {}))
                 attempt['conversion_passed'] = True
             except (ValueError, AssertionError, IndexError, struct.error) as error:
@@ -660,7 +664,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                           prepared_pcm8_bytes=sum(s['pcm8_bytes'] for s in conversion['samples']),
                           pcm8_quantizer_clamped_values=sum(s['resampling']['pcm8_clipped_samples'] for s in conversion['samples']),
                           maximum_source_step=max(s['resampling']['source_pitched_rate_hz'] / 10512 for s in conversion['samples']))
-            if known_merge and not (studio or ajito or change or hokora):
+            if known_merge and not (studio or ajito or change or hokora or kincho):
                 result['known_merged_antialias'] = {
                     'source_track_count':12, 'target_track_count':8,
                     'track_groups':[list(g) for g in SF3_BOSSMAE_GROUPS],
@@ -673,6 +677,23 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'release_flagged_reuses_with_nonzero_envelope':905,
                         'prepared_pcm8_clamped_values':4763, 'prepared_pcm8_bytes':513763,
                         'scope':'Standalone two-cycle window and prepared storage counts; not an audible-error bound',
+                        'batch_native_remeasured':False}}
+            if kincho:
+                result['known_merged_antialias'] = {
+                    'source_track_count':10, 'target_track_count':8,
+                    'track_groups':[list(g) for g in SF3_KINCHO_GROUPS],
+                    'scope':'Pinned accepted KINCHO grouping and upward-pitch filtering only; existing guards; no search',
+                    'standalone_observations': {
+                        'source':'sf3-kincho-upward-antialias-exe6-v1',
+                        'rom_sha256':'ae6243cff652dc8c028a2ed7d42ebdf38ba001218adec3cbf08231b65260ad01',
+                        'observed_note_calls':1194, 'observed_rejections':0,
+                        'held_or_starting_preemptions':0,
+                        'release_flagged_reuses_with_nonzero_envelope':477,
+                        'plain_baseline_release_reuses':476, 'slot_choices_different_from_plain':175,
+                        'plain_baseline_observation':'sf3-kincho-plain-native-baseline-v1',
+                        'prepared_pcm8_clamped_values':10592, 'prepared_pcm8_bytes':1086559,
+                        'zero_velocity_native_calls':0,
+                        'scope':'Standalone two-cycle window and prepared storage; fresh plain-ROM native observation; not an audible-error bound',
                         'batch_native_remeasured':False}}
             if hokora:
                 result['known_merged_antialias'] = {
@@ -745,7 +766,7 @@ def scan_antialias_variant(archive, row, source, base, raw_sdat, profile, capaci
                         'zero_velocity_native_calls':6, 'zero_mappings_added_by_filtering':0,
                         'scope':'Standalone two-cycle window and prepared storage; not an audible-error bound',
                         'batch_native_remeasured':False}}
-            if studio or ajito or change:
+            if studio or ajito or change or kincho:
                 result['upward_pitch_preparation'] = {
                     'bound_method':conversion['bandlimited_pcm']['upward_bound_method'],
                     'shift_semitone_counts':dict(Counter(str(s['resampling']['preparation_key']-s['source_key']) for s in conversion['samples'])),
@@ -1050,7 +1071,7 @@ def main():
     inputs = verified_sources(args.source_dir)
     evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
-    report = {'schema_version': 29, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+    report = {'schema_version': 30, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
@@ -1166,6 +1187,17 @@ def main():
                   'standalone_voice_and_clipping_observations_attributed':True,
                   'plain_baseline_observation_is_fresh_read_only_capture':True,
                   'batch_native_runtime_validation':False},
+              'known_kincho_upward_antialias_policy': {
+                  'source_family':'ssr3', 'sequence_index':30,
+                  'source_track_ids':list(range(8))+[14,15],
+                  'track_groups':[list(g) for g in SF3_KINCHO_GROUPS],
+                  'all_tracks_loop':True, 'fitting_or_active_modulation':False,
+                  'existing_group_and_filter_guards':True, 'group_search':False,
+                  'maximum_shift_semitones':12, 'preparation_key_overflow_rejected':True,
+                  'shared_wave_root_source_key_maximum':True,
+                  'native_notes_bends_expression_unchanged':True,
+                  'standalone_voice_observations_explicitly_attributed':True,
+                  'batch_native_runtime_validation':False},
               'known_change_upward_antialias_policy': {
                   'source_family':'ssr3', 'sequence_index':47,
                   'source_track_ids':list(range(10))+[13,14,15],
@@ -1208,7 +1240,7 @@ def main():
                   'batch_native_runtime_validation':False},
               'antialias_variant_policy': {'enabled': args.antialias_variants,
                   'separate_from_primary_route': True, 'singleton_tracks_only': False,
-                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7 and CHANGE slot47 and SF2 HOKORA slot20 only; existing guards and no search',
+                  'merged_exception':'Pinned SF3 BOSSMAE slot27, STUDIO slot4, AJITO slot7 and CHANGE slot47 SF2 HOKORA slot20 and KINCHO slot30 only; existing guards and no search',
                   'finite_and_looping_sequences': True, 'source_step_range': [1/16, 32],
                   'pcm_sample_budget': 4_000_000, 'native_mixing_rate_hz': 10512,
                   'upward_bend_transpose_modulation_portamento': False,
