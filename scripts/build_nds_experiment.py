@@ -49,7 +49,7 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'sf
                  'sf2-win2-release-antialias': 'ssr2', 'sf2-win': 'ssr2', 'sf2-win-antialias': 'ssr2', 'sf2-nessie-envelope': 'ssr2', 'sf2-battle-delay': 'ssr2',
                  'sf2-kaicyou-toggle': 'ssr2',
                  'sf2-dempajiken-envelope': 'ssr2', 'sf2-dempajiken-antialias-envelope': 'ssr2',
-                 'sf2-henkan-finite': 'ssr2',
+                 'sf2-henkan-finite': 'ssr2', 'sf2-henkan-antialias': 'ssr2',
                  'sf3-win2-finite': 'ssr3', 'sf3-win2-antialias': 'ssr3',
                  'sf3-hokora-envelope': 'ssr3', 'sf3-hokora-antialias-envelope': 'ssr3', 'sf3-friend-envelope': 'ssr3'}
 
@@ -88,6 +88,12 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         index, name = 31, 'BGM_KANDO'
         blob, dependency, conversion = convert_song(archive, index, capacity,
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
+    elif song == 'sf2-henkan-antialias':
+        index, name = 26, 'BGM_HENKAN'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            bandlimited_pcm=True, finite_support=True)
     elif song == 'sf3-gameover-antialias':
         index, name = 40, 'BGM_GAMEOVER'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
