@@ -260,12 +260,27 @@ def assess_groups(tracks, groups, finite_support=False, mixed_loop_support=False
     return loop_start, period, expanded, decisions
 
 
+def upward_pitch_bound_after_first_use(track, first_tick):
+    """Bound all future pitch, including arbitrarily long release tails and loops.
+
+    Intro pitch before a sample's first use cannot affect it. Earlier controls
+    inside the repeating body can affect a later use on the next iteration.
+    Deliberately do not trim at note-off: native release tails still follow
+    their owner's controls.
+    """
+    future = [a for a in track['actions'] if a['ticks'] >= first_tick]
+    if track['termination'] == 'loop':
+        future += track['actions'][track['loop_action']:]
+    return max([0] + [(a['state_after']['bend'] * a['state_after']['bend_range']) >> 1
+                      for a in future if 'state_after' in a])
+
+
 def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0.0,
                         native_pitch_lfo=False, envelope_support=False, native_pitch_lfo_delay=False,
                         native_pitch_lfo_live_depth=False, native_pitch_lfo_live_toggle=False,
                         finite_support=False, bandlimited_pcm=False, finite_release_support=False,
                         mixed_loop_support=False, native_pitch_lfo_min_depth=False,
-                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False, merged_bandlimited_support=False, bandlimited_upward_support=False):
+                        mixed_live_depth_support=False, native_pitch_lfo_late_depth=False, native_pitch_lfo_variable_tempo=False, variable_late_fitted_support=False, merged_bandlimited_support=False, bandlimited_upward_support=False, bandlimited_upward_future_support=False):
     if type(song_gain_db) not in (int, float) or not math.isfinite(song_gain_db) or not -24 <= song_gain_db <= 12:
         raise ValueError('Song gain must be finite and within -24..12 dB')
     if len(groups) > track_capacity:
@@ -298,6 +313,9 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
     if bandlimited_upward_support and not (bandlimited_pcm and not (
             native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
         raise ValueError('Upward-bandlimited mode requires plain looping filtered tracks')
+    if bandlimited_upward_future_support and (
+            not bandlimited_upward_support or any(len(group) != 1 for group in groups)):
+        raise ValueError('Future-use upward bounds require explicit singleton upward-bandlimited mode')
     if merged_bandlimited_support and not (bandlimited_pcm and any(len(group) > 1 for group in groups)
             and not (native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
         raise ValueError('Merged bandlimited mode requires plain looping merged tracks and explicit filtering')
@@ -565,7 +583,7 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         return offset
 
     bank_offset = allocate(bytes(128 * 12))
-    preparation_keys, upward_bounds = {}, {}
+    preparation_keys, upward_bounds, upward_first_uses = {}, {}, {}
     if bandlimited_upward_support:
         track_bounds = {track['track']: max([0] + [
             ((action['state_after']['bend'] * action['state_after']['bend_range']) >> 1)
@@ -575,7 +593,15 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             if definition.kind != 1 or not 0 <= definition.archive_slot < len(archives):
                 raise ValueError('Merged experiment requires valid PCM instruments')
             identity = (archives[definition.archive_slot], definition.wave_id, definition.root_key, note['key'])
-            upward_bounds[identity] = max(upward_bounds.get(identity, 0), track_bounds[note['source_track']])
+            use = (note['source_track'], identity)
+            upward_first_uses[use] = min(upward_first_uses.get(use, note['ticks']), note['ticks'])
+            if not bandlimited_upward_future_support:
+                upward_bounds[identity] = max(upward_bounds.get(identity, 0), track_bounds[note['source_track']])
+        if bandlimited_upward_future_support:
+            by_track = {track['track']: track for track in tracks}
+            for (source_track, identity), first_tick in upward_first_uses.items():
+                bound = upward_pitch_bound_after_first_use(by_track[source_track], first_tick)
+                upward_bounds[identity] = max(upward_bounds.get(identity, 0), bound)
         for identity, units in upward_bounds.items():
             shift = (units + 63) // 64
             if shift > 12 or identity[3] + shift > 127:
@@ -609,6 +635,11 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                         bound_method='Maximum positive effective pitch across each source track; maximum across shared wave/root/source-key uses',
                         native_step_at_bound=(resampling['native_playback_rate_hz'] / MIX_RATE)
                             * 2 ** ((upward_bounds[cache_key] / 64 - (prepared_key - note['key'])) / 12))
+                    if bandlimited_upward_future_support:
+                        resampling.update(
+                            bound_method='Maximum effective pitch after earliest use, including the complete recurring body and unbounded release tails; maximum across shared uses',
+                            earliest_use_ticks_by_source_track={str(track): tick
+                                for (track, identity), tick in upward_first_uses.items() if identity == cache_key})
                     resampling['nominal_cutoff_at_bound_fraction_of_mixer_nyquist'] = (
                         resampling['filter_cutoff_input_nyquist_fraction']
                         * resampling['source_samples_per_output'] * resampling['native_step_at_bound'])
@@ -807,6 +838,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
             upward_bound_method='Conservative per-source-track effective-pitch maximum, shared per wave/root/source-key',
             source_keys_and_controls_unchanged=True,
             policy='Opt-in plain looping per-key filtering at a conservative upward-pitch ceiling; existing controls, grouping and sample guards retained; no modulation/transpose/porta/sweep')
+    if bandlimited_upward_future_support:
+        report['bandlimited_pcm'].update(
+            future_use_pitch_bounds=True,
+            upward_bound_method='Per-wave/root/source-key earliest use on each source track; all subsequent controls and the entire recurring body, including unbounded release tails')
     if bandlimited_pcm and envelope_support:
         report['bandlimited_pcm']['fitted_attack_envelopes'] = True
     if finite_support:
