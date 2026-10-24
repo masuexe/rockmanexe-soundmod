@@ -34,7 +34,7 @@ SOURCE_ARCHIVES = {
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
 SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'sf3-battle-merged-antialias': 'ssr3', 'kando': 'ssr3', 'kando-antialias': 'ssr3',
-                 'sf1-setsunai': 'ssr1', 'sf1-room-antialias': 'ssr1', 'sf1-labo-antialias': 'ssr1', 'sf1-school-antialias': 'ssr1', 'sf1-dempajiken-antialias': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
+                 'sf1-setsunai': 'ssr1', 'sf1-room-antialias': 'ssr1', 'sf1-labo-antialias': 'ssr1', 'sf1-school-antialias': 'ssr1', 'sf1-dempajiken-antialias': 'ssr1', 'sf1-antenna-antialias': 'ssr1', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
                  'sf1-planetarium-delay': 'ssr1', 'sf1-hokora-mixed-delay': 'ssr1', 'sf1-lose-depth-min': 'ssr1', 'sf1-sabishi-variable-late-envelope': 'ssr1', 'sf3-sabishi-variable-late-envelope': 'ssr3', 'sf3-kincho-ten-track': 'ssr3', 'sf3-kincho-upward-antialias': 'ssr3', 'sf3-studio-fifteen-track': 'ssr3', 'sf3-studio-upward-antialias': 'ssr3', 'sf3-ajito-upward-antialias': 'ssr3', 'sf3-change-upward-antialias': 'ssr3', 'sf3-bossmae-merged-antialias': 'ssr3', 'sf3-ajito-fourteen-track': 'ssr3', 'sf3-change-thirteen-track': 'ssr3', 'sf3-bossmae-twelve-track': 'ssr3', 'sf3-dempajiken-eleven-track': 'ssr3', 'sf3-dempajiken-merged-antialias': 'ssr3',
@@ -88,6 +88,12 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         index, name = 31, 'BGM_KANDO'
         blob, dependency, conversion = convert_song(archive, index, capacity,
                                                    song_gain_db=song_gain_db, native_effect_headroom=True)
+    elif song == 'sf1-antenna-antialias':
+        index, name = 16, 'BGM16ANTENNA'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            bandlimited_pcm=True)
     elif song == 'sf1-dempajiken-antialias':
         index, name = 11, 'BGM11DEMPAJIKEN'
         tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
