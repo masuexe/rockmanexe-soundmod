@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "title": {
+    "source": "/home/harp/projects/nds/roms/ssr1d.nds",
+    "song": "sf1-ura-upward-antialias",
+    "song_gain_db": 3.5
+  },
+  "battle": {
+    "source": "/home/harp/projects/nds/roms/ssr1d.nds",
+    "song": "sf1-henkan-antialias",
+    "song_gain_db": 0
+  },
+  "communication": "title"
+}
