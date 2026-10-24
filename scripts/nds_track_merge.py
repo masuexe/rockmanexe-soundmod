@@ -311,8 +311,10 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
                                (envelope_support and not mixed_live_depth_support) or bandlimited_pcm):
         raise ValueError('Mixed experiment excludes finite-only, envelope-fitting and filtered modes')
     if bandlimited_upward_support and not (bandlimited_pcm and not (
-            native_pitch_lfo or envelope_support or finite_support or finite_release_support or mixed_loop_support)):
-        raise ValueError('Upward-bandlimited mode requires plain looping filtered tracks')
+            native_pitch_lfo or envelope_support or
+            (finite_support and not bandlimited_upward_future_support) or
+            finite_release_support or mixed_loop_support)):
+        raise ValueError('Upward-bandlimited mode requires plain looping filtered tracks or explicit singleton future-use finite mode')
     if bandlimited_upward_future_support and (
             not bandlimited_upward_support or any(len(group) != 1 for group in groups)):
         raise ValueError('Future-use upward bounds require explicit singleton upward-bandlimited mode')
@@ -842,6 +844,11 @@ def convert_merged_song(archive, index, groups, track_capacity=8, song_gain_db=0
         report['bandlimited_pcm'].update(
             future_use_pitch_bounds=True,
             upward_bound_method='Per-wave/root/source-key earliest use on each source track; all subsequent controls and the entire recurring body, including unbounded release tails')
+        if finite_support:
+            report['bandlimited_pcm'].update(
+                finite_upward_preparation=True,
+                policy='Opt-in finite singleton filtering at a future-use upward-pitch ceiling; exact per-track EOT/FINE and all original pitch controls retained',
+                upward_bound_method='Per-wave/root/source-key earliest use on each finite source track; every subsequent control through END, maximum across shared uses; no invented loop')
     if bandlimited_pcm and envelope_support:
         report['bandlimited_pcm']['fitted_attack_envelopes'] = True
     if finite_support:
