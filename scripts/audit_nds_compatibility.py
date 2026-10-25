@@ -882,8 +882,9 @@ def verified_sources(directory):
     return results
 
 
-def manual_evidence(root):
-    records = []
+def collect_manual_evidence(root):
+    """Keep accepted composite artifacts separate from standalone song matches."""
+    records, composites = [], []
     for path in sorted(root.glob('*/manual-testing.json')):
         value = json.loads(path.read_text())
         if value.get('status') != 'user_reported_pass':
@@ -894,13 +895,33 @@ def manual_evidence(root):
             raise ValueError(f'Manual evidence artifact differs: {path}')
         if expected != manifest['output_fingerprint']:
             raise ValueError(f'Manual evidence/manifest fingerprints differ: {path}')
+        if 'nds_dual_conversion' in manifest:
+            source = manifest['nds_dual_conversion']
+            if set(source['songs']) != {'title', 'battle'} or source['communication_role'] not in source['songs']:
+                raise ValueError(f'Invalid composite manual evidence roles: {path}')
+            patch = fingerprint(path.with_name('unified.bps').read_bytes())
+            if patch != value['expected_bps_fingerprint']:
+                raise ValueError(f'Composite manual evidence patch differs: {path}')
+            composites.append({'configuration': path.parent.name, 'record': str(path.resolve()),
+                               'output_fingerprint': expected, 'bps_fingerprint': patch,
+                               'songs': source['songs'], 'communication_role': source['communication_role'],
+                               'reported_acceptance_scope': value.get('acceptance_scope'),
+                               'scope': 'User-reported checks for this exact composite artifact only; '
+                                        'not standalone song acceptance or a batch runtime test'})
+            continue
         source = manifest['nds_conversion']
         records.append({'family': source['source_profile'][:4], 'sequence_index': source['sequence_index'],
                         'output_sha256': expected['sha256'], 'record': str(path.resolve()),
                         'bandlimited_pcm': bool(source.get('bandlimited_pcm')),
                         'configuration': path.parent.name,
+                        'reported_acceptance_scope': value.get('acceptance_scope'),
                         'scope': 'user-reported tests for this artifact; separate from batch audit'})
-    return records
+    return records, composites
+
+
+def manual_evidence(root):
+    """Backward-compatible standalone-only evidence for per-sequence matching."""
+    return collect_manual_evidence(root)[0]
 
 
 def summarize(rows):
@@ -1003,6 +1024,12 @@ def write_reports(directory, report):
                         '保持 10,512 Hz 混音；离线倍率 1/16–32，单采样最多 1,000,000 点、整曲 PCM 最多 4,000,000 字节。',
                         '音量余量不足时尝试 0 dB，并保留原失败记录；采样削顶计数不等于最终混音削顶。',
                         '人工记录只按同源曲目和同一 ROM 指纹匹配；同曲目的旧未滤波版本通过，不代表新抗混叠版本通过。'])
+    if report.get('composite_manual_records'):
+        summary.extend(['', '## 组合 ROM 的独立验收记录', '',
+                        '以下记录不计入单曲精确匹配数量；仅保留对应组合 ROM 的用户报告范围。', ''])
+        for record in report['composite_manual_records']:
+            summary.append(f'- {record["configuration"]}：ROM CRC32 `{record["output_fingerprint"]["crc32"]}`；'
+                           f'{record["reported_acceptance_scope"] or record["scope"]}')
     (directory / 'summary.md').write_text('\n'.join(summary) + '\n')
     fields = ['id', 'family', 'index', 'name', 'status', 'source_tracks', 'target_tracks', 'samples',
               'route', 'gain_db', 'appended_bytes', 'native_pitch_lfo_approximation',
@@ -1118,9 +1145,10 @@ def main():
         parser.error('Requires original Japanese EXE6 Gregar/Falzar')
     capacity = base[target['layout']['player_table_offset'] + target['layout']['music_player'] * 12 + 8]
     inputs = verified_sources(args.source_dir)
-    evidence = manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
+    evidence, composites = collect_manual_evidence(Path(__file__).resolve().parents[1] / 'out/nds-research')
     args.out.mkdir(parents=True)
     report = {'schema_version': 32, 'complete': False, 'scope': 'SSEQ only; no batch runtime or listening checks',
+              'composite_manual_records': composites,
               'known_fifteen_track_route_policy': {
                   'source_family':'ssr3', 'sequence_index':4,
                   'source_track_ids':list(range(13))+[14,15],
