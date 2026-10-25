@@ -39,6 +39,12 @@ SONGS = (
     ('ssr2', 16, 'sf2-kaicyou-toggle', 'KAICYOU', 3.5, False),
     ('ssr3', 27, 'sf3-bossmae-merged-antialias', 'BOSSMAE', 3.5, False),
     ('ssr3', 30, 'sf3-kincho-upward-antialias', 'KINCHO', 3.5, False),
+    ('ssr1', 16, 'sf1-antenna-antialias', 'ANTENNA', 3.5, False),
+    ('ssr1', 11, 'sf1-dempajiken-antialias', 'DEMPAJIKEN', 3.5, False),
+    ('ssr1', 30, 'sf1-win-antialias', 'WIN', 3.5, False),
+    ('ssr1', 33, 'sf1-gameover-antialias', 'GAMEOVER', 3.5, True),
+    ('ssr1', 34, 'sf1-bossmae-antialias', 'BOSSMAE', 3.5, False),
+    ('ssr3', 26, 'sf3-dempajiken-merged-antialias', 'DEMPAJIKEN', 3.5, False),
 )
 
 
@@ -62,7 +68,7 @@ def discover_nds(directory, uploaded):
 
 
 # Static facts from the registered, independently checked configurations.
-TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8)))
+TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8)))
 
 
 def add_nds_catalog(value, originals):
