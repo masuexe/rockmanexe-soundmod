@@ -93,3 +93,7 @@ The updated usual manager restores the saved Falzar settings and reads all17
 entries without conversion; refreshing its page uses the new elapsed display.
 Recursive v10–v38 file sets/hashes and the existing Windows test patch retain
 their identities. No new listening or gameplay acceptance is recorded.
+
+The user subsequently reported “加载时间明显缩短。可以下一步了”. This is
+user-reported improvement in manager loading time, without an independently
+timed client trace or a new ROM/gameplay acceptance claim.
