@@ -16,7 +16,8 @@ from original_catalog import catalog_originals, PROFILES, identify
 from target_profiles import TARGETS, target_profile, identify_target
 from prepatch import apply_prepatch, find_prepatch, prepatch_available
 from nds_catalog import (NDS_DIRECTORY, NDS_PROFILES, SONGS, identify_nds, discover_nds,
-                         add_nds_catalog, annotate_nds_manifest)
+                         add_nds_catalog, prepare_nds_catalog, annotate_nds_manifest)
+from nds_conversion_cache import NdsConversionCache
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_DIRECTORY = ROOT.parent / 'roms'
@@ -47,7 +48,9 @@ class Manager:
         self.jobs = {}
         self.active = None
         self.preview_cache = {}
-        self.nds_cache = {}
+        self.nds_cache = NdsConversionCache(self.directory / 'nds-cache')
+        self.nds_sources = {}
+        self.live_request = 0
         self.default_project = self._default_project(target_profile('exe45-pvp'))
         self.project_notice = ''
         self.project = copy.deepcopy(self.default_project)
@@ -134,6 +137,7 @@ class Manager:
     def _invalidate(self):
         self.revision += 1
         self.value = self.decoded = None
+        self.nds_sources = {}
         self.inputs = {key:value for key,value in self.inputs.items() if not key.startswith('rom:')}
         self.preview_cache.clear()
         self.realtime.stop()
@@ -325,22 +329,38 @@ class Manager:
             donors = {key:path.read_bytes() for key,(_,path) in source_paths.items() if key in PROFILES}
             nds_originals = {key:path.read_bytes() for key,(_,path) in source_paths.items() if key in NDS_PROFILES}
             value, reports = catalog_originals(base, pvp, donors)
-            original_donors = dict(donors)
-            add_nds_catalog(value, reports, donors, nds_originals, base, self.nds_cache)
+            add_nds_catalog(value, nds_originals)
             with self.lock:
                 if revision != self.revision:
                     raise ValueError('Files changed; load tracks again')
                 self.selected_target = value['target_profile']
                 self._reconcile_project(value, draft)
-                self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in original_donors.items()})
+                self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in donors.items()})
                 self.value = value
                 self.decoded = (base, pvp, donors, pvp_info, reports)
+                self.nds_sources = {key:source_paths[key][1] for key in nds_originals}
             return {'tracks': sum(row['playlist_eligible'] for row in value['entries'])}
         return self._start('catalog', task)
 
     def _loaded(self):
         if self.value is None or self.decoded is None:
             raise ValueError('Load tracks first')
+
+    def _build_snapshot(self, value, decoded, paths, project):
+        base, pvp, donors, _, reports = decoded
+        keys = {key for rule in resolve_pools(project, value) for key in rule['keys']}
+        needed = {row['original_source'] for row in value['entries']
+                  if row['key'] in keys and row.get('nds_selector')}
+        originals = {}
+        for key in sorted(needed):
+            raw = paths[key].read_bytes()
+            if fingerprint(raw) != value['nds_sources'][key]['rom_fingerprint']:
+                raise ValueError('NDS source changed; load tracks again')
+            originals[key] = raw
+        prepared, reports, donors = prepare_nds_catalog(value, reports, donors, originals, base, keys, self.nds_cache)
+        output, catalog, manifest = build_catalog(base, pvp, prepared, reports, donors, project, selected_only=True)
+        annotate_nds_manifest(manifest, prepared)
+        return output, catalog, manifest
 
     def save_project(self, project):
         with self.lock:
@@ -382,28 +402,28 @@ class Manager:
         self.save_project(project)
         with self.lock:
             decoded = self.decoded
+            value, paths = self.value, dict(self.nds_sources)
             project = copy.deepcopy(self.project)
             known = {r['key'] for r in self.value['entries']}
             names = {key:name for key,name in self.names.items() if key in known}
         def task(job_id):
             directory = self.directory / job_id
             directory.mkdir()
-            base, pvp, donors, pvp_info, reports = decoded
-            output, value, manifest = build_catalog(base, pvp, self.value, reports, donors, project, selected_only=True)
+            base, _, _, pvp_info, _ = decoded
+            output, catalog, manifest = self._build_snapshot(value, decoded, paths, project)
             patch = make_bps(base, output)
             if apply_bps(base, patch)[0] != output:
                 raise AssertionError('Export verification failed')
-            for row in value['entries']:
+            for row in catalog['entries']:
                 row['name'] = names.get(row['key'], row.get('name') or '')
-            patch_role = TARGETS[value['target_profile']].get('patch_role','pvp')
+            patch_role = TARGETS[catalog['target_profile']].get('patch_role','pvp')
             manifest.update(source_patches={patch_role:pvp_info} if pvp_info else {}, manager=True, music_sources='original ROMs')
-            annotate_nds_manifest(manifest, self.value)
             (directory / 'unified.gba').write_bytes(output)
             (directory / 'unified.bps').write_bytes(patch)
             (directory / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')
             saved_project = {**project, 'names': names}
             (directory / 'project.json').write_text(json.dumps(saved_project, ensure_ascii=False, indent=2) + '\n')
-            write_catalog(directory, value)
+            write_catalog(directory, catalog)
             return {'files': ['unified.bps', 'unified.gba', 'project.json', 'catalog.csv'],
                     'size_bytes': len(output), 'fingerprint': fingerprint(output), 'directory': str(directory)}
         return self._start('export', task)
@@ -420,14 +440,13 @@ class Manager:
             if cache_key in self.preview_cache:
                 return {'job_id': self.preview_cache[cache_key]}
             decoded = self.decoded
+            value, paths = self.value, dict(self.nds_sources)
             target_id = row['target_index']
         def task(job_id):
             directory = self.directory / job_id
             directory.mkdir()
-            base, pvp, donors, _, reports = decoded
-            config = {'schema_version': 1, 'pools': {str(self.value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
-            output, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
-            annotate_nds_manifest(manifest, self.value)
+            config = {'schema_version': 1, 'pools': {str(value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
+            output, _, manifest = self._build_snapshot(value, decoded, paths, config)
             rom = directory / 'preview.gba'
             rom.write_bytes(output)
             wav, info = capture_preview(rom, manifest, target_id, directory / 'capture', seconds, self.mgba)
@@ -444,18 +463,32 @@ class Manager:
             if not row or not row['playlist_eligible']:
                 raise ValueError('This entry is not available for music preview')
             base, pvp, donors, _, reports = self.decoded
+            self.live_request += 1
+            ticket, revision = self.live_request, self.revision
             if row.get('nds_selector'):
-                config = {'schema_version': 1, 'pools': {str(self.value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
-                data, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
-                table, count = manifest['target_table_file_offset'], manifest['table_entry_count']
-                return self.realtime.start(data,table,count,row['target_index'],sample_rate)
-            if row['source'] == self.value['native_source']:
+                snapshot = self.value, self.decoded, dict(self.nds_sources)
+            elif row['source'] == self.value['native_source']:
                 layout = target_profile(self.value['target_profile'])['layout']
                 data, table, count = pvp, layout['table_offset'], layout['entry_count']
             else:
                 profile = PROFILES[row['source']]
                 data, table, count = donors[row['source']], profile['table_offset'], profile['entry_count']
-            return self.realtime.start(data,table,count,row['source_index'],sample_rate)
+            if not row.get('nds_selector'):
+                return self.realtime.start(data,table,count,row['source_index'],sample_rate)
+        # Conversion can be slow; state/stop/source-change requests stay responsive.
+        value, decoded, paths = snapshot
+        config = {'schema_version':1,'pools':{str(value['preview_trigger']):{'tracks':[key],'selector_shift':0}}}
+        data, _, manifest = self._build_snapshot(value, decoded, paths, config)
+        with self.lock:
+            if revision != self.revision or ticket != self.live_request:
+                raise ValueError('Preview cancelled or sources changed')
+            return self.realtime.start(data,manifest['target_table_file_offset'],manifest['table_entry_count'],row['target_index'],sample_rate)
+
+    def stop_live_preview(self, session_id=None):
+        with self.lock:
+            if session_id is None:
+                self.live_request += 1
+            return self.realtime.stop(session_id)
 
     def file(self, job_id, filename):
         with self.lock:
@@ -468,5 +501,8 @@ class Manager:
         return path
 
     def close(self):
-        self.realtime.stop()
+        with self.lock:
+            self.revision += 1
+            self.live_request += 1
+            self.realtime.stop()
         self.executor.shutdown(wait=True)

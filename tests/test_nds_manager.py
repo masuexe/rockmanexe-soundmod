@@ -73,6 +73,9 @@ class NdsManagerIntegrationTests(unittest.TestCase):
             try:
                 originals = {k: fingerprint(m.source_paths[k][1].read_bytes()) for k in NDS_PROFILES}
                 finish(m, m.load(list(NDS_PROFILES) + ['exe1']))
+                self.assertEqual(m.nds_cache.stats['conversions'], 0)
+                self.assertEqual(m.value['nds_conversions'], [])
+                self.assertFalse(any(k.startswith('nds-') for k in m.decoded[2]))
                 state = m.state()
                 nds = [r for r in state['catalog']['entries'] if r.get('nds_selector')]
                 self.assertEqual(len(nds), 8)
@@ -103,8 +106,9 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 saved = json.loads((out / 'project.json').read_text())
                 self.assertEqual(saved['names'][title['key']], 'My URA')
                 self.assertEqual(saved['pools'], project['pools'])
+                self.assertEqual(m.nds_cache.stats['conversions'], 2)
                 # Reload uses cached conversions but revalidates original input identities.
-                with patch('nds_catalog.build_experiment', side_effect=AssertionError('Unexpected conversion')):
+                with patch('nds_conversion_cache.build_experiment', side_effect=AssertionError('Unexpected conversion')):
                     finish(m, m.load(['nds-ssr1']))
                 self.assertEqual(m.state()['project']['pools']['21']['tracks'], [cue['key']])
                 self.assertEqual(next(r['name'] for r in m.state()['catalog']['entries'] if r['key'] == title['key']), 'My URA')
@@ -129,8 +133,17 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                     finish(other, other.load())
                     self.assertEqual(other.state()['project']['pools']['21']['tracks'], [cue['key']])
                     self.assertEqual(other.names[title['key']], 'My URA')
+                    with patch('nds_conversion_cache.build_experiment', side_effect=AssertionError('Persistent cache missed')):
+                        finish(other, other.export(other.state()['project']))
+                    self.assertEqual(other.nds_cache.stats['conversions'], 0)
+                    self.assertEqual(other.nds_cache.stats['disk_hits'], 2)
                 finally:
                     other.close()
+                changed = Path(d) / 'externally-changed.nds'
+                changed.write_bytes(b'changed after catalog load')
+                m.nds_sources['nds-ssr1'] = changed
+                with self.assertRaisesRegex(AssertionError, 'source changed'):
+                    finish(m, m.export(m.state()['project']))
                 m.select_target('exegp')
                 self.assertFalse(set(m.state()['selected_sources']) & NDS_PROFILES.keys())
                 self.assertFalse(any(o['key'] in NDS_PROFILES for o in m.state()['source_options']))

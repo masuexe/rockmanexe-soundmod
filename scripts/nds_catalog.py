@@ -2,7 +2,8 @@
 import copy
 from pathlib import Path
 
-from build_nds_experiment import SOURCES, SOURCE_ARCHIVES, build_experiment
+from build_nds_experiment import SOURCES, SOURCE_ARCHIVES
+from nds_music import nds_sdat
 from original_catalog import PROFILES
 from scan_audio import fingerprint
 
@@ -45,55 +46,66 @@ def discover_nds(directory, uploaded):
     return paths
 
 
-def add_nds_catalog(value, reports, sources, originals, base, cache):
-    """Extend a GBA catalog with isolated converted banks and stable song IDs."""
+# Static facts from the registered, independently checked configurations.
+TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7)))
+
+
+def add_nds_catalog(value, originals):
+    """Validate originals and list registered songs without converting audio."""
     if not originals:
         return
     if value['target_profile'] not in ('exe6', 'exe6f'):
         raise ValueError('NDS music currently requires Japanese EXE6 Gregar or Falzar')
     provenance = {}
     for key, raw in originals.items():
-        if key not in NDS_PROFILES or identify_nds(raw) != key:
+        fp = fingerprint(raw)
+        profile = SOURCES.get(fp['sha256'])
+        if key not in NDS_PROFILES or profile is None or 'nds-' + profile[:4] != key:
             raise ValueError('NDS source does not match its selected game')
-        provenance[key] = {'rom_fingerprint': fingerprint(raw),
-                           'source_profile': SOURCES[fingerprint(raw)['sha256']]}
-    conversions = []
-    base_sha = fingerprint(base)['sha256']
+        archive = SOURCE_ARCHIVES[profile[:4]]
+        sdat = fingerprint(nds_sdat(raw, archive['file_id']))
+        if sdat['sha256'] != archive['sha256']:
+            raise ValueError('NDS SDAT fingerprint differs')
+        provenance[key] = {'rom_fingerprint': fp, 'source_profile': profile,
+                           'sdat_fingerprint': sdat}
     for ordinal, (family, index, selector, name, gain, finite) in enumerate(SONGS):
         original_key = 'nds-' + family
         if original_key not in originals:
             continue
-        source_sha = provenance[original_key]['rom_fingerprint']['sha256']
-        cache_key = (source_sha, base_sha, selector)
-        if cache_key not in cache:
-            _, _, manifest, conversion, dependency, blob, _, _ = build_experiment(
-                originals[original_key], base, song=selector, song_gain_db=gain)
-            cache[cache_key] = (blob, dependency, conversion, manifest['nds_conversion'])
-        blob, dependency, conversion, origin = cache[cache_key]
-        if (origin['sequence_index'] != index or origin['song_gain_db'] != gain
-                or bool(conversion.get('finite_song')) != finite):
-            raise AssertionError('Registered NDS configuration changed')
         source = f'nds-{family}-{index}'
-        song_key = f'{source}:{index}'
-        slot = NDS_SLOT_START + ordinal
         label = SOURCE_ARCHIVES[family]['label'] + ' · ' + name
-        value['sources'][source] = fingerprint(blob)
         value['source_labels'][source] = label
         value['entries'].append({
-            'key': song_key, 'source': source, 'source_label': label, 'source_index': index,
-            'target_index': slot, 'track_count': conversion['track_count'],
+            'key': f'{source}:{index}', 'source': source, 'source_label': label, 'source_index': index,
+            'target_index': NDS_SLOT_START + ordinal, 'track_count': TRACK_COUNTS[selector],
             'source_player': 0, 'second_field_raw': 0, 'empty': False,
             'playlist_eligible': True, 'availability': 'importable_music',
             'classification': 'converted_nds_music', 'name': name, 'name_status': 'registered_nds_title',
             'finite_song': finite, 'playback_note': 'Ends naturally; does not repeat' if finite else '',
             'nds_selector': selector, 'original_source': original_key})
-        reports[song_key] = dependency
-        sources[source] = blob
-        conversions.append({**copy.deepcopy(origin), 'key': song_key, 'source_key': source,
-                            'target_index': slot, 'selector': selector})
     value['table_entry_count'] = max(value['table_entry_count'], NDS_SLOT_START + len(SONGS))
     value['nds_sources'] = provenance
-    value['nds_conversions'] = conversions
+    value['nds_conversions'] = []
+
+
+def prepare_nds_catalog(value, reports, sources, originals, base, keys, cache):
+    """Prepare only selected songs in a private build snapshot, in registry order."""
+    value, reports, sources = copy.deepcopy(value), dict(reports), dict(sources)
+    rows = {row['key']: row for row in value['entries']}
+    for spec in SONGS:
+        family, index, selector, _, _, _ = spec
+        source = f'nds-{family}-{index}'
+        song_key = f'{source}:{index}'
+        if song_key not in keys:
+            continue
+        row = rows[song_key]
+        blob, dependency, conversion, origin = cache.get(
+            originals[row['original_source']], base, spec, TRACK_COUNTS[selector])
+        value['sources'][source] = fingerprint(blob)
+        reports[song_key], sources[source] = dependency, blob
+        value['nds_conversions'].append({**copy.deepcopy(origin), 'key': song_key, 'source_key': source,
+                                        'target_index': row['target_index'], 'selector': selector})
+    return value, reports, sources
 
 
 def annotate_nds_manifest(manifest, value):

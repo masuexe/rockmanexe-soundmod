@@ -29,9 +29,10 @@ separate.
    in `/home/harp/projects/nds/roms` are discovered automatically. Alternatively,
    use **Add music ROMs** to upload a supported `.nds` file, including a renamed
    original. All seven previously pinned Japanese source revisions are accepted.
-3. Click **Load tracks**. Initial NDS conversion takes longer than reading a GBA
-   source. Choose the desired song for each playback pool. GBA donors and native
-   music can be used in the same project.
+3. Click **Load tracks** to validate originals and list the registered songs.
+   Audio is prepared only when needed for a preview or export; the first use can
+   take longer, and later sessions reuse checked local caches. Choose songs for
+   each pool. GBA donors and native music can be used in the same project.
 4. Use **Play now** for the converted GBA song through agbplay, or **Record mGBA
    preview** for an audio capture from a separately built target ROM. Neither
    option plays the original DS driver; agbplay's enhanced mixer can differ from
@@ -57,8 +58,11 @@ wave/tone offsets are never used to merge unrelated banks.
 
 Every selected original is fingerprint checked again when loaded. The converter
 also checks the pinned SDAT and existing headroom, grouping, sample and timing
-guards. In-memory conversion reuse is keyed by original ROM hash, target base
-hash and registered selector. Original game files are read-only. Source uploads
+guards. [On-demand conversion and persistent caching](nds-conversion-cache.md)
+use original/SDAT/target fingerprints, registered configuration and loaded-toolchain
+identity. Cache dependencies are reparsed from checked compiled bytes. Originals
+must remain available and unchanged, even on a cache hit. Original game files are
+read-only. Source uploads
 retain the existing32MiB limit, which includes the seven pinned NDS originals.
 
 Exports pack only songs actually used by pools. `build.json` records selected

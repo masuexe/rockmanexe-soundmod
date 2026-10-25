@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path == '/api/realtime':
                     self.stream_audio(value); return
                 elif path == '/api/realtime/stop':
-                    result = self.server.manager.realtime.stop(value.get('id'))
+                    result = self.server.manager.stop_live_preview(value.get('id'))
                 elif path == '/api/load':
                     result = self.server.manager.load(value.get('sources'),value.get('project'))
                 elif path == '/api/target':

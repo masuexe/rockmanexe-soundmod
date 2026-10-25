@@ -35,7 +35,7 @@ For GP with ChipControl, select **Rockman EXE Battle Chip GP (JP) + ChipControl 
 
 Japanese EXE6 Gregar and Falzar are also targets. Select the matching original ROM; no pre-patch is needed. Both expose 37 native music events plus **Communication battles only**. Title ID 1 and the ordinary ID-21 pool remain independent; older projects inherit the new scene pool from their previous ID-21 choices. Saved projects remain separate by variant. See [EXE6 details](exe6.md).
 
-Japanese EXE6 also accepts the [eight-song Star Force NDS library](nds-manager.md). NDS originals are discovered in `/home/harp/projects/nds/roms` or added as `.nds` uploads. Registered song names and finite-playback notes are supplied by that library; existing GBA donor naming remains unchanged. **Play now** for NDS plays the converted GBA score.
+Japanese EXE6 also accepts the [eight-song Star Force NDS library](nds-manager.md). NDS originals are discovered in `/home/harp/projects/nds/roms` or added as `.nds` uploads. Registered song names and finite-playback notes are supplied by that library; existing GBA donor naming remains unchanged. **Play now** for NDS plays the converted GBA score. NDS audio is [prepared on demand and cached across restarts](nds-conversion-cache.md); loading the roster or saving a project does not convert it.
 
 ## Choose and export
 

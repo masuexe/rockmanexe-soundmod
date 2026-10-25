@@ -1,6 +1,8 @@
 *.gba
+*.nds
 *.sav
 *.bps
 out/
+nds-cache/
 __pycache__/
 *.pyc

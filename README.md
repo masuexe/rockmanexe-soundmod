@@ -6,6 +6,8 @@ The tools provide **read-only audio table scanning, verified BPS decoding, patch
 
 For Japanese EXE6, the [NDS music library](docs/nds-manager.md) offers eight registered Star Force 1/2/3 conversions, including source selection, converted-song previews, saved pools and BPS export. Choose the EXE6 target before selecting or uploading NDS sources.
 
+NDS catalogs load without converting audio. Preview/export prepares only requested songs and reuses a checked local cache across restarts; see [cache behavior and validation](docs/nds-conversion-cache.md).
+
 ## Open the local manager
 
 ```bash
