@@ -45,13 +45,20 @@ class NdsManagerGuardTests(unittest.TestCase):
             ('ssr1', 6, 'sf1-school-antialias', 'SCHOOL', 3.5, False),
             ('ssr2', 31, 'sf2-win2-release-antialias', 'WIN2', 3.5, True),
             ('ssr3', 28, 'sf3-comical-antialias', 'COMICAL', 3.5, False)))
-        self.assertEqual(SONGS[11:], (
+        self.assertEqual(SONGS[11:17], (
             ('ssr1', 21, 'sf1-comical-antialias', 'COMICAL', 3.5, False),
             ('ssr1', 24, 'sf1-kando-antialias', 'KANDO', 3.5, False),
             ('ssr2', 11, 'sf2-dempajiken-antialias-envelope', 'DEMPAJIKEN', 3.5, False),
             ('ssr2', 20, 'sf2-hokora-merged-antialias', 'HOKORA', 3.5, False),
             ('ssr3', 39, 'sf3-win2-antialias', 'WIN2', 3.5, True),
             ('ssr3', 40, 'sf3-gameover-antialias', 'GAMEOVER', 3.5, True)))
+        self.assertEqual(SONGS[17:], (
+            ('ssr1', 5, 'sf1-labo-antialias', 'LABO', 3.5, False),
+            ('ssr1', 22, 'sf1-jiken-antialias', 'JIKEN', 3.5, False),
+            ('ssr2', 27, 'sf2-battle-delay', 'BATTLE', 3.5, False),
+            ('ssr2', 16, 'sf2-kaicyou-toggle', 'KAICYOU', 3.5, False),
+            ('ssr3', 27, 'sf3-bossmae-merged-antialias', 'BOSSMAE', 3.5, False),
+            ('ssr3', 30, 'sf3-kincho-upward-antialias', 'KINCHO', 3.5, False)))
 
     def test_unknown_rom_and_unsupported_target_leave_state_intact(self):
         with self.assertRaises(ValueError):
@@ -89,10 +96,10 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 self.assertFalse(any(k.startswith('nds-') for k in m.decoded[2]))
                 state = m.state()
                 nds = [r for r in state['catalog']['entries'] if r.get('nds_selector')]
-                self.assertEqual(len(nds), 17)
-                self.assertEqual(state['nds_library_song_count'], 17)
+                self.assertEqual(len(nds), 23)
+                self.assertEqual(state['nds_library_song_count'], 23)
                 self.assertEqual([r['target_index'] for r in nds], list(range(NDS_SLOT_START, NDS_SLOT_START + len(SONGS))))
-                self.assertEqual([r['name'] for r in nds], ['URA', 'HENKAN', 'WIN', 'ROOM', 'BATTLE', 'ROOM', 'HENKAN', 'KANDO', 'SCHOOL', 'WIN2', 'COMICAL', 'COMICAL', 'KANDO', 'DEMPAJIKEN', 'HOKORA', 'WIN2', 'GAMEOVER'])
+                self.assertEqual([r['name'] for r in nds], ['URA', 'HENKAN', 'WIN', 'ROOM', 'BATTLE', 'ROOM', 'HENKAN', 'KANDO', 'SCHOOL', 'WIN2', 'COMICAL', 'COMICAL', 'KANDO', 'DEMPAJIKEN', 'HOKORA', 'WIN2', 'GAMEOVER', 'LABO', 'JIKEN', 'BATTLE', 'KAICYOU', 'BOSSMAE', 'KINCHO'])
                 self.assertEqual([r['key'] for r in nds if r['finite_song']], ['nds-ssr1-26:26', 'nds-ssr2-26:26', 'nds-ssr2-31:31', 'nds-ssr3-39:39', 'nds-ssr3-40:40'])
                 self.assertTrue(all(o['loaded'] for o in state['source_options'] if o['key'] in NDS_PROFILES))
                 title, cue = nds[:2]
@@ -110,7 +117,7 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 self.assertEqual({x['key'] for x in manifest['imports']}, {title['key'], cue['key'], 'exe1:0'})
                 self.assertEqual({x['key'] for x in manifest['nds_manager']['songs']}, {title['key'], cue['key']})
                 self.assertFalse(manifest['nds_manager']['manual_acceptance_inferred'])
-                self.assertEqual(manifest['nds_manager']['library_song_count'], 17)
+                self.assertEqual(manifest['nds_manager']['library_song_count'], 23)
                 waves = [set(s['file_offset'] for s in analyze(rom, manifest['target_table_file_offset'], r['target_index'])['samples']) for r in (title, cue)]
                 self.assertFalse(waves[0] & waves[1])
                 self.assertEqual([len(w) for w in waves], [22, 2])
