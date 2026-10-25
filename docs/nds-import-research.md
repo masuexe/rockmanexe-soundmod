@@ -1,6 +1,6 @@
 # NDS music import research
 
-For current five-song manager support, see [NDS manager usage](nds-manager.md).
+For current manager support, see [NDS manager usage](nds-manager.md).
 The initial experiment and its historical limits are recorded below.
 
 Assessment and first experiment date: 2026-10-15. Star Force 3 `BGM_ROOM` now

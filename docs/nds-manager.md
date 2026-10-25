@@ -1,9 +1,9 @@
-# NDS music in the manager: initial library
+# NDS music in the manager
 
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-This initial library contains five configurations:
+The current library contains eight configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -12,8 +12,12 @@ This initial library contains five configurations:
 | Star Force 2 | WIN | Filtering | +3.5dB | Loops |
 | Star Force 3 | ROOM | Filtering | +3.5dB | Loops |
 | Star Force 3 | BATTLE | Existing eleven-to-eight grouping and filtering | +3.5dB | Loops |
+| Star Force 1 | ROOM | Filtering | +3.5dB | Loops |
+| Star Force 2 | HENKAN | Finite filtering | +3.5dB | Ends naturally |
+| Star Force 3 | KANDO | Filtering | +3.5dB | Loops |
 
-Other songs and other NDS revisions are not offered by this first library.
+The [second library batch](nds-manager-library-v2.md) adds the last three entries.
+Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains
 separate.
@@ -45,7 +49,8 @@ Switching to another target removes NDS selections; stored source files remain.
 
 ## Packing and provenance
 
-NDS slots8954–8958 follow all reserved GBA donor slots. The five IDs and song
+NDS slots8954–8961 follow all reserved GBA donor slots. The first five keep
+slots8954–8958; the second batch appends8959–8961. Existing IDs and song
 keys remain fixed when other sources are deselected. Each converted song has
 its own source namespace, including two songs from the same original; relative
 wave/tone offsets are never used to merge unrelated banks.
@@ -67,7 +72,7 @@ Ten PCM voices,10512Hz mixing, PCM8 storage and existing filter, modulation,
 envelope and timing approximations continue to apply. Earlier allocation and
 release-tail limitations remain relevant to these unchanged song configurations.
 
-## Initial integration verification
+## Initial five-song integration verification
 
 The five freshly generated source blobs are byte-identical to their accepted
 standalone versions; conversion/dependency JSON values also match. Their prior

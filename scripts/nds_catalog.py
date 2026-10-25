@@ -11,13 +11,18 @@ NDS_PROFILES = {'nds-' + family: {'label': item['label'] + ' (NDS, JP)',
                                 'filename': family + '.nds', 'family': family}
                 for family, item in SOURCE_ARCHIVES.items()}
 # IDs are permanent; additional configurations append slots, never renumber these.
-NDS_SLOT_START = max(p['target_slot_start'] + p['entry_count'] for p in PROFILES.values())
+NDS_SLOT_START = 8954
+if max(p['target_slot_start'] + p['entry_count'] for p in PROFILES.values()) > NDS_SLOT_START:
+    raise ValueError('GBA donor ranges overlap reserved NDS song slots')
 SONGS = (
     ('ssr1', 18, 'sf1-ura-upward-antialias', 'URA', 3.5, False),
     ('ssr1', 26, 'sf1-henkan-antialias', 'HENKAN', 0, True),
     ('ssr2', 30, 'sf2-win-antialias', 'WIN', 3.5, False),
     ('ssr3', 2, 'room-antialias', 'ROOM', 3.5, False),
     ('ssr3', 35, 'sf3-battle-merged-antialias', 'BATTLE', 3.5, False),
+    ('ssr1', 4, 'sf1-room-antialias', 'ROOM', 3.5, False),
+    ('ssr2', 26, 'sf2-henkan-antialias', 'HENKAN', 3.5, True),
+    ('ssr3', 31, 'kando-antialias', 'KANDO', 3.5, False),
 )
 
 
@@ -65,7 +70,8 @@ def add_nds_catalog(value, reports, sources, originals, base, cache):
                 originals[original_key], base, song=selector, song_gain_db=gain)
             cache[cache_key] = (blob, dependency, conversion, manifest['nds_conversion'])
         blob, dependency, conversion, origin = cache[cache_key]
-        if origin['sequence_index'] != index or origin['song_gain_db'] != gain:
+        if (origin['sequence_index'] != index or origin['song_gain_db'] != gain
+                or bool(conversion.get('finite_song')) != finite):
             raise AssertionError('Registered NDS configuration changed')
         source = f'nds-{family}-{index}'
         song_key = f'{source}:{index}'
@@ -96,4 +102,5 @@ def annotate_nds_manifest(manifest, value):
     if conversions:
         manifest['nds_manager'] = {'schema_version': 1, 'songs': conversions,
                                    'manual_acceptance_inferred': False,
-                                   'scope': 'Initial registered five-song library; converted GBA playback'}
+                                   'library_song_count': len(SONGS),
+                                   'scope': 'Registered manager library; converted GBA playback'}

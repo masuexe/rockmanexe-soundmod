@@ -28,6 +28,20 @@ def finish(manager, task):
 
 
 class NdsManagerGuardTests(unittest.TestCase):
+    def test_registry_preserves_v1_slots_and_source_specific_configuration(self):
+        self.assertEqual(NDS_SLOT_START, 8954)
+        self.assertEqual(SONGS[:5], (
+            ('ssr1', 18, 'sf1-ura-upward-antialias', 'URA', 3.5, False),
+            ('ssr1', 26, 'sf1-henkan-antialias', 'HENKAN', 0, True),
+            ('ssr2', 30, 'sf2-win-antialias', 'WIN', 3.5, False),
+            ('ssr3', 2, 'room-antialias', 'ROOM', 3.5, False),
+            ('ssr3', 35, 'sf3-battle-merged-antialias', 'BATTLE', 3.5, False)))
+        self.assertEqual(len({(r[0], r[1]) for r in SONGS}), len(SONGS))
+        self.assertEqual(SONGS[5:], (
+            ('ssr1', 4, 'sf1-room-antialias', 'ROOM', 3.5, False),
+            ('ssr2', 26, 'sf2-henkan-antialias', 'HENKAN', 3.5, True),
+            ('ssr3', 31, 'kando-antialias', 'KANDO', 3.5, False)))
+
     def test_unknown_rom_and_unsupported_target_leave_state_intact(self):
         with self.assertRaises(ValueError):
             identify_nds(b'unknown revision')
@@ -61,10 +75,11 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 finish(m, m.load(list(NDS_PROFILES) + ['exe1']))
                 state = m.state()
                 nds = [r for r in state['catalog']['entries'] if r.get('nds_selector')]
-                self.assertEqual(len(nds), 5)
-                self.assertEqual([r['target_index'] for r in nds], list(range(NDS_SLOT_START, NDS_SLOT_START + 5)))
-                self.assertEqual([r['name'] for r in nds], ['URA', 'HENKAN', 'WIN', 'ROOM', 'BATTLE'])
-                self.assertEqual(sum(r['finite_song'] for r in nds), 1)
+                self.assertEqual(len(nds), 8)
+                self.assertEqual(state['nds_library_song_count'], 8)
+                self.assertEqual([r['target_index'] for r in nds], list(range(NDS_SLOT_START, NDS_SLOT_START + len(SONGS))))
+                self.assertEqual([r['name'] for r in nds], ['URA', 'HENKAN', 'WIN', 'ROOM', 'BATTLE', 'ROOM', 'HENKAN', 'KANDO'])
+                self.assertEqual([r['key'] for r in nds if r['finite_song']], ['nds-ssr1-26:26', 'nds-ssr2-26:26'])
                 self.assertTrue(all(o['loaded'] for o in state['source_options'] if o['key'] in NDS_PROFILES))
                 title, cue = nds[:2]
                 project = copy.deepcopy(state['project'])
@@ -81,6 +96,7 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 self.assertEqual({x['key'] for x in manifest['imports']}, {title['key'], cue['key'], 'exe1:0'})
                 self.assertEqual({x['key'] for x in manifest['nds_manager']['songs']}, {title['key'], cue['key']})
                 self.assertFalse(manifest['nds_manager']['manual_acceptance_inferred'])
+                self.assertEqual(manifest['nds_manager']['library_song_count'], 8)
                 waves = [set(s['file_offset'] for s in analyze(rom, manifest['target_table_file_offset'], r['target_index'])['samples']) for r in (title, cue)]
                 self.assertFalse(waves[0] & waves[1])
                 self.assertEqual([len(w) for w in waves], [22, 2])
@@ -95,7 +111,7 @@ class NdsManagerIntegrationTests(unittest.TestCase):
                 with patch.object(m.realtime, 'start', return_value='session') as start:
                     self.assertEqual(m.live_preview(title['key']), 'session')
                     data, table, count, song, rate = start.call_args.args
-                    self.assertEqual((count, song, rate), (NDS_SLOT_START + 5, title['target_index'], 48000))
+                    self.assertEqual((count, song, rate), (NDS_SLOT_START + len(SONGS), title['target_index'], 48000))
                     self.assertEqual(len(analyze(data, table, song)['samples']), 22)
                 def capture(data, manifest, target, directory, seconds, mgba):
                     self.assertEqual(target, cue['target_index'])

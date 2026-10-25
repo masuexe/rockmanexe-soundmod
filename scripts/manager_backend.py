@@ -15,7 +15,7 @@ from unified_catalog import write_catalog
 from original_catalog import catalog_originals, PROFILES, identify
 from target_profiles import TARGETS, target_profile, identify_target
 from prepatch import apply_prepatch, find_prepatch, prepatch_available
-from nds_catalog import (NDS_DIRECTORY, NDS_PROFILES, identify_nds, discover_nds,
+from nds_catalog import (NDS_DIRECTORY, NDS_PROFILES, SONGS, identify_nds, discover_nds,
                          add_nds_catalog, annotate_nds_manifest)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,6 +219,7 @@ class Manager:
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
                     'source_profiles':{key:profile['label'] for key,profile in SOURCE_PROFILES.items()},
+                    'nds_library_song_count':len(SONGS),
                     'project_notice':self.project_notice, 'target_label':self.value.get('target_label') if self.value else None, 'selected_sources':sorted(self.selected_sources & self.source_paths.keys()),
                     'source_options':[{'key':key,'label':SOURCE_PROFILES[key]['label'],'filename':filename,
                                        'size_bytes':path.stat().st_size if path.is_file() else 0,
