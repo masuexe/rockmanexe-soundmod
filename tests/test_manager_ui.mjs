@@ -98,10 +98,10 @@ console.log('EXE6 checks passed: both JP variants, 38 events, exclusive communic
 
 // Registered NDS entries use the same project and preview controls, with honest playback hints.
 const ndsRow={key:'nds-ssr1-26:26',source:'nds-ssr1-26',source_label:'Star Force 1 · HENKAN',source_index:26,target_index:8955,track_count:4,playlist_eligible:true,name:'HENKAN',nds_selector:'sf1-henkan-antialias',finite_song:true,playback_note:'Ends naturally; does not repeat'};
-fixture.nds_library_song_count=8;rows.push(ndsRow);fixture.source_options.push({key:'nds-ssr1',label:'Star Force 1 (NDS, JP)',filename:'source.nds',loaded:false});
+fixture.nds_library_song_count=11;rows.push(ndsRow);fixture.source_options.push({key:'nds-ssr1',label:'Star Force 1 (NDS, JP)',filename:'source.nds',loaded:false});
 await el('load').onclick();
 const ndsSource=el('donor-list').children.find(e=>e.children[0].dataset.source==='nds-ssr1').children[0];ndsSource.checked=true;ndsSource.listeners.change();await el('load').onclick();
-assert.ok(fixture.selected_sources.includes('nds-ssr1'));assert.match(el('nds-library-info').textContent,/8 supported/);
+assert.ok(fixture.selected_sources.includes('nds-ssr1'));assert.match(el('nds-library-info').textContent,/11 supported/);
 const ndsTrack=el('tracks').children.find(e=>e.dataset.key===ndsRow.key);assert.equal(ndsTrack.children[1].children[0].textContent,'HENKAN');assert.match(ndsTrack.children[1].children[1].textContent,/does not repeat/);
 ndsTrack.listeners.click();assert.match(el('detail').textContent,/does not repeat/);assert.match(el('playback-hint').textContent,/converted GBA song/);
 el('rule').value='21';el('rule').listeners.change();el('clear').onclick();const ndsCheck=el('tracks').children.find(e=>e.dataset.key===ndsRow.key).children[0];ndsCheck.checked=true;ndsCheck.listeners.change();await el('save-project').onclick();assert.deepEqual(persisted.pools['21'].tracks,[ndsRow.key]);

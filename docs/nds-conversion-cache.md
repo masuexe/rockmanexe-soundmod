@@ -8,7 +8,9 @@ needs; every selected original must remain available and unchanged.
 Generated conversions persist under `<data-dir>/nds-cache/`. Restarting the
 manager reuses checked entries. Deleting this generated cache is safe: requested
 songs will be rebuilt. A read-only/full cache does not prevent valid exports.
-The current eight-song roster, stable IDs, gains and project schema are unchanged.
+The eight-song roster at cache introduction, stable IDs, gains and project
+schema were unchanged by that optimization. Later library additions are recorded
+in the manager library guide.
 
 ## Validation and invalidation
 
@@ -96,3 +98,7 @@ as tested by the user.
 
 Local evidence is under `out/nds-research/nds-lazy-cache-v1/`; generated game
 assets remain outside Git.
+
+On 2026-10-25, the user reported no anomaly in the cache-version manager and
+confirmed its eight-entry roster. This is manager workflow feedback, without
+additional listening/gameplay coverage or a new ROM acceptance claim.
