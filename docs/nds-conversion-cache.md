@@ -16,10 +16,16 @@ in the manager library guide.
 
 Cache identity includes original ROM and SDAT fingerprints, target base/profile,
 registered selector/index/gain, finite flag, track count and ten-channel setting.
-A toolchain fingerprint snapshots script/config contents, Python implementation
-and version, platform, machine and libc at module import. A changed release or
-configuration cannot reuse an older key. Restart the server after updating its
-Python source; an existing server continues using its loaded release.
+A toolchain fingerprint snapshots the conversion dependency closure, all JSON
+configuration, Python implementation/version, platform, machine and libc at
+module import. Local imports are followed transitively, including function-local
+and optional branches. Converter/analysis/target roots are mandatory; missing
+roots or invalid Python fail closed. Manager, UI and registry-only edits do not
+change this key. Audio dependencies or configuration changes still invalidate it.
+Per-song selector/index/gain/finite/track-count changes remain identity changes.
+Restart the server after updating Python source; an existing server continues
+using its loaded release. The [cache scope update](nds-cache-scope-v2.md) records
+the new policy, one-time upgrade and exact-output checks.
 
 Entries use bounded JSON/base64, not executable serialization. A payload digest,
 compiled-container fingerprint and configuration checks protect integrity.
@@ -36,7 +42,10 @@ cannot mutate the loaded catalog. Only prepared sources get generated-resource
 fingerprints in export metadata. ROM/BPS and parsed conversion provenance remain
 unchanged; catalog/manifest metadata can omit unprepared resource fingerprints.
 
-Slow Play now preparation happens outside the manager state lock. State and Stop
+Play now shows elapsed preparation time while waiting, with a first-use/local-
+cache hint for NDS songs. It does not estimate completion percentages. Timers
+stop on playback, Stop, error and request replacement. Slow preparation happens
+outside the manager state lock. State and Stop
 requests remain responsive. Stop, a newer preview or a source revision change
 prevents a stale request from starting playback. An already requested conversion
 may finish and populate the cache after cancellation; cancellation is not a

@@ -6,7 +6,7 @@ The tools provide **read-only audio table scanning, verified BPS decoding, patch
 
 For Japanese EXE6, the [NDS music library](docs/nds-manager.md) offers seventeen registered Star Force 1/2/3 conversions, including source selection, converted-song previews, saved pools and BPS export. Choose the EXE6 target before selecting or uploading NDS sources.
 
-NDS catalogs load without converting audio. Preview/export prepares only requested songs and reuses a checked local cache across restarts; see [cache behavior and validation](docs/nds-conversion-cache.md).
+NDS catalogs load without converting audio. Preview/export prepares only requested songs and reuses a checked local cache across restarts. Registry-only additions and UI changes preserve existing audio caches; first-use playback shows elapsed preparation time. See [cache behavior](docs/nds-conversion-cache.md) and [cache scope validation](docs/nds-cache-scope-v2.md).
 
 ## Open the local manager
 
@@ -68,6 +68,7 @@ Outputs include `unified.gba`, a BPS patch for the original EXE4.5 ROM, `catalog
 ```bash
 python3 -m unittest discover -s tests -v
 node tests/test_manager_ui.mjs
+node tests/test_realtime_client.mjs
 node tests/test_audio_worklet.mjs
 ```
 

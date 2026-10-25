@@ -1,4 +1,5 @@
 """Content-addressed, checked JSON/PCM cache; dependency reports are reparsed."""
+import ast
 import base64
 import hashlib
 import json
@@ -31,9 +32,34 @@ def digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
-def toolchain_fingerprint():
-    files = sorted((ROOT / 'scripts').glob('*.py')) + sorted((ROOT / 'config').glob('*.json'))
-    return digest({'files': {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest() for f in files},
+CONVERSION_ROOTS = ('build_nds_experiment', 'analyze_song', 'nds_music', 'scan_audio', 'target_profiles')
+
+
+def conversion_files(root=ROOT, roots=CONVERSION_ROOTS):
+    """Include local imports even inside functions and optional conversion paths."""
+    pending, seen, files = list(roots), set(), []
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        path = root / 'scripts' / (name + '.py')
+        raw = path.read_bytes()  # Missing conversion roots must fail closed.
+        files.append(path)
+        for node in ast.walk(ast.parse(raw, filename=str(path))):
+            names = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
+                     else [node.module] if isinstance(node, ast.ImportFrom) and node.module else [])
+            for imported in names:
+                local = imported.split('.')[0]
+                if (root / 'scripts' / (local + '.py')).is_file():
+                    pending.append(local)
+    return sorted(files) + sorted((root / 'config').glob('*.json'))
+
+
+def toolchain_fingerprint(root=ROOT, roots=CONVERSION_ROOTS):
+    files = conversion_files(root, roots)
+    return digest({'dependency_policy': 2,
+                   'files': {str(f.relative_to(root)): hashlib.sha256(f.read_bytes()).hexdigest() for f in files},
                    'python': sys.version, 'implementation': platform.python_implementation(),
                    'system': platform.system(), 'machine': platform.machine(), 'libc': platform.libc_ver()})
 

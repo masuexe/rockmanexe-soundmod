@@ -9,12 +9,61 @@ import unittest
 from unittest.mock import patch
 
 sys.path[:0] = [str(Path('scripts').resolve()), str(Path('tests').resolve())]
-from nds_conversion_cache import NdsConversionCache, digest
+from nds_conversion_cache import NdsConversionCache, conversion_files, digest, toolchain_fingerprint
 from nds_track_merge import convert_merged_song
 from scan_audio import fingerprint
 from test_nds_upward_antialias import archive, score
 
 SPEC = ('ssr1', 0, 'fixture', 'Fixture', 0, False)
+
+
+class ConversionDependencyTests(unittest.TestCase):
+    def test_registry_and_manager_edits_keep_keys_but_nested_converter_edits_do_not(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            (root / 'config').mkdir()
+            (scripts / 'converter.py').write_text('from helpers import value\n')
+            (scripts / 'helpers.py').write_text('def optional():\n import dsp\n')
+            (scripts / 'dsp.py').write_text('import converter\nvalue=1\n')
+            key = toolchain_fingerprint(root, ('converter',))
+            (scripts / 'nds_catalog.py').write_text('SONGS = ["new registration"]\n')
+            (scripts / 'manager_backend.py').write_text('label = "new UI"\n')
+            self.assertEqual(toolchain_fingerprint(root, ('converter',)), key)
+            (scripts / 'dsp.py').write_text('import converter\nvalue=2\n')
+            self.assertNotEqual(toolchain_fingerprint(root, ('converter',)), key)
+
+    def test_configuration_and_environment_still_invalidate(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'scripts').mkdir()
+            (root / 'config').mkdir()
+            (root / 'scripts/converter.py').write_text('value=1\n')
+            key = toolchain_fingerprint(root, ('converter',))
+            (root / 'config/target.json').write_text('{"rate": 10512}')
+            changed = toolchain_fingerprint(root, ('converter',))
+            self.assertNotEqual(changed, key)
+            with patch('nds_conversion_cache.platform.machine', return_value='changed-machine'):
+                self.assertNotEqual(toolchain_fingerprint(root, ('converter',)), changed)
+
+    def test_missing_or_invalid_conversion_dependencies_fail_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'scripts').mkdir()
+            with self.assertRaises(FileNotFoundError):
+                toolchain_fingerprint(root, ('converter',))
+            (root / 'scripts/converter.py').write_text('def invalid(')
+            with self.assertRaises(SyntaxError):
+                toolchain_fingerprint(root, ('converter',))
+
+    def test_real_dependency_closure_keeps_audio_modules_and_excludes_manager(self):
+        names = {p.name for p in conversion_files()}
+        self.assertTrue({'build_nds_experiment.py', 'nds_music.py', 'nds_resample.py',
+                         'nds_track_merge.py', 'nds_lfo.py', 'nds_variable_lfo.py',
+                         'target_profiles.py', 'rom-profiles.json'} <= names)
+        self.assertFalse({'nds_catalog.py', 'manager_backend.py', 'manage_sound.py',
+                          'nds_conversion_cache.py'} & names)
 
 
 class NdsConversionCacheTests(unittest.TestCase):

@@ -5,6 +5,7 @@ class ExeRealtime {
   wake(session){const waiters=session.waiters.splice(0);for(const resolve of waiters)resolve();}
   async stop(){
     const session=this.current;if(!session)return;
+    clearInterval(session.loadingTimer);
     this.current=null;session.abort.abort();this.wake(session);
     if(session.node){session.node.port.postMessage({stop:true});session.node.disconnect();session.node.port.close();}
     session.context.close().catch(()=>{});
@@ -18,13 +19,17 @@ class ExeRealtime {
     const context=new AudioContext({sampleRate:48000,latencyHint:'interactive'});
     const session={key,context,abort:new AbortController(),waiters:[],sent:0,consumed:0,started:false,startedAt:performance.now()};
     this.current=session;this.onState({type:'loading',key});
+    session.loadingTimer=setInterval(()=>{
+      if(this.current!==session||session.started){clearInterval(session.loadingTimer);return;}
+      this.onState({type:'loading',key,elapsed_ms:performance.now()-session.startedAt});
+    },1000);
     try{
       await context.resume();await context.audioWorklet.addModule('/audio-worklet.js');
       if(this.current!==session)return;
       const node=new AudioWorkletNode(context,'exe-stream',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});session.node=node;node.connect(context.destination);
       node.port.onmessage=({data})=>{
         if(this.current!==session)return;
-        if(data.type==='started'){session.started=true;this.onState({type:'playing',key,latency_ms:performance.now()-session.startedAt});}
+        if(data.type==='started'){session.started=true;clearInterval(session.loadingTimer);this.onState({type:'playing',key,latency_ms:performance.now()-session.startedAt});}
         if(data.type==='progress'){session.consumed=data.consumed;this.wake(session);this.onState({...data,key,sample_rate:context.sampleRate});}
         if(data.type==='ended'){this.stop();this.onState({type:'ended',key});}
       };

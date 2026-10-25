@@ -6,7 +6,11 @@ const roles = {base:'Original target ROM', pvp:'PvP BPS pre-patch'};
 const sourceNames = {pvp:'Native target music'};
 const messages = {empty:'Empty entry',preserved_native_audio:'Preserved native audio',reserved_nonmusic_entry:'Other audio; not imported',exceeds_target_track_capacity:'Exceeds target voice capacity',unsupported_dependencies:'Unsupported audio dependencies'};
 const live = new window.ExeRealtime(window.MANAGER_TOKEN, event=>{
-  if(event.type==='loading')$('live-status').textContent=`Starting ${event.key}…`;
+  if(event.type==='loading'){
+    const nds=state?.catalog?.entries?.some(row=>row.key===event.key&&row.nds_selector);
+    const elapsed=Math.floor((event.elapsed_ms||0)/1000);
+    $('live-status').textContent=nds?`Preparing NDS audio · ${elapsed}s elapsed. First use converts the song; later plays use the local cache.`:`Starting ${event.key} · ${elapsed}s elapsed…`;
+  }
   if(event.type==='playing'){$('live-status').textContent=`Playing ${event.key}`;$('live-status').dataset.latencyMs=event.latency_ms.toFixed(1);}
   if(event.type==='progress'){$('live-status').dataset.frames=event.consumed;$('live-status').dataset.peak=Math.max(Number($('live-status').dataset.peak||0),event.peak);$('live-status').dataset.underruns=event.underruns;}
   if(event.type==='stopped')$('live-status').textContent='Stopped';
