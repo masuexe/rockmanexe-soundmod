@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains eleven configurations:
+The current library contains seventeen configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -18,11 +18,20 @@ The current library contains eleven configurations:
 | Star Force 1 | SCHOOL | Filtering | +3.5dB | Loops |
 | Star Force 2 | WIN2 | Finite release snapshots and filtering | +3.5dB | Ends naturally |
 | Star Force 3 | COMICAL | Filtering | +3.5dB | Loops |
+| Star Force 1 | COMICAL | Filtering | +3.5dB | Loops |
+| Star Force 1 | KANDO | Filtering | +3.5dB | Loops |
+| Star Force 2 | DEMPAJIKEN | Fitted envelopes and filtering | +3.5dB | Loops |
+| Star Force 2 | HOKORA | Nine-to-eight grouping and filtering | +3.5dB | Loops |
+| Star Force 3 | WIN2 | Finite filtering | +3.5dB | Ends naturally |
+| Star Force 3 | GAMEOVER | Finite filtering | +3.5dB | Ends naturally |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
 delivered ROM6406CA45 has user-reported listening and added-song visibility
 acceptance, with individual timing/workflow/gameplay subchecks not separately confirmed.
+The [fourth batch](nds-manager-library-v4.md) adds the final six entries;
+its exact ROM D1A5CB1F and all three requested workflow/listening/gameplay checks
+have user-reported acceptance. Slow preview loading is separately under investigation.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains
