@@ -33,6 +33,25 @@ def artifact(root, name, *, dual=False, status='user_reported_pass', scope='Only
 
 
 class ManualEvidenceTests(unittest.TestCase):
+    def test_manager_pool_export_is_separate_and_retains_actual_routing(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            p = artifact(root, 'manager', dual=True)
+            m = json.loads((p / 'build.json').read_text())
+            source = m.pop('nds_dual_conversion')
+            m['nds_manager'] = {'songs': [{'key': 'nds-ssr1-18:18', **source['songs']['title']}]}
+            m['hook'] = {'rules': [{'trigger_id': 1, 'ids': [8954]}]}
+            (p / 'build.json').write_text(json.dumps(m))
+            records, composites = collect_manual_evidence(root)
+            self.assertEqual(records, [])
+            self.assertEqual(composites[0]['manager_pool_rules'], m['hook']['rules'])
+            self.assertEqual(composites[0]['songs'], m['nds_manager']['songs'])
+            self.assertIsNone(composites[0]['communication_role'])
+            m['nds_manager']['songs'] *= 2
+            (p / 'build.json').write_text(json.dumps(m))
+            with self.assertRaisesRegex(ValueError, 'songs'):
+                collect_manual_evidence(root)
+
     def test_composite_is_separate_and_cannot_accept_either_standalone_role(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

@@ -15,6 +15,8 @@ from unified_catalog import write_catalog
 from original_catalog import catalog_originals, PROFILES, identify
 from target_profiles import TARGETS, target_profile, identify_target
 from prepatch import apply_prepatch, find_prepatch, prepatch_available
+from nds_catalog import (NDS_DIRECTORY, NDS_PROFILES, identify_nds, discover_nds,
+                         add_nds_catalog, annotate_nds_manifest)
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_DIRECTORY = ROOT.parent / 'roms'
@@ -23,6 +25,8 @@ DEFAULT_PVP_PATCH = PATCH_DIRECTORY / 'exe45_pvp_0.6.0.bps'
 if not DEFAULT_PVP_PATCH.is_file(): DEFAULT_PVP_PATCH = ROOT / 'references/exe45_pvp_0.6.0.bps'
 INPUTS = {'base': ROM_DIRECTORY / 'exe45.gba', 'pvp': DEFAULT_PVP_PATCH}
 INPUTS.update({f'rom:{key}': ROM_DIRECTORY / profile['filename'] for key, profile in PROFILES.items()})
+INPUTS.update({f'rom:{key}': NDS_DIRECTORY / profile['filename'] for key, profile in NDS_PROFILES.items()})
+SOURCE_PROFILES = {**PROFILES, **NDS_PROFILES}
 
 
 
@@ -43,6 +47,7 @@ class Manager:
         self.jobs = {}
         self.active = None
         self.preview_cache = {}
+        self.nds_cache = {}
         self.default_project = self._default_project(target_profile('exe45-pvp'))
         self.project_notice = ''
         self.project = copy.deepcopy(self.default_project)
@@ -64,11 +69,12 @@ class Manager:
                 uploaded = self.directory / 'uploaded-roms' / profile['filename']
                 path = uploaded if uploaded.exists() else INPUTS['rom:' + key]
                 if path.exists(): self.source_paths[key] = (path.name, path)
+            self.source_paths.update(discover_nds(NDS_DIRECTORY, self.directory / 'uploaded-roms'))
         if pvp_patch is not None:
             patch_path = Path(pvp_patch)
             self.inputs['pvp'] = (patch_path.name,patch_path.read_bytes())
-        self.selected_sources = set(saved['sources']) if saved and isinstance(saved.get('sources'), list) else set(self.source_paths)
-        self.selected_sources.intersection_update(PROFILES)
+        self.selected_sources = set(saved['sources']) if saved and isinstance(saved.get('sources'), list) else set(self.source_paths) & PROFILES.keys()
+        self.selected_sources.intersection_update(SOURCE_PROFILES)
 
         saved_target = json.loads(self.target_path.read_text()).get('target') if self.target_path.exists() else None
         if target is not None:
@@ -78,6 +84,8 @@ class Manager:
             self.selected_target = identify_target(decoded)['key']
         elif saved_target in TARGETS and preload:
             self.select_target(saved_target, persist=False)
+        if self.selected_target not in ('exe6', 'exe6f'):
+            self.selected_sources.difference_update(NDS_PROFILES)
 
     def select_target(self, key, persist=True):
         if key not in TARGETS: raise ValueError('Choose a supported target ROM')
@@ -99,6 +107,8 @@ class Manager:
             default_project = self._default_project(profile)
             project = json.loads(project_path.read_text()) if project_path.exists() else copy.deepcopy(default_project)
             self.selected_target = key
+            if key not in ('exe6', 'exe6f'):
+                self.selected_sources.difference_update(NDS_PROFILES)
             self.inputs = replacement
             self._invalidate()
             self.project_path, self.default_project, self.project = project_path, default_project, project
@@ -133,6 +143,8 @@ class Manager:
             if self.active: raise ValueError('Wait for the current task before changing sources')
             if not isinstance(sources, list) or any(not isinstance(key, str) or key not in self.source_paths for key in sources):
                 raise ValueError('Select available original ROM sources')
+            if self.selected_target not in ('exe6', 'exe6f') and any(key in NDS_PROFILES for key in sources):
+                raise ValueError('NDS music currently requires Japanese EXE6 Gregar or Falzar')
             selected = set(sources)
             if selected != self.selected_sources:
                 self.selected_sources = selected
@@ -193,7 +205,7 @@ class Manager:
             value = copy.deepcopy(self.value)
             if value:
                 for row in value['entries']:
-                    row['name'] = self.names.get(row['key'], '')
+                    row['name'] = self.names.get(row['key'], row.get('name') or '')
             project = copy.deepcopy(self.project)
             known = {r['key'] for r in value['entries']} if value else set(self.names)
             project['names'] = {key:name for key,name in self.names.items() if key in known}
@@ -206,15 +218,21 @@ class Manager:
                     'patch_accept':'.ips' if TARGETS[self.selected_target].get('patch_format')=='ips' else '.bps',
                     'active_job': self.jobs.get(self.active) if self.active else None,
                     'preview_available': Path(self.mgba).is_file(), 'realtime_available':self.realtime.available(), 'rom_directory':str(ROM_DIRECTORY),
-                    'source_profiles':{key:profile['label'] for key,profile in PROFILES.items()},
+                    'source_profiles':{key:profile['label'] for key,profile in SOURCE_PROFILES.items()},
                     'project_notice':self.project_notice, 'target_label':self.value.get('target_label') if self.value else None, 'selected_sources':sorted(self.selected_sources & self.source_paths.keys()),
-                    'source_options':[{'key':key,'label':PROFILES[key]['label'],'filename':filename,
-                                       'size_bytes':path.stat().st_size if path.is_file() else 0,'loaded':self.value is not None and key in self.decoded[2]}
-                                      for key,(filename,path) in sorted(self.source_paths.items())]}
+                    'source_options':[{'key':key,'label':SOURCE_PROFILES[key]['label'],'filename':filename,
+                                       'size_bytes':path.stat().st_size if path.is_file() else 0,
+                                       'loaded':self.value is not None and (key in self.decoded[2] or key in self.value.get('nds_sources',{}))}
+                                      for key,(filename,path) in sorted(self.source_paths.items())
+                                      if key not in NDS_PROFILES or self.selected_target in ('exe6', 'exe6f')]}
 
     def upload(self, role, filename, data):
         if role == 'rom':
-            role = 'rom:' + identify(data)
+            try:
+                key = identify(data)
+            except ValueError:
+                key = identify_nds(data)
+            role = 'rom:' + key
         if role not in INPUTS or not data or len(data) > 32 * 1024 * 1024:
             raise ValueError('Choose a supported ROM, BPS or IPS file, no larger than 32 MiB')
         with self.lock:
@@ -223,9 +241,14 @@ class Manager:
             filename = filename.replace('\\', '/').rsplit('/', 1)[-1][:200]
             if role.startswith('rom:'):
                 key = role[4:]
+                if key in NDS_PROFILES:
+                    if self.selected_target not in ('exe6', 'exe6f'):
+                        raise ValueError('Select Japanese EXE6 Gregar or Falzar before adding NDS music')
+                    if identify_nds(data) != key:
+                        raise ValueError('NDS source does not match its selected game')
                 directory = self.directory / 'uploaded-roms'
                 directory.mkdir(exist_ok=True)
-                path = directory / PROFILES[key]['filename']
+                path = directory / SOURCE_PROFILES[key]['filename']
                 temporary = path.with_suffix('.tmp')
                 temporary.write_bytes(data)
                 temporary.replace(path)
@@ -298,14 +321,17 @@ class Manager:
                 pvp, pvp_info = apply_prepatch(base,inputs['pvp'][1],profile)
             else:
                 pvp, pvp_info = apply_bps(base,inputs['pvp'][1])
-            donors = {key:path.read_bytes() for key,(_,path) in source_paths.items()}
+            donors = {key:path.read_bytes() for key,(_,path) in source_paths.items() if key in PROFILES}
+            nds_originals = {key:path.read_bytes() for key,(_,path) in source_paths.items() if key in NDS_PROFILES}
             value, reports = catalog_originals(base, pvp, donors)
+            original_donors = dict(donors)
+            add_nds_catalog(value, reports, donors, nds_originals, base, self.nds_cache)
             with self.lock:
                 if revision != self.revision:
                     raise ValueError('Files changed; load tracks again')
                 self.selected_target = value['target_profile']
                 self._reconcile_project(value, draft)
-                self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in donors.items()})
+                self.inputs.update({'rom:' + key:(source_paths[key][0],data) for key,data in original_donors.items()})
                 self.value = value
                 self.decoded = (base, pvp, donors, pvp_info, reports)
             return {'tracks': sum(row['playlist_eligible'] for row in value['entries'])}
@@ -367,9 +393,10 @@ class Manager:
             if apply_bps(base, patch)[0] != output:
                 raise AssertionError('Export verification failed')
             for row in value['entries']:
-                row['name'] = names.get(row['key'], '')
+                row['name'] = names.get(row['key'], row.get('name') or '')
             patch_role = TARGETS[value['target_profile']].get('patch_role','pvp')
             manifest.update(source_patches={patch_role:pvp_info} if pvp_info else {}, manager=True, music_sources='original ROMs')
+            annotate_nds_manifest(manifest, self.value)
             (directory / 'unified.gba').write_bytes(output)
             (directory / 'unified.bps').write_bytes(patch)
             (directory / 'build.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -399,6 +426,7 @@ class Manager:
             base, pvp, donors, _, reports = decoded
             config = {'schema_version': 1, 'pools': {str(self.value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
             output, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
+            annotate_nds_manifest(manifest, self.value)
             rom = directory / 'preview.gba'
             rom.write_bytes(output)
             wav, info = capture_preview(rom, manifest, target_id, directory / 'capture', seconds, self.mgba)
@@ -414,7 +442,12 @@ class Manager:
             row = next((r for r in self.value['entries'] if r['key'] == key), None)
             if not row or not row['playlist_eligible']:
                 raise ValueError('This entry is not available for music preview')
-            base, pvp, donors, _, _ = self.decoded
+            base, pvp, donors, _, reports = self.decoded
+            if row.get('nds_selector'):
+                config = {'schema_version': 1, 'pools': {str(self.value['preview_trigger']): {'tracks': [key], 'selector_shift': 0}}}
+                data, _, manifest = build_catalog(base, pvp, self.value, reports, donors, config, selected_only=True)
+                table, count = manifest['target_table_file_offset'], manifest['table_entry_count']
+                return self.realtime.start(data,table,count,row['target_index'],sample_rate)
             if row['source'] == self.value['native_source']:
                 layout = target_profile(self.value['target_profile'])['layout']
                 data, table, count = pvp, layout['table_offset'], layout['entry_count']

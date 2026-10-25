@@ -35,6 +35,8 @@ For GP with ChipControl, select **Rockman EXE Battle Chip GP (JP) + ChipControl 
 
 Japanese EXE6 Gregar and Falzar are also targets. Select the matching original ROM; no pre-patch is needed. Both expose 37 native music events plus **Communication battles only**. Title ID 1 and the ordinary ID-21 pool remain independent; older projects inherit the new scene pool from their previous ID-21 choices. Saved projects remain separate by variant. See [EXE6 details](exe6.md).
 
+Japanese EXE6 also accepts the initial [five-song Star Force NDS library](nds-manager.md). NDS originals are discovered in `/home/harp/projects/nds/roms` or added as `.nds` uploads. Registered song names and finite-playback notes are supplied by that library; existing GBA donor naming remains unchanged. **Play now** for NDS plays the converted GBA score.
+
 ## Choose and export
 
 1. Select **Game to modify**, supply the original target ROM and any required pre-patch, check the music ROM sources you need, then click **Load tracks**. The source counter distinguishes selected, available, and loaded ROMs. Native target music is always included; clearing every donor source loads only those entries (48 for PvP, 16 for GP, 37 for EXE6).
@@ -76,7 +78,7 @@ The output directory must be new.
 
 ## Verification
 
-The Python suite passes 67 tests, including manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity, selected-only packing/loading, source-choice persistence, disabled-source pool pruning, native-only catalogs, and BPS reconstruction. Run:
+The Python suite covers manager input rejection, project/name persistence, invalid-project atomicity, preview cache/isolation, HTTP token/origin/path handling, original-ROM identity, selected-only packing/loading, source-choice persistence, disabled-source pool pruning, native-only catalogs, and BPS reconstruction. Run:
 
 ```bash
 python3 -m unittest discover -s tests -v

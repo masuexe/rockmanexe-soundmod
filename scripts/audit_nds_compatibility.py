@@ -895,19 +895,28 @@ def collect_manual_evidence(root):
             raise ValueError(f'Manual evidence artifact differs: {path}')
         if expected != manifest['output_fingerprint']:
             raise ValueError(f'Manual evidence/manifest fingerprints differ: {path}')
-        if 'nds_dual_conversion' in manifest:
-            source = manifest['nds_dual_conversion']
-            if set(source['songs']) != {'title', 'battle'} or source['communication_role'] not in source['songs']:
+        if 'nds_dual_conversion' in manifest or 'nds_manager' in manifest:
+            source = manifest.get('nds_dual_conversion', manifest.get('nds_manager'))
+            manager = 'nds_dual_conversion' not in manifest
+            if manager:
+                songs = source['songs']
+                if (not isinstance(songs, list) or not songs
+                        or any(not isinstance(s, dict) or not isinstance(s.get('key'), str) for s in songs)
+                        or len({s['key'] for s in songs}) != len(songs)):
+                    raise ValueError(f'Invalid manager NDS manual evidence songs: {path}')
+            elif set(source['songs']) != {'title', 'battle'} or source['communication_role'] not in source['songs']:
                 raise ValueError(f'Invalid composite manual evidence roles: {path}')
             patch = fingerprint(path.with_name('unified.bps').read_bytes())
             if patch != value['expected_bps_fingerprint']:
                 raise ValueError(f'Composite manual evidence patch differs: {path}')
             composites.append({'configuration': path.parent.name, 'record': str(path.resolve()),
                                'output_fingerprint': expected, 'bps_fingerprint': patch,
-                               'songs': source['songs'], 'communication_role': source['communication_role'],
+                               'songs': source['songs'], 'communication_role': source.get('communication_role'),
                                'reported_acceptance_scope': value.get('acceptance_scope'),
                                'scope': 'User-reported checks for this exact composite artifact only; '
                                         'not standalone song acceptance or a batch runtime test'})
+            if manager:
+                composites[-1]['manager_pool_rules'] = manifest['hook']['rules']
             continue
         source = manifest['nds_conversion']
         records.append({'family': source['source_profile'][:4], 'sequence_index': source['sequence_index'],

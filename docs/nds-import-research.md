@@ -1,10 +1,13 @@
 # NDS music import research
 
+For current five-song manager support, see [NDS manager usage](nds-manager.md).
+The initial experiment and its historical limits are recorded below.
+
 Assessment and first experiment date: 2026-10-15. Star Force 3 `BGM_ROOM` now
 converts into GBA MPlay resources and plays naturally in Japanese EXE6.
 The Gregar experiment passes sustained execution through two loops; Falzar
 also passes the start/effect/queue/stop probes. This is a separate research CLI,
-and NDS import/preview is not yet available in the manager.
+and NDS import/preview was not available in the manager at this initial stage.
 
 The second [BGM_BATTLE experiment](nds-battle-research.md) now maps eleven
 source tracks into eight target tracks without dropping note events. It has

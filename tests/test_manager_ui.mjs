@@ -95,3 +95,16 @@ for(const target of ['exe6','exe6f']){
  assert.equal(exported.target_profile,target);assert.match(el('status').textContent,new RegExp(`apply BPS to ${target}.gba`));
 }
 console.log('EXE6 checks passed: both JP variants, 38 events, exclusive communication pool, unchanged ID-21/title pools and original-ROM exports.');
+
+// Registered NDS entries use the same project and preview controls, with honest playback hints.
+const ndsRow={key:'nds-ssr1-26:26',source:'nds-ssr1-26',source_label:'Star Force 1 · HENKAN',source_index:26,target_index:8955,track_count:4,playlist_eligible:true,name:'HENKAN',nds_selector:'sf1-henkan-antialias',finite_song:true,playback_note:'Ends naturally; does not repeat'};
+rows.push(ndsRow);fixture.source_options.push({key:'nds-ssr1',label:'Star Force 1 (NDS, JP)',filename:'source.nds',loaded:false});
+await el('load').onclick();
+const ndsSource=el('donor-list').children.find(e=>e.children[0].dataset.source==='nds-ssr1').children[0];ndsSource.checked=true;ndsSource.listeners.change();await el('load').onclick();
+assert.ok(fixture.selected_sources.includes('nds-ssr1'));
+const ndsTrack=el('tracks').children.find(e=>e.dataset.key===ndsRow.key);assert.equal(ndsTrack.children[1].children[0].textContent,'HENKAN');assert.match(ndsTrack.children[1].children[1].textContent,/does not repeat/);
+ndsTrack.listeners.click();assert.match(el('detail').textContent,/does not repeat/);assert.match(el('playback-hint').textContent,/converted GBA song/);
+el('rule').value='21';el('rule').listeners.change();el('clear').onclick();const ndsCheck=el('tracks').children.find(e=>e.dataset.key===ndsRow.key).children[0];ndsCheck.checked=true;ndsCheck.listeners.change();await el('save-project').onclick();assert.deepEqual(persisted.pools['21'].tracks,[ndsRow.key]);
+await el('play-now').onclick();assert.match(el('live-status').textContent,/Playing nds-ssr1-26:26/);await el('preview').onclick();assert.equal(previewed.key,ndsRow.key);await el('export').onclick();assert.deepEqual(exported.pools['21'].tracks,[ndsRow.key]);
+assert.match(fs.readFileSync(new URL('../web/index.html',import.meta.url),'utf8'),/accept="\.gba,\.nds"/);
+console.log('NDS UI checks passed: source choice, title, finite hint, converted preview, saved pool and export.');
