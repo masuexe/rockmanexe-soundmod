@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains twenty-nine configurations:
+The current library contains thirty-five configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -36,6 +36,12 @@ The current library contains twenty-nine configurations:
 | Star Force 1 | GAMEOVER | Finite filtering | +3.5dB | Ends naturally |
 | Star Force 1 | BOSSMAE | Filtering | +3.5dB | Loops |
 | Star Force 3 | DEMPAJIKEN | Eleven-to-eight grouping and filtering | +3.5dB | Loops |
+| Star Force 1 | SETSUNAI | Filtering, note-free conductor retained | +3.5dB | Loops |
+| Star Force 1 | KINCHO | Filtering | +3.5dB | Loops |
+| Star Force 1 | LAST | Filtering and boundary EOT | +3.5dB | Loops |
+| Star Force 1 | WIN2 | Accepted-v2 finite filtering | +3.5dB | Ends naturally |
+| Star Force 3 | HOKORA | Fitted envelopes and filtering | +3.5dB | Loops |
+| Star Force 3 | CHANGE | Thirteen-to-eight grouping and upward filtering | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -49,6 +55,9 @@ its exact ROM FBD9D2FF and three requested workflow/listening/gameplay checks
 have user-reported acceptance, with other exports and manual Falzar scope separate.
 The [sixth batch](nds-manager-library-v6.md) adds the final six entries;
 its exact ROM6E07A6DC and three requested workflow/listening/gameplay checks
+have user-reported acceptance, with other exports and manual Falzar scope separate.
+The [seventh batch](nds-manager-library-v7.md) adds the final six entries;
+its exact ROM414209BD and three requested workflow/listening/gameplay checks
 have user-reported acceptance, with other exports and manual Falzar scope separate.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
