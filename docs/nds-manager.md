@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains thirty-five configurations:
+The current library contains thirty-seven configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -42,6 +42,8 @@ The current library contains thirty-five configurations:
 | Star Force 1 | WIN2 | Accepted-v2 finite filtering | +3.5dB | Ends naturally |
 | Star Force 3 | HOKORA | Fitted envelopes and filtering | +3.5dB | Loops |
 | Star Force 3 | CHANGE | Thirteen-to-eight grouping and upward filtering | +3.5dB | Loops |
+| Star Force 3 | STUDIO | Fifteen-to-eight grouping and upward filtering | +3.5dB | Loops |
+| Star Force 3 | AJITO | Fourteen-to-eight grouping and upward filtering | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -59,6 +61,9 @@ have user-reported acceptance, with other exports and manual Falzar scope separa
 The [seventh batch](nds-manager-library-v7.md) adds the final six entries;
 its exact ROM414209BD and three requested workflow/listening/gameplay checks
 have user-reported acceptance, with other exports and manual Falzar scope separate.
+The [eighth batch](nds-manager-library-v8.md) appends STUDIO/AJITO; exact
+ROM2EF82603 and all three requested manager/listening/gameplay checks have
+user-reported acceptance. Other exports and manual Falzar coverage remain separate.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains
