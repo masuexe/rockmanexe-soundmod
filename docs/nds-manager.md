@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains forty-one configurations:
+The current library contains forty-three configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -48,6 +48,8 @@ The current library contains forty-one configurations:
 | Star Force 2 | NESSIE | Original PCM, fitted envelopes and native pitch LFO | +3.5dB | Loops |
 | Star Force 3 | FRIEND | Original PCM, release snapshots and native pitch LFO | +3.5dB | Loops |
 | Star Force 1 | SABISHI | Original PCM, fitted attack and variable-tempo late-enable LFO | +3.5dB | Loops |
+| Star Force 3 | SABISHI | Source-specific gates, original PCM and variable-tempo late-enable/fitted attack | +3.5dB | Loops |
+| Star Force 2 | VS | Original PCM, late pitch-LFO activation and positive depth updates | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -73,6 +75,9 @@ ROM4C9805E9 and all three requested manager/listening/gameplay checks have
 user-reported acceptance. Other exports and manual Falzar coverage remain separate.
 The [tenth batch](nds-manager-library-v10.md) appends FRIEND/SABISHI; exact
 ROM6C7BFA04 and all three requested manager/listening/gameplay checks have
+user-reported acceptance. Other exports and manual Falzar coverage remain separate.
+The [eleventh batch](nds-manager-library-v11.md) appends SF3 SABISHI/SF2 VS; exact
+ROM120003E3 and all three requested manager/listening/gameplay checks have
 user-reported acceptance. Other exports and manual Falzar coverage remain separate.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
