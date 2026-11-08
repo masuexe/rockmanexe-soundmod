@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains forty-three configurations:
+The current library contains forty-five configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -50,6 +50,8 @@ The current library contains forty-three configurations:
 | Star Force 1 | SABISHI | Original PCM, fitted attack and variable-tempo late-enable LFO | +3.5dB | Loops |
 | Star Force 3 | SABISHI | Source-specific gates, original PCM and variable-tempo late-enable/fitted attack | +3.5dB | Loops |
 | Star Force 2 | VS | Original PCM, late pitch-LFO activation and positive depth updates | +3.5dB | Loops |
+| Star Force 1 | FMPLANET | Original PCM and fixed delayed pitch LFO | +3.5dB | Loops |
+| Star Force 1 | GOWAIINCHO | Original PCM, pre-note LFO setup and fixed delayed pitch LFO | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -79,6 +81,25 @@ user-reported acceptance. Other exports and manual Falzar coverage remain separa
 The [eleventh batch](nds-manager-library-v11.md) appends SF3 SABISHI/SF2 VS; exact
 ROM120003E3 and all three requested manager/listening/gameplay checks have
 user-reported acceptance. Other exports and manual Falzar coverage remain separate.
+The [twelfth batch](nds-manager-library-v12.md) appends SF1 FMPLANET/GOWAIINCHO;
+its exact ROM29C46BC0 has user-reported acceptance for all three requested checks. Other exports and
+manual Falzar coverage remain separate.
+
+## v12 review and acceptance
+
+The twelfth batch appends slots8997–8998 and keeps all prior slots, gains, finite
+flags and cache identities. Both additions reuse accepted audio and dependencies.
+Thirty-nine reports match strictly; six keep explicit legacy or pinned report
+reconciliation. Fresh34-case focused Python and three JavaScript suites pass. The
+prior550-case full suite is reused, not rerun. All45 real starts, the separate
+45-song Falzar pool, HTTP export and two new three-second previews pass. The final
+Gregar ROM and BPS are built. A Falzar review server is prepared at
+`http://127.0.0.1:8789/` was the review URL at delivery. The user reports all
+three requested checks passed for exact ROM29C46BC0.
+Title FMPLANET must run for at least180 seconds. Virus GOWAIINCHO must run for at
+least240 seconds, including first entry near8 seconds and joins near150/206
+seconds. The operator must also check45-song visibility, both previews,
+save/reload/export, chips or Buster and three battle-map-battle cycles.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains

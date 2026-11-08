@@ -59,6 +59,8 @@ SONGS = (
     ('ssr1', 36, 'sf1-sabishi-variable-late-envelope', 'SABISHI', 3.5, False),
     ('ssr3', 33, 'sf3-sabishi-variable-late-envelope', 'SABISHI', 3.5, False),
     ('ssr2', 37, 'sf2-vs-late-depth', 'VS', 3.5, False),
+    ('ssr1', 2, 'sf1-fmplanet-delay', 'FMPLANET', 3.5, False),
+    ('ssr1', 7, 'sf1-gowaiincho-delay', 'GOWAIINCHO', 3.5, False),
 )
 
 
@@ -82,7 +84,7 @@ def discover_nds(directory, uploaded):
 
 
 # Static facts from the registered, independently checked configurations.
-TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8)))
+TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 8)))
 
 
 def add_nds_catalog(value, originals):
