@@ -19,8 +19,8 @@ or gameplay acceptance. A silent environment defers those manual checks;
 automated success does not replace them.
 
 For each new manual-listening delivery, overwrite
-`/mnt/d/Trill/patches/_exe6_test/v0.0.0/BR5J_00.bps`
-(Windows: `D:\Trill\patches\_exe6_test\v0.0.0\BR5J_00.bps`) with that exact
+`/mnt/c/trill/patches/_exe6_test/v0.0.0/BR5J_00.bps`
+(Windows: `C:\trill\patches\_exe6_test\v0.0.0\BR5J_00.bps`) with that exact
 experiment's final `unified.bps`. Verify the destination SHA-256 matches the
 validated patch and record the delivery. If the destination is unavailable,
 report that the copy could not be completed; do not claim it was delivered.
