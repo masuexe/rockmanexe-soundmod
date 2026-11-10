@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains forty-five configurations:
+The current library contains forty-seven configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -52,6 +52,8 @@ The current library contains forty-five configurations:
 | Star Force 2 | VS | Original PCM, late pitch-LFO activation and positive depth updates | +3.5dB | Loops |
 | Star Force 1 | FMPLANET | Original PCM and fixed delayed pitch LFO | +3.5dB | Loops |
 | Star Force 1 | GOWAIINCHO | Original PCM, pre-note LFO setup and fixed delayed pitch LFO | +3.5dB | Loops |
+| Star Force 1 | HOKORA | Original PCM, six looping tracks and one one-shot track; weak delayed LFO | +3.5dB | Loops |
+| Star Force 1 | PLANETARIUM | Original PCM, delayed LFO and long notes across loop jumps | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -100,6 +102,9 @@ Title FMPLANET must run for at least180 seconds. Virus GOWAIINCHO must run for a
 least240 seconds, including first entry near8 seconds and joins near150/206
 seconds. The operator must also check45-song visibility, both previews,
 save/reload/export, chips or Buster and three battle-map-battle cycles.
+The [thirteenth batch](nds-manager-library-v13.md) appends SF1 HOKORA/PLANETARIUM;
+exact ROM2F9772D8 and all three requested manager/listening/gameplay checks have
+user-reported acceptance. Other exports and manual Falzar coverage remain separate.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains
