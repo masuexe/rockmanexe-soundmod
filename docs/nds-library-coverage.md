@@ -26,8 +26,11 @@ Seventeen missing sequences already have a historical packed variant. They
 still need source-specific reference, native, integration and manual evidence.
 The other51 missing sequences had capacity blockers in the v38 audit. Those
 results are historical leads; current conversion support must be verified.
-The four STRM files need a separate stream decoding/playback path. The present
-SSEQ converter does not import them.
+The four STRM files need a separate stream decoding/playback path.
+[Offline source decoding](nds-strm-source-research.md) now matches an independent
+reference for all four complete stereo streams, loop repetitions and loop seeks.
+The present SSEQ converter does not import them; no native or manual STRM
+acceptance is established.
 
 | Stream | Name | Source bytes | State |
 | --- | --- | ---: | --- |
