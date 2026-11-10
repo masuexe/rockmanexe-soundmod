@@ -63,6 +63,13 @@ SONGS = (
     ('ssr1', 7, 'sf1-gowaiincho-delay', 'GOWAIINCHO', 3.5, False),
     ('ssr1', 20, 'sf1-hokora-mixed-delay', 'HOKORA', 3.5, False),
     ('ssr1', 13, 'sf1-planetarium-delay', 'PLANETARIUM', 3.5, False),
+    ('ssr1', 27, 'sf1-battle-lfo', 'BATTLE', 3.5, False),
+    ('ssr1', 3, 'sf1-hometown-depth', 'HOMETOWN', 3.5, False),
+    ('ssr1', 28, 'sf1-boss-toggle', 'BOSS', 3.5, False),
+    ('ssr1', 32, 'sf1-lose-depth-min', 'LOSE', 3.5, False),
+    ('ssr3', 42, 'sf3-lose-depth-min', 'LOSE', 3.5, False),
+    ('ssr2', 32, 'sf2-lose-mixed-depth-min', 'LOSE', 3.5, False),
+    ('ssr1', 9, 'sf1-satellite-upward-antialias', 'SATELLITE', 3.5, False),
 )
 
 
@@ -86,7 +93,7 @@ def discover_nds(directory, uploaded):
 
 
 # Static facts from the registered, independently checked configurations.
-TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 8, 7, 8)))
+TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 8, 7, 8, 7, 8, 7, 7, 7, 7, 8)))
 
 
 def add_nds_catalog(value, originals):

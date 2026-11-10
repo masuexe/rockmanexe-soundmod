@@ -3,7 +3,7 @@
 The manager accepts fingerprint-pinned Japanese Star Force original ROMs as
 music sources for Japanese EXE6 Gregar and Falzar. It reuses the existing
 registered conversions, GBA resource relocator, playback pools and BPS exporter.
-The current library contains forty-seven configurations:
+The current library contains fifty-four configurations:
 
 | Source | Song | Preparation | Gain | Playback |
 | --- | --- | --- | ---: | --- |
@@ -54,6 +54,13 @@ The current library contains forty-seven configurations:
 | Star Force 1 | GOWAIINCHO | Original PCM, pre-note LFO setup and fixed delayed pitch LFO | +3.5dB | Loops |
 | Star Force 1 | HOKORA | Original PCM, six looping tracks and one one-shot track; weak delayed LFO | +3.5dB | Loops |
 | Star Force 1 | PLANETARIUM | Original PCM, delayed LFO and long notes across loop jumps | +3.5dB | Loops |
+| Star Force 1 | BATTLE | Accepted-v2 original PCM and native pitch LFO | +3.5dB | Loops |
+| Star Force 1 | HOMETOWN | Original PCM, fitted attack and positive LFO depth updates | +3.5dB | Loops |
+| Star Force 1 | BOSS | Original PCM and live LFO on/off | +3.5dB | Loops |
+| Star Force 1 | LOSE | Original PCM, fitted attack and minimum-depth/live LFO | +3.5dB | Loops |
+| Star Force 3 | LOSE | Source-specific original PCM and minimum-depth/live LFO | +3.5dB | Loops |
+| Star Force 2 | LOSE | Original PCM, six looping tracks and one-shot intro | +3.5dB | Loops |
+| Star Force 1 | SATELLITE | Corrected-v2 future-use upward filtering | +3.5dB | Loops |
 
 The [second library batch](nds-manager-library-v2.md) added ROOM/HENKAN/KANDO.
 The [third batch](nds-manager-library-v3.md) adds SCHOOL/WIN2/COMICAL; its
@@ -105,6 +112,10 @@ save/reload/export, chips or Buster and three battle-map-battle cycles.
 The [thirteenth batch](nds-manager-library-v13.md) appends SF1 HOKORA/PLANETARIUM;
 exact ROM2F9772D8 and all three requested manager/listening/gameplay checks have
 user-reported acceptance. Other exports and manual Falzar coverage remain separate.
+The [fourteenth batch](nds-manager-library-v14.md) appends seven configurations.
+The user reports the requested title/battle ROM14D9DEF4 and manager workflow checks passed. Other exports and manual Falzar coverage remain separate.
+The [full coverage ledger](nds-library-coverage.md) keeps all122 sounding sequences
+and four streams in scope;54 entries do not complete that target.
 Other songs and other NDS revisions are not offered by this library.
 Existing standalone acceptance is source history; it does not accept every
 manager-generated ROM. Target-specific and linked-gameplay coverage remains
