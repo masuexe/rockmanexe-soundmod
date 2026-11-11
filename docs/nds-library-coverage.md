@@ -29,12 +29,13 @@ results are historical leads; current conversion support must be verified.
 The four STRM files need a separate stream decoding/playback path.
 [Offline source decoding](nds-strm-source-research.md) now matches an independent
 reference for all four complete stereo streams, loop repetitions and loop seeks.
-The present SSEQ converter does not import them; no native or manual STRM
-acceptance is established.
+A separate bounded STRM exporter now has native evidence and user-reported
+manual acceptance for the exact SF1 title experiment ROM20069322. The SSEQ
+converter and 54-song production library do not import streams.
 
 | Stream | Name | Source bytes | State |
 | --- | --- | ---: | --- |
-| ssr1:strm:0 | STRM_BGM01TITLE | 1878620 | Decoder/playback research |
+| ssr1:strm:0 | STRM_BGM01TITLE | 1878620 | [Accepted standalone experiment](nds-sf1-strm-title-research.md), ROM20069322 |
 | ssr1:strm:1 | STRM_BGM35STAFFROLL | 4188468 | Decoder/playback research |
 | ssr2:strm:0 | STRM_TITLE | 1708320 | Decoder/playback research |
 | ssr3:strm:0 | STRM_TITLE | 1627444 | Decoder/playback research |
