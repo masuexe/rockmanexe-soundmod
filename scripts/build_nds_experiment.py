@@ -37,6 +37,8 @@ SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'sf
                  'sf3-den-live-sixteen-track': 'ssr3',
                  'sf2-teki-delay': 'ssr2', 'sf2-burai-envelope-delay': 'ssr2',
                  'sf2-ski-envelope-delay': 'ssr2',
+                 'sf1-dempa-delay': 'ssr1', 'sf1-truck-delay': 'ssr1',
+                 'sf1-gowadenno-lfo': 'ssr1',
                  'sf1-setsunai': 'ssr1', 'sf1-room-antialias': 'ssr1', 'sf1-labo-antialias': 'ssr1', 'sf1-school-antialias': 'ssr1', 'sf1-dempajiken-antialias': 'ssr1', 'sf1-antenna-antialias': 'ssr1', 'sf1-comical-antialias': 'ssr1', 'sf1-jiken-antialias': 'ssr1', 'sf1-kando-antialias': 'ssr1', 'sf1-win-antialias': 'ssr1', 'sf1-bossmae-antialias': 'ssr1', 'sf1-gameover-antialias': 'ssr1', 'sf3-comical-antialias': 'ssr3', 'sf3-gameover-antialias': 'ssr3', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
@@ -95,6 +97,14 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
             native_pitch_lfo=True, native_pitch_lfo_delay=True,
             envelope_support=song != 'sf2-teki-delay')
+    elif song in ('sf1-dempa-delay', 'sf1-truck-delay', 'sf1-gowadenno-lfo'):
+        index, name = {'sf1-dempa-delay': (10, 'BGM10DEMPA'),
+                       'sf1-truck-delay': (12, 'BGM12TRUCK'),
+                       'sf1-gowadenno-lfo': (15, 'BGM15GOWADENNO')}[song]
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            native_pitch_lfo=True, native_pitch_lfo_delay=index in (10, 12))
     elif song == 'room':
         index, name = 2, 'BGM_ROOM'
         blob, dependency, conversion = convert_song(archive, index, capacity, song_gain_db=song_gain_db)

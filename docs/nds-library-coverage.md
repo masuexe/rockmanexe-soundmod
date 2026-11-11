@@ -6,16 +6,17 @@ work. A registered entry does not establish acceptance of every exported ROM.
 
 | Family | SSEQ slots | With notes | Library entries | Missing SSEQ | STRM music |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| ssr1 | 38 | 35 | 27 | 8 | 2 |
+| ssr1 | 38 | 35 | 30 | 5 | 2 |
 | ssr2 | 43 | 40 | 14 | 26 | 1 |
 | ssr3 | 51 | 47 | 16 | 31 | 1 |
 
 The complete inventory has132 SSEQ slots and four nonempty STRM files. Five
 SSEQ slots are empty. Five execute no notes in the bounded source trace. All
 122 SSEQ entries with notes, including short cues, and all four streams remain
-in scope. The library offers57 of126 music items with content. It still lacks
-65 SSEQ entries and four streams. The user reports the requested checks passed
-for exact v15 composite A01CA114. This is not completion of the full goal.
+in scope. The library offers60 of126 music items with content. It still lacks
+62 SSEQ entries and four streams. The user reports the requested checks passed
+for exact v15 composite A01CA114 and v16 composite B58B4A8B. This is not
+completion of the full goal.
 
 The source files also have three `SEQARC_SE` archives. All their named entries
 have the `SE` prefix. These sound-effect archives are listed separately from
@@ -23,10 +24,11 @@ the background-music catalog. No effect is silently counted as an imported song.
 
 ## Remaining work
 
-Fourteen missing sequences have rebuilt historical variants with source/reference
+Eleven missing sequences have rebuilt historical variants with source/reference
 and bounded native evidence. Manager integration and manual acceptance remain.
 The [v15 manager batch](nds-manager-library-v15.md) registers three of the
 original17 candidates, reusing verified source evidence under exact byte identity.
+The [v16 manager batch](nds-manager-library-v16.md) registers three more.
 The other51 missing sequences had capacity blockers in the v38 audit. Those
 results are historical leads; current conversion support must be verified.
 The separate [SF3 DEN_LIVE sixteen-track experiment](nds-sf3-den-live-sixteen-track-research.md)
@@ -38,7 +40,7 @@ The four STRM files need a separate stream decoding/playback path.
 reference for all four complete stereo streams, loop repetitions and loop seeks.
 A separate bounded STRM exporter now has native evidence and user-reported
 manual acceptance for the exact SF1 title experiment ROM20069322. The SSEQ
-converter and57-song production library do not import streams.
+converter and60-song production library do not import streams.
 
 | Stream | Name | Source bytes | State |
 | --- | --- | ---: | --- |
@@ -65,12 +67,12 @@ The v38 status is retained as historical packing evidence only.
 | ssr1:7 | BGM07GOWAIINCHO | sf1-gowaiincho-delay | packed_delayed_lfo_approximation |
 | ssr1:8 | BGM08YUMENOSHIMA | existing_packing_needs_validation | packed_lfo_approximation |
 | ssr1:9 | BGM09SATELLITE | sf1-satellite-upward-antialias | packed_standard |
-| ssr1:10 | BGM10DEMPA | existing_packing_needs_validation | packed_delayed_lfo_approximation |
+| ssr1:10 | BGM10DEMPA | sf1-dempa-delay | packed_delayed_lfo_approximation |
 | ssr1:11 | BGM11DEMPAJIKEN | sf1-dempajiken-antialias | packed_standard |
-| ssr1:12 | BGM12TRUCK | existing_packing_needs_validation | packed_delayed_lfo_approximation |
+| ssr1:12 | BGM12TRUCK | sf1-truck-delay | packed_delayed_lfo_approximation |
 | ssr1:13 | BGM13PLANETARIUM | sf1-planetarium-delay | packed_delayed_lfo_approximation |
 | ssr1:14 | BGM14SCHOOLDENNO | conversion_capacity_research | capacity_blocked |
-| ssr1:15 | BGM15GOWADENNO | existing_packing_needs_validation | packed_lfo_approximation |
+| ssr1:15 | BGM15GOWADENNO | sf1-gowadenno-lfo | packed_lfo_approximation |
 | ssr1:16 | BGM16ANTENNA | sf1-antenna-antialias | packed_standard |
 | ssr1:17 | BGM17LAST | sf1-last-antialias | packed_standard |
 | ssr1:18 | BGM18URA | sf1-ura-upward-antialias | packed_standard |
