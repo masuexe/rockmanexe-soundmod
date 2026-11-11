@@ -7,16 +7,16 @@ work. A registered entry does not establish acceptance of every exported ROM.
 | Family | SSEQ slots | With notes | Library entries | Missing SSEQ | STRM music |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | ssr1 | 38 | 35 | 30 | 5 | 2 |
-| ssr2 | 43 | 40 | 14 | 26 | 1 |
+| ssr2 | 43 | 40 | 17 | 23 | 1 |
 | ssr3 | 51 | 47 | 16 | 31 | 1 |
 
 The complete inventory has132 SSEQ slots and four nonempty STRM files. Five
 SSEQ slots are empty. Five execute no notes in the bounded source trace. All
 122 SSEQ entries with notes, including short cues, and all four streams remain
-in scope. The library offers60 of126 music items with content. It still lacks
-62 SSEQ entries and four streams. The user reports the requested checks passed
+in scope. The library offers63 of126 music items with content. It still lacks
+59 SSEQ entries and four streams. The user reports the requested checks passed
 for exact v15 composite A01CA114 and v16 composite B58B4A8B. This is not
-completion of the full goal.
+completion of the full goal. The user also reports the requested v17 checks passed for exact composite02DF8781.
 
 The source files also have three `SEQARC_SE` archives. All their named entries
 have the `SE` prefix. These sound-effect archives are listed separately from
@@ -24,11 +24,12 @@ the background-music catalog. No effect is silently counted as an imported song.
 
 ## Remaining work
 
-Eleven missing sequences have rebuilt historical variants with source/reference
+Eight missing sequences have rebuilt historical variants with source/reference
 and bounded native evidence. Manager integration and manual acceptance remain.
 The [v15 manager batch](nds-manager-library-v15.md) registers three of the
 original17 candidates, reusing verified source evidence under exact byte identity.
 The [v16 manager batch](nds-manager-library-v16.md) registers three more.
+The [v17 manager batch](nds-manager-library-v17.md) registers another three.
 The other51 missing sequences had capacity blockers in the v38 audit. Those
 results are historical leads; current conversion support must be verified.
 The separate [SF3 DEN_LIVE sixteen-track experiment](nds-sf3-den-live-sixteen-track-research.md)
@@ -40,7 +41,7 @@ The four STRM files need a separate stream decoding/playback path.
 reference for all four complete stereo streams, loop repetitions and loop seeks.
 A separate bounded STRM exporter now has native evidence and user-reported
 manual acceptance for the exact SF1 title experiment ROM20069322. The SSEQ
-converter and60-song production library do not import streams.
+converter and63-song production library do not import streams.
 
 | Stream | Name | Source bytes | State |
 | --- | --- | ---: | --- |
@@ -99,7 +100,7 @@ The v38 status is retained as historical packing evidence only.
 | ssr2:1 | BGM_TEKI | sf2-teki-delay | packed_delayed_lfo_approximation |
 | ssr2:2 | BGM_BURAI | sf2-burai-envelope-delay | packed_envelope_delayed_lfo_approximation |
 | ssr2:3 | BGM_HOMETOWN | conversion_capacity_research | capacity_blocked |
-| ssr2:4 | BGM_ROOM | existing_packing_needs_validation | packed_standard |
+| ssr2:4 | BGM_ROOM | sf2-room-antialias | packed_standard |
 | ssr2:5 | BGM_SKI | sf2-ski-envelope-delay | packed_envelope_delayed_lfo_approximation |
 | ssr2:6 | BGM_MIZUUMI | sf2-mizuumi-variable-tempo | packed_variable_tempo_lfo_approximation |
 | ssr2:7 | BGM_NEWTOKYO | conversion_capacity_research | capacity_blocked |
@@ -116,10 +117,10 @@ The v38 status is retained as historical packing evidence only.
 | ssr2:18 | BGM_MU | conversion_capacity_research | capacity_blocked |
 | ssr2:19 | BGM_KAKUSHI | conversion_capacity_research | capacity_blocked |
 | ssr2:20 | BGM_HOKORA | sf2-hokora-merged-antialias | packed_known_nine_track_merge |
-| ssr2:21 | BGM_COMICAL | existing_packing_needs_validation | packed_standard |
+| ssr2:21 | BGM_COMICAL | sf2-comical-antialias | packed_standard |
 | ssr2:22 | BGM_JIKEN | conversion_capacity_research | capacity_blocked |
 | ssr2:23 | BGM_KINCHO | conversion_capacity_research | capacity_blocked |
-| ssr2:24 | BGM_KANDO | existing_packing_needs_validation | packed_standard |
+| ssr2:24 | BGM_KANDO | sf2-kando-antialias | packed_standard |
 | ssr2:25 | BGM_SETSUNAI | conversion_capacity_research | capacity_blocked |
 | ssr2:26 | BGM_HENKAN | sf2-henkan-antialias | packed_finite_standard |
 | ssr2:27 | BGM_BATTLE | sf2-battle-delay | packed_delayed_lfo_approximation |
