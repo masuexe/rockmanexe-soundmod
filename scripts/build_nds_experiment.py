@@ -34,6 +34,7 @@ SOURCE_ARCHIVES = {
     'ssr3': {'file_id': 187, 'sha256': SDAT_SHA256, 'label': 'Star Force 3'},
 }
 SONG_FAMILIES = {'room': 'ssr3', 'room-antialias': 'ssr3', 'battle': 'ssr3', 'sf3-battle-merged-antialias': 'ssr3', 'kando': 'ssr3', 'kando-antialias': 'ssr3',
+                 'sf3-den-live-sixteen-track': 'ssr3',
                  'sf1-setsunai': 'ssr1', 'sf1-room-antialias': 'ssr1', 'sf1-labo-antialias': 'ssr1', 'sf1-school-antialias': 'ssr1', 'sf1-dempajiken-antialias': 'ssr1', 'sf1-antenna-antialias': 'ssr1', 'sf1-comical-antialias': 'ssr1', 'sf1-jiken-antialias': 'ssr1', 'sf1-kando-antialias': 'ssr1', 'sf1-win-antialias': 'ssr1', 'sf1-bossmae-antialias': 'ssr1', 'sf1-gameover-antialias': 'ssr1', 'sf3-comical-antialias': 'ssr3', 'sf3-gameover-antialias': 'ssr3', 'sf1-setsunai-antialias': 'ssr1', 'sf1-kincho': 'ssr1', 'sf1-kincho-antialias': 'ssr1', 'sf1-battle-lfo': 'ssr1', 'sf1-last': 'ssr1', 'sf1-last-antialias': 'ssr1',
                  'sf1-fmplanet-delay': 'ssr1', 'sf1-hometown-depth': 'ssr1',
                  'sf1-gowaiincho-delay': 'ssr1',
@@ -73,7 +74,17 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
         raise ValueError(source_archive['label'] + ' SDAT fingerprint mismatch')
     archive = SoundArchive(raw_sdat)
     capacity = base[target['layout']['player_table_offset'] + target['layout']['music_player'] * 12 + 8]
-    if song == 'room':
+    native_capacity = None
+    if song == 'sf3-den-live-sixteen-track':
+        from native_track_capacity import capacity_plan
+        capacity, _ = capacity_plan(base, target, 16)
+        native_capacity = 16
+        index, name = 15, 'BGM_DEN_LIVE'
+        tracks = trace_sequence(archive.sequence(index)[0], analysis_only=True)
+        blob, dependency, conversion = convert_merged_song(
+            archive, index, [(t['track'],) for t in tracks], capacity, song_gain_db,
+            envelope_support=True)
+    elif song == 'room':
         index, name = 2, 'BGM_ROOM'
         blob, dependency, conversion = convert_song(archive, index, capacity, song_gain_db=song_gain_db)
     elif song == 'sf3-battle-merged-antialias':
@@ -378,12 +389,13 @@ def build_experiment(source, base, events=('1',), pcm_channels=10, song_gain_db=
             native_pitch_lfo_live_toggle=song == 'sf2-kaicyou-toggle')
     else:
         raise ValueError('Unknown NDS experiment song')
+    options = {'native_track_capacity': native_capacity} if native_capacity is not None else {}
     return pack_converted_experiment(source, base, key, raw_sdat, index, name,
-                                     blob, dependency, conversion, events, pcm_channels)
+                                     blob, dependency, conversion, events, pcm_channels, **options)
 
 
 def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, dependency,
-                              conversion, events=('1',), pcm_channels=10):
+                              conversion, events=('1',), pcm_channels=10, *, native_track_capacity=None):
     """Pack an already-converted research song through the shared exporter.
 
     Kept separate so a read-only batch audit can check candidate resources
@@ -418,9 +430,10 @@ def pack_converted_experiment(source, base, key, raw_sdat, index, name, blob, de
         raise ValueError('Choose distinct nonempty target events')
     playlist = {'schema_version': 1, 'target_profile': target['key'],
                 'pools': {str(event): {'tracks': [song_key], 'selector_shift': 0} for event in events}}
+    options = {'native_track_capacity': native_track_capacity} if native_track_capacity is not None else {}
     output, catalog, manifest = build_catalog(base, base, catalog, reports,
                                                {source_key: blob}, playlist, pcm_channels,
-                                               selected_only=True)
+                                               selected_only=True, **options)
     patch = make_bps(base, output)
     reconstructed, patch_info = apply_bps(base, patch)
     if reconstructed != output:

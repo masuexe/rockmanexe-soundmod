@@ -416,7 +416,8 @@ def build(base, pvp, sound, gp, playlist, pcm_channels=10):
     return build_catalog(base, pvp, value, reports, {'soundmod': sound, 'exegp': gp}, playlist, pcm_channels)
 
 
-def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_channels=10, selected_only=False):
+def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_channels=10, selected_only=False,
+                  native_track_capacity=None):
     """Reuse the checked target relocator/hooks with an independently prepared catalog."""
     target = validate_target(base, target_rom)
     layout = target['layout']
@@ -428,6 +429,9 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
     if selected_only:
         selected = {key for rule in rules for key in rule['keys']}
         reports = {key: report for key, report in reports.items() if key in selected}
+    from native_track_capacity import capacity_plan, check_import_capacity, install_capacity
+    capacity, capacity_change = capacity_plan(target_rom, target, native_track_capacity)
+    check_import_capacity(reports, capacity)
     if not 4 <= pcm_channels <= 12:
         raise ValueError('PCM channel budget must be 4..12')
     selected_reports = [(key.split(':')[0], report) for key, report in reports.items()]
@@ -507,6 +511,10 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
         allowed.append((query_entry,query_entry+len(query_stub)))
         auxiliary_hooks['status_query'] = {'entry_address':f'0x{ROM_BASE+query_entry:08X}',
                                            'handler_address':f'0x{ROM_BASE+query_offset:08X}', 'handler_size':len(query_code)}
+    capacity_metadata = None
+    if capacity_change is not None:
+        capacity_ranges, capacity_metadata = install_capacity(output, capacity_change, relocator.allocate)
+        allowed.extend(capacity_ranges)
     expected = bytearray(target_rom)
     for a, b in allowed:
         expected[a:b] = output[a:b]
@@ -519,6 +527,9 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
             continue
         original = reports[row['key']]
         relocated = analyze(result, table_offset, row['target_index'])
+        check_import_capacity({row['key']: relocated}, capacity)
+        if len(original['tracks']) != len(relocated['tracks']):
+            raise AssertionError(f"Relocated track count differs: {row['key']}")
         for old, new in zip(original['tracks'], relocated['tracks']):
             if old['notes'] != new['notes'] or old['ticks_before_repeat'] != new['ticks_before_repeat'] or old['termination'] != new['termination']:
                 raise AssertionError(f"Relocated sequence differs: {row['key']}")
@@ -557,6 +568,8 @@ def build_catalog(base, target_rom, value, reports, sources, playlist, pcm_chann
                 'import_policy': 'selected tracks only' if selected_only else 'all eligible foreign tracks'}
     if scene_selector:
         manifest['hook']['scene_selector'] = copy.deepcopy(layout['scene_selector'])
+    if capacity_metadata is not None:
+        manifest['native_track_capacity'] = capacity_metadata
     return result, value, manifest
 
 

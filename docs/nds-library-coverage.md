@@ -26,6 +26,10 @@ Seventeen missing sequences already have a historical packed variant. They
 still need source-specific reference, native, integration and manual evidence.
 The other51 missing sequences had capacity blockers in the v38 audit. Those
 results are historical leads; current conversion support must be verified.
+The separate [SF3 DEN_LIVE sixteen-track experiment](nds-sf3-den-live-sixteen-track-research.md)
+now has both-target native evidence for an explicit larger BGM allocation.
+The user reports the requested checks passed for exact Gregar ROM30DD33D8. This is
+not a production registration and does not change the54/126 library count.
 The four STRM files need a separate stream decoding/playback path.
 [Offline source decoding](nds-strm-source-research.md) now matches an independent
 reference for all four complete stereo streams, loop repetitions and loop seeks.
@@ -144,7 +148,7 @@ The v38 status is retained as historical packing evidence only.
 | ssr3:12 | BGM_NOISE | conversion_capacity_research | capacity_blocked |
 | ssr3:13 | BGM_KAKUSHI | conversion_capacity_research | capacity_blocked |
 | ssr3:14 | BGM_DEN_ROCKET | conversion_capacity_research | capacity_blocked |
-| ssr3:15 | BGM_DEN_LIVE | conversion_capacity_research | capacity_blocked |
+| ssr3:15 | BGM_DEN_LIVE | sixteen_track_experiment_user_reported_pass | capacity_blocked |
 | ssr3:16 | BGM_DEN_KANKYO | conversion_capacity_research | capacity_blocked |
 | ssr3:17 | BGM_DEN_WAXA | conversion_capacity_research | capacity_blocked |
 | ssr3:18 | BGM_DEN_BURAI | conversion_capacity_research | capacity_blocked |
