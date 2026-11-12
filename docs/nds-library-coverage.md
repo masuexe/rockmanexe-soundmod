@@ -6,18 +6,20 @@ work. A registered entry does not establish acceptance of every exported ROM.
 
 | Family | SSEQ slots | With notes | Library entries | Missing SSEQ | STRM music |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| ssr1 | 38 | 35 | 31 | 4 | 2 |
-| ssr2 | 43 | 40 | 18 | 22 | 1 |
+| ssr1 | 38 | 35 | 33 | 2 | 2 |
+| ssr2 | 43 | 40 | 19 | 21 | 1 |
 | ssr3 | 51 | 47 | 17 | 30 | 1 |
 
 The complete inventory has132 SSEQ slots and four nonempty STRM files. Five
 SSEQ slots are empty. Five execute no notes in the bounded source trace. All
 122 SSEQ entries with notes, including short cues, and all four streams remain
-in scope. The library offers66 of126 music items with content. It still lacks
-56 SSEQ entries and four streams. The user reports the requested checks passed
+in scope. The library offers69 of126 music items with content. It still lacks
+53 SSEQ entries and four streams. The user reports the requested checks passed
 for exact v15 composite A01CA114 and v16 composite B58B4A8B. This is not
 completion of the full goal. The user also reports the requested v17 checks passed for exact composite02DF8781.
 The user reports the requested v18 checks passed for exact compositeC9F14777.
+The user reports the requested v19 checks passed for exact composite7706BEA1;
+observed allocation losses for its three songs remain explicit.
 
 The source files also have three `SEQARC_SE` archives. All their named entries
 have the `SE` prefix. These sound-effect archives are listed separately from
@@ -25,13 +27,14 @@ the background-music catalog. No effect is silently counted as an imported song.
 
 ## Remaining work
 
-Five missing sequences have rebuilt historical variants with source/reference
+Two missing sequences have rebuilt historical variants with source/reference
 and bounded native evidence. Manager integration and manual acceptance remain.
 The [v15 manager batch](nds-manager-library-v15.md) registers three of the
 original17 candidates, reusing verified source evidence under exact byte identity.
 The [v16 manager batch](nds-manager-library-v16.md) registers three more.
 The [v17 manager batch](nds-manager-library-v17.md) registers another three.
 The [v18 manager batch](nds-manager-library-v18.md) registers three more.
+The [v19 manager batch](nds-manager-library-v19.md) registers another three.
 The other51 missing sequences had capacity blockers in the v38 audit. Those
 results are historical leads; current conversion support must be verified.
 The separate [SF3 DEN_LIVE sixteen-track experiment](nds-sf3-den-live-sixteen-track-research.md)
@@ -43,7 +46,7 @@ The four STRM files need a separate stream decoding/playback path.
 reference for all four complete stereo streams, loop repetitions and loop seeks.
 A separate bounded STRM exporter now has native evidence and user-reported
 manual acceptance for the exact SF1 title experiment ROM20069322. The SSEQ
-converter and66-song production library do not import streams.
+converter and69-song production library do not import streams.
 
 | Stream | Name | Source bytes | State |
 | --- | --- | ---: | --- |
@@ -68,7 +71,7 @@ The v38 status is retained as historical packing evidence only.
 | ssr1:5 | BGM05LABO | sf1-labo-antialias | packed_standard |
 | ssr1:6 | BGM06SCHOOL | sf1-school-antialias | packed_standard |
 | ssr1:7 | BGM07GOWAIINCHO | sf1-gowaiincho-delay | packed_delayed_lfo_approximation |
-| ssr1:8 | BGM08YUMENOSHIMA | existing_packing_needs_validation | packed_lfo_approximation |
+| ssr1:8 | BGM08YUMENOSHIMA | sf1-yumenoshima-lfo | packed_lfo_approximation |
 | ssr1:9 | BGM09SATELLITE | sf1-satellite-upward-antialias | packed_standard |
 | ssr1:10 | BGM10DEMPA | sf1-dempa-delay | packed_delayed_lfo_approximation |
 | ssr1:11 | BGM11DEMPAJIKEN | sf1-dempajiken-antialias | packed_standard |
@@ -79,7 +82,7 @@ The v38 status is retained as historical packing evidence only.
 | ssr1:16 | BGM16ANTENNA | sf1-antenna-antialias | packed_standard |
 | ssr1:17 | BGM17LAST | sf1-last-antialias | packed_standard |
 | ssr1:18 | BGM18URA | sf1-ura-upward-antialias | packed_standard |
-| ssr1:19 | BGM19KAKUSHI | existing_packing_needs_validation | packed_lfo_approximation |
+| ssr1:19 | BGM19KAKUSHI | sf1-kakushi-lfo | packed_lfo_approximation |
 | ssr1:20 | BGM20HOKORA | sf1-hokora-mixed-delay | packed_mixed_min_depth_lfo_approximation |
 | ssr1:21 | BGM21COMICAL | sf1-comical-antialias | packed_standard |
 | ssr1:22 | BGM22JIKEN | sf1-jiken-antialias | packed_standard |
@@ -112,7 +115,7 @@ The v38 status is retained as historical packing evidence only.
 | ssr2:11 | BGM_DEMPAJIKEN | sf2-dempajiken-antialias-envelope | packed_envelope_approximation |
 | ssr2:12 | BGM_OBAKE | conversion_capacity_research | capacity_blocked |
 | ssr2:13 | BGM_YUKIOTOKO | conversion_capacity_research | capacity_blocked |
-| ssr2:14 | BGM_FRIEND | existing_packing_needs_validation | packed_envelope_lfo_approximation |
+| ssr2:14 | BGM_FRIEND | sf2-friend-envelope | packed_envelope_lfo_approximation |
 | ssr2:15 | BGM_NESSIE | sf2-nessie-envelope | packed_envelope_lfo_approximation |
 | ssr2:16 | BGM_KAICYOU | sf2-kaicyou-toggle | packed_envelope_live_toggle_lfo_approximation |
 | ssr2:17 | BGM_SOUDOU | conversion_capacity_research | capacity_blocked |

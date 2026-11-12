@@ -82,6 +82,9 @@ SONGS = (
     ('ssr1', 29, 'sf1-lastboss-delay', 'LASTBOSS', 3.5, False),
     ('ssr2', 38, 'sf2-wifi-envelope-delay', 'WIFI', 3.5, False),
     ('ssr3', 24, 'sf3-burai-envelope-delay', 'BURAI', 3.5, False),
+    ('ssr1', 8, 'sf1-yumenoshima-lfo', 'YUMENOSHIMA', 3.5, False),
+    ('ssr1', 19, 'sf1-kakushi-lfo', 'KAKUSHI', 3.5, False),
+    ('ssr2', 14, 'sf2-friend-envelope', 'FRIEND', 3.5, False),
 )
 
 
@@ -105,7 +108,7 @@ def discover_nds(directory, uploaded):
 
 
 # Static facts from the registered, independently checked configurations.
-TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 8, 7, 8, 7, 8, 7, 7, 7, 7, 8, 8, 8, 8, 7, 8, 8, 6, 8, 7, 7, 8, 8)))
+TRACK_COUNTS = dict(zip((s[2] for s in SONGS), (8, 4, 7, 6, 8, 6, 4, 7, 7, 6, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 7, 8, 8, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 8, 7, 8, 7, 8, 7, 7, 7, 7, 8, 8, 8, 8, 7, 8, 8, 6, 8, 7, 7, 8, 8, 8, 8, 8)))
 
 
 def add_nds_catalog(value, originals):
